@@ -199,6 +199,22 @@ document.addEventListener("mouseout", e => {
   if (survole && !survole.contains(e.relatedTarget)) { survole = null; $("#apercu").hidden = true; }
 });
 
+/** La version, en petit à côté de Thème : « v1.2.0 », une version d'essai mise en évidence
+ * (« v1.2.1-test.4 »), ou la version de développement et son commit. Sur le bureau, elle mène aux
+ * mises à jour. */
+async function afficherVersion(bureau) {
+  let v;
+  try { v = (await api("GET", "/api/sante")).version || ""; } catch { return; }
+  const el = $("#version-app");
+  const git = /^0\.0\.0-git([0-9a-f]+)$/.exec(v);
+  const test = /-test\./.test(v);
+  el.textContent = git ? `dev ${git[1]}` : /^\d/.test(v) ? "v" + v : v;
+  el.classList.toggle("test", test);
+  el.title = git ? `Version de développement (commit ${git[1]})` : test ? `Version d'essai ${v}` : `Version ${v}`;
+  if (bureau) { el.href = "#/parametres"; el.title += " — mises à jour dans Paramètres"; }
+  el.hidden = !v;
+}
+
 // ---------------------------------------------------------------- démarrage
 document.addEventListener("keydown", e => {
   const saisie = e.target.closest("input,textarea,select,[contenteditable]");
@@ -316,6 +332,7 @@ function ecranCompte(acces) {
   if (acces.local || acces.compte?.admin) initFichier();
   // en bas à gauche : local, connecté à un serveur ou hors connexion (application de bureau)
   if (acces.local && !acces.serveur) { initEtatLien(); initBadgeMaj(); }
+  afficherVersion(acces.local && !acces.serveur);
   try { await chargerSchema(); }
   catch (e) { $("#vue").innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
   await dessinerNav();
