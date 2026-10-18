@@ -11,6 +11,8 @@ Dernière mise à jour : 16 octobre 2026, avec les points 11 et 12 de l'audit (P
 - **Clé de publication** : `~/Outil/cle-publication-cof-dm.pem` (hors dépôt), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
 - **Faire essayer une PR** : `gh workflow run release.yml --ref <branche> -f canal=test`, puis l'application (canal Test) la propose.
 
+- **Version affichée** : en petit à côté de « Thème » (v1.2.0 ; une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
+
 ## Pour reprendre sur un autre poste
 
 Le MJ utilise l'application en mode serveur avec `docker compose` sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`), données dans `~/Outil/COF_DM/donnees`. Mise à jour : `git pull && docker compose up -d --build`.
