@@ -1,0 +1,12 @@
+.git
+.github
+dist
+donnees
+AppDir
+appimagetool
+cof-dm
+cof-dm.exe
+*.db
+*.cofdm
+*.log
+*.syso

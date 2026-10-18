@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=COF DM
+GenericName=Gestion de campagne
+Comment=Préparer et mener ses campagnes de Chroniques Oubliées Fantasy
+Exec=cof-dm
+Icon=cof-dm
+Terminal=false
+Categories=Game;RolePlaying;
+Keywords=jdr;cof;chroniques;campagne;mj;

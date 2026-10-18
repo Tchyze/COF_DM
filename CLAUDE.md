@@ -1,0 +1,81 @@
+# CLAUDE.md — COF DM
+
+Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Application de bureau Windows / Linux, données locales (un fichier SQLite `.cofdm` par univers), interface web embarquée dans une fenêtre native. Elle a absorbé le projet frère **tracker_COF** (bestiaire, feuilles de personnage, rencontres, combat) ; ce qu'il reste à retirer ou à faire est dans `SUIVI.md`.
+
+Langue du projet : **français** partout (code, identifiants, commentaires, messages de commit, README, docs). Garder ce style.
+
+**Chantier en cours** : lire `SUIVI.md` (ce qui est fait, décisions prises, lots restants) avant de reprendre le travail, et le mettre à jour à la fin de chaque lot.
+
+## Stack
+
+- **Go 1.26 (1.26.9 au moins, fixé par `go.mod`)**, CGO obligatoire (SQLite via `mattn/go-sqlite3`).
+- **SQLite + FTS5** : toujours compiler et tester avec le tag `sqlite_fts5` (sans lui, `internal/store/fts5_requis.go` fait échouer la compilation volontairement).
+- **Fenêtre native** : `webview/webview_go` (WebView2 sous Windows, GTK 3 + WebKitGTK 4.1 sous Linux). Le tag `nogui` la désactive (`gui_nogui.go`) : à utiliser pour les tests, le mode headless et la CI.
+- **Frontend** : HTML / CSS / JavaScript **sans framework, sans dépendance, sans étape de build**. Embarqué dans le binaire via `//go:embed frontend`. Ne pas introduire de npm, bundler ou framework.
+- **Outils** : scripts Python 3 (bibliothèque standard uniquement) dans `outils/` pour importer un vault Obsidian (l'export vers Obsidian est dans l'application : `internal/obsidian`).
+
+## Commandes
+
+```bash
+gofmt -l .                                            # doit ne rien afficher (vérifié en CI)
+go vet -tags "sqlite_fts5 nogui" ./...
+go test -tags "sqlite_fts5 nogui" ./...               # tests
+go run -tags "sqlite_fts5 nogui" . -data ./donnees    # lancer sans fenêtre (interface dans le navigateur)
+go build -tags sqlite_fts5 -o cof-dm .                # application de bureau
+go build -tags "sqlite_fts5 nogui serveur" -o cof-dm-serveur .   # édition serveur (celle de l'image Docker)
+```
+
+Options du binaire : `-port` (défaut 8100), `-data <dossier>` (dossier de l'application), `-univers <fichier.cofdm>`, `-headless`, `-reseau` (écoute sur le réseau local, comme la case de Paramètres → Tablette et réseau), `-serveur` (mode serveur : seulement dans l'édition serveur, compilée avec l'étiquette `serveur` pour l'image Docker ; l'application de bureau le refuse), `-mcp` (serveur MCP pour Claude sur stdio, qui joint l'application lancée par son API).
+
+Avant de considérer une tâche terminée : `gofmt`, `go vet` et `go test` passent, avec les tags ci-dessus.
+
+## Architecture
+
+| Dossier | Rôle |
+|---|---|
+| `internal/modele` | **Seule source de vérité du schéma** : types de fiches, champs, relations, calendrier, validation. Le serveur valide avec, le frontend construit ses formulaires avec, l'API le publie (`GET /api/schema`). |
+| `internal/store` | Un univers ouvert (un fichier SQLite `.cofdm`) : fiches, relations, références, mentions `[[Nom]]`, images (dans le fichier), recherche FTS5, graphe, chronologie, journal, export, réparation. |
+| `internal/serveur` | API REST (`net/http`, routes `METHODE /chemin` de Go 1.22+), contrôle d'accès (jeton, mot de passe MJ), images, secrets, bestiaire et règles, rencontres, combats, écran du MJ. `univers.go` : `Application`, qui tient l'univers ouvert, en change (menu Fichier) et reprend les anciennes données ; `sauvegardes.go` : sauvegardes automatiques et rotation. |
+| `internal/comptes` | Comptes du mode serveur (`comptes.json`) : nom, mot de passe haché, administrateur, rôle par univers (`mj`, `auditeur`, `joueur`), jetons d'API. |
+| `internal/fiches`, `internal/regles`, `internal/reference` | Repris de tracker_COF : validation des monstres et des feuilles de personnage ; fichier de règles de l'univers (listes de choix, créateur de monstre) et son application ; profils, peuples et voies importés. Aucune donnée des livres. |
+| `internal/reglages` | Réglages de l'application (`reglages.json`) : univers ouvert, récents, mot de passe MJ, jeton d'API. |
+| `internal/obsidian` | Export vers un vault Obsidian : une note Markdown par fiche, rangée comme le vault que lit `outils/vault_vers_cofdm.py`. Ne filtre rien : le serveur retire avant ce que les joueurs ne voient pas (`internal/serveur/obsidian.go`). |
+| `internal/combat` | Moteur de combat repris de tracker_COF : tours, attaques, états, tests, récapitulatif. Il lit ses valeurs et ses états dans la partie `combat` des règles (`Etat.Regler`) ; sans elle, combat minimal. |
+| `internal/des` | Formules de dés hors combat (`1d20+3`, `2d20kh1`), sans règle du jeu ; les jets de la table vivent en mémoire (`internal/serveur/des.go`), hors de l'univers. |
+| `internal/mcp` | Serveur MCP (`cof-dm -mcp`, `mcp.go` à la racine pour la configuration) : JSON-RPC sur stdio, sans dépendance. Chaque outil est traduit en appels de l'API REST avec un jeton : aucun accès direct au store, mêmes droits, même validation, même journal. Toute route ajoutée à l'API peut y gagner un outil (décrit en français, avec ses annotations lecture / destructif) et son test. Rien d'effacement définitif. La sortie standard est réservée au protocole : les traces vont sur stderr. |
+| `frontend/` | `app.js`, `ui.js`, `composants.js`, `schema.js`, `md.js`, `theme.js`, `monstres.js`, `recap.js`, `fichier.js` (menu Fichier), vues dans `js/views/`. `style.css`, et `combat.css` pour l'écran de combat (`views/combat.js`) et la page des joueurs (`joueur.html`, `joueur.js`). |
+| `internal/majour` | Mises à jour du bureau : versions publiées sur GitHub (canaux stable et test), téléchargement vérifié par la signature Ed25519 de `SHA256SUMS` (clé publique `ClePublique` ; la clé privée est le secret `COF_DM_SIGNATURE` du dépôt, jamais dans le dépôt), remplacement du programme et relance (`internal/serveur/majour.go`, `frontend/js/majour.js`). |
+| `docs/API.md` | Documentation de l'API. |
+
+## Règles à respecter
+
+- **Ajouter ou modifier un champ / type de fiche** : partir de `internal/modele`. Le frontend se construit à partir du schéma ; ne pas coder un champ en dur côté interface.
+- **Toute modification de l'API** (route, paramètre, réponse) se reporte dans `docs/API.md` dans le même commit.
+- **Le monde est unique et persistant** : pas d'état par campagne. Un changement (PNJ mort, etc.) vaut partout.
+- **Intégrité des liens** : renommer une fiche met à jour ses mentions `[[Nom]]` ; supprimer une fiche la retire des autres. Toute nouvelle fonction qui touche aux noms ou aux références doit préserver ces deux garanties, avec un test.
+- **Secrets MJ** : les champs et relations réservés au MJ ne doivent jamais fuiter vers une vue « joueurs » (feuille de route, point 6).
+- **Journal** : toute écriture passe par le store pour être journalisée avec son auteur (MJ ou client API).
+- **Un univers = un seul fichier** : tout ce qui appartient au monde (images comprises) va dans le fichier `.cofdm`, jamais dans un dossier à côté. À l'inverse, ce qui tient à l'ordinateur (mot de passe MJ, jeton, adresse du tracker) va dans `internal/reglages`, jamais dans l'univers. Le journal SQLite reste en mode DELETE (pas de WAL) pour que le fichier se copie tel quel.
+- **Routes `/api/univers`** : elles manipulent des fichiers de l'ordinateur du MJ et ne répondent qu'à lui (ni session, ni jeton depuis le réseau).
+- **Aucune donnée des livres dans le dépôt**, pour que le logiciel se distribue sans problème : ni liste (peuples, profils, tailles, catégories, états…), ni table chiffrée, ni nom de capacité ou de voie, ni texte, ni numéro de page — dans le code, l'interface, la documentation **et les tests**. Ces données viennent du fichier de règles importé par le MJ et rangé dans l'univers (`internal/regles`, `GET /api/regles`) ; le code n'en garde que la structure et les formules, et tout doit fonctionner en saisie libre sans fichier. Un champ de fiche qui propose des choix venus des livres porte `Liste` (et non `Options`) dans `internal/modele`. Les tests utilisent des règles et des fiches inventées. Avant d'ajouter une constante, une liste ou un message, se demander s'il vient d'un livre : si oui, il va dans le fichier de règles.
+- **Fusion de tracker_COF** : ses données entrent dans le fichier d'univers (`documents`, par collection ; `internal/store/documents.go`) et suivent les rôles. La feuille de personnage d'un PJ est rangée à part (`feuilles`, une par fiche) et lit son niveau sur la fiche : ne jamais dupliquer dans la feuille un champ de la fiche. Les rencontres et le profil de combat des PNJ désignent des monstres du bestiaire de l'univers (genres `adversaires` et `monstre`) ; la difficulté se calcule dans `internal/regles/rencontres.go` avec la partie `rencontre` du fichier de règles. Un champ qui change de sens ou disparaît demande d'augmenter `versionDonnees` (`internal/store/reparer.go`), qui remet les fiches existantes en forme à l'ouverture et à la restauration d'un export.
+- **Combats** (`internal/serveur/combats.go`) : rangés dans l'univers (`documents`, collection `combats`). Toute action passe par `POST /api/combats/{id}/actions`, qui suit les rôles ; le WebSocket `GET /api/combats/{id}/direct` ne fait que recevoir et vérifie `Origin`. Ne jamais faire appliquer une action reçue par le WebSocket. La fiche d'un monstre, d'un PNJ ou d'un PJ qui entre en combat est lue par le serveur (`ficheCombat`), jamais fournie par l'écran. Les PV et les points de chance des PJ sont reportés sur leur feuille sans passer par le journal, qui note le début et la fin du combat.
+- **Écran de combat** (`frontend/js/views/combat.js`, `frontend/combat.css`) : il se loge dans un hôte de taille fixée (`.combat-hote` : la page, ou le volet de l'écran du MJ) et s'y adapte par requêtes de conteneur, jamais par la taille de la fenêtre. Ses styles sont tous rangés sous `.combat`. Aucun état, aucune valeur du jeu n'y est écrit : il les lit dans `GET /api/regles` (partie `combat`) et doit rester utilisable sans elle.
+- **Sécurité réseau** : par défaut, écoute sur `127.0.0.1` uniquement. Ne pas changer ce comportement ; l'ouverture au réseau reste un choix du MJ (case de Paramètres ou `-reseau`), avec le jeton pour l'API et le mot de passe MJ pour l'interface (`internal/serveur/acces.go`). Le mot de passe, l'ouverture au réseau et le jeton ne se règlent que sur l'ordinateur du MJ. Toute nouvelle route est protégée par défaut : n'ajouter à `ouvert()` que ce que la page de connexion exige.
+- **Bureau et serveur** : l'application de bureau n'est qu'un éditeur ; le mode serveur n'existe que dans l'édition serveur (`edition_serveur.go`, étiquette `serveur`, image Docker). Le bureau travaille en **mode local** ou **relié à un serveur** (`internal/serveur/distant.go`, zone en bas à gauche : `frontend/js/connexion.js`). Relié, il ne répond plus au réseau local (`Options.Relie`, `msgReseauRelie`) : ni tablette, ni page des joueurs, ni jeton depuis le réseau ; il ne s'y ouvre pas au lancement (`BureauRelie`). La connexion se fait par nom et mot de passe, échangés contre un jeton propre au poste, rendu au serveur quand il le quitte (`DELETE /api/compte/jeton`) ; jamais de mot de passe gardé. Les copies d'un autre serveur, ou ouvertes en mode local, sont en pause.
+- **Mode serveur** (`-serveur`, `internal/serveur/comptes.go`) : derrière un reverse proxy, toute requête vient de `127.0.0.1` ; ce mode ne doit donc **jamais** se fier à `local()`. L'accès passe par `acces.entrer` (compte ou jeton du compte), les droits par `servirComptes` : administrateur pour le serveur (comptes, univers, tracker), `mj` pour écrire, `auditeur` pour lire. Toute nouvelle route d'écriture doit rester refusée à l'auditeur (elle l'est d'office si elle n'est pas en `GET`) ; ne pas faire d'écriture derrière un `GET`.
+- **Serveur multi-univers** (`internal/serveur/multi.go`) : en mode serveur, `Application` tient tous les univers du dossier `univers/` ouverts (`a.tous`), un `Serveur` par univers. L'univers visé vient de l'en-tête `X-COF-Univers`, sinon du cookie du navigateur, sinon du premier univers où le compte a un rôle ; un jeton qui a accès à plusieurs univers doit envoyer l'en-tête, sauf pour les routes du compte (`proprePerso` : `/api/acces`, `/api/compte`), qui ne visent aucun univers. Dans une route `/api/univers`, ne jamais lire `a.st` : prendre `a.vise(r)`. Le rôle se lit toujours dans l'univers visé (`c.Role(s.store.ID())`).
+- **Page des joueurs** (`internal/serveur/pagejoueurs.go`, `frontend/joueur.html`) : à la maison, c'est la seule partie de l'application qui réponde au réseau **sans mot de passe**, et seulement quand le MJ l'a ouverte. Ses routes sont une **liste blanche** à part (`s.libre`), gardée par `pageJoueursOuverte()` et `routeLibre()` : n'y inscrire qu'une route en lecture dont le contenu est fait pour les joueurs (jamais les notes du MJ, jamais une fiche du monde, jamais un chiffre d'un combat en cours : `reduire`), avec un test de non-fuite (`TestPageJoueursLibre`). Seules écritures permises : la feuille déverrouillée et un jet de dés (`POST /api/joueur/des`, `internal/serveur/des.go`), qui ne touche pas à l'univers ; un jet caché du MJ ne part jamais vers les joueurs (`TestDesMaison`, `TestDesServeur`, `TestDesDirect`). L'ouverture se règle sur l'ordinateur du MJ (`surPlace`). Sur un serveur, les mêmes routes passent par le compte et se restreignent au PJ du joueur (`pjDuCompte`). Les joueurs n'agissent jamais sur un combat.
+- **Vue des joueurs** (`internal/serveur/joueur.go`) : le rôle `joueur` passe par une **liste blanche** de routes au contenu filtré (fiches partagées, sans champ `Secret`, sans relation secrète ni « sait »). Une nouvelle route ne lui est ouverte que si elle y est inscrite, avec son filtre et un test de non-fuite (`TestServeurJoueur`). Tout nouveau genre de champ est caché aux joueurs tant qu'il n'est pas dans `genresJoueur`. Un joueur n'écrit que les champs marqués `Joueur: true` dans `internal/modele`, sur la fiche de son PJ (`modifierJoueur`) : ne jamais marquer ainsi un champ `Secret`, une référence ou un champ qui pèse sur le jeu (statut, niveau). L'export vers Obsidian « joueurs » (`GET /api/export/obsidian?secrets=0`) passe par le même filtre (`mondeJoueur`), avec son test de non-fuite (`TestExportObsidian`).
+- **Synchronisation** (`internal/store/sync.go`, `protocole.go`, `identifiants.go`, `internal/serveur/sync.go`, `distant.go`, `internal/synchro`) : l'univers vu champ par champ, relevé par comparaison avec `sync_etat` (rien à noter au moment d'écrire). Tout nouvel objet ou champ rangé dans l'univers doit être pris en compte par `aplatir` et `appliquer` (avec un test), sinon il ne voyagera pas ; ce qui tient à un seul côté (réglage de l'ordinateur, combat en cours) n'y entre pas. Toute création tire son identifiant par `prochainID`, jamais par l'auto-incrément de SQLite.
+- Données locales, binaires et `donnees/` sont ignorés par git : ne jamais committer de `.db`, `.cofdm`, `.log` ni médias de test réels.
+
+## Git et publication
+
+- Travailler sur une branche par fonctionnalité, PR vers `main` (le workflow *Tests* tourne sur chaque PR).
+- Une version se publie en poussant un tag `vX.Y.Z` : le workflow *Release* compile l'exe Windows et l'AppImage, signe `SHA256SUMS` et publie (canal stable). **Ne jamais pousser de tag sans demande explicite.**
+- Pour faire essayer une PR : lancer *Release* sur sa branche avec le canal `test` (`gh workflow run release.yml --ref <branche> -f canal=test`) ; la préversion `vX.Y.Z-test.N` arrive dans l'application de qui suit le canal Test.
+
+## Feuille de route (README)
+
+Prochaines étapes : la liste complète et ses priorités sont dans `PROJETS.md` (P1 fait, sauf les restes à vérifier ; P2 ensuite, à commencer par les aides de jeu ; les cartes sont reportées bien plus tard).

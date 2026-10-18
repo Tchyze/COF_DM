@@ -1,0 +1,20 @@
+# COF DM en mode serveur, derrière le nginx de la machine (voir README, « Avec Docker »).
+#
+#   mkdir -p donnees && docker compose up -d --build
+#   docker compose logs cof-dm        # premier lancement : le mot de passe du compte « admin »
+#
+# Le conteneur partage le réseau de la machine (Linux) : COF DM n'écoute que sur 127.0.0.1:8100,
+# comme sans Docker, et seul nginx le joint. Rien n'est ouvert sur le réseau.
+services:
+  cof-dm:
+    build: .
+    image: cof-dm:latest
+    container_name: cof-dm
+    network_mode: host
+    # utilisateur du conteneur : celui à qui appartient ./donnees (le vôtre, en général 1000:1000)
+    user: "${COF_UID:-1000}:${COF_GID:-1000}"
+    command: ["-serveur", "-port", "${COF_PORT:-8100}", "-data", "/data"]
+    volumes:
+      # comptes, univers (donnees/univers/*.cofdm), sauvegardes, réglages
+      - ./donnees:/data
+    restart: unless-stopped

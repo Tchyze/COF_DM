@@ -1,0 +1,16 @@
+# binaires et données locales
+/cof-dm
+/cof-dm.exe
+/dist/
+/donnees/
+*.db
+*.cofdm
+*.db-shm
+*.db-wal
+*.log
+*.syso
+/AppDir/
+/appimagetool
+
+# Python
+__pycache__/

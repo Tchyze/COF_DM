@@ -1,0 +1,392 @@
+/* Combat (repris de tracker_COF) : liste des combats, écran de jeu, récapitulatif.
+   Tout est rangé sous .combat pour ne rien changer au reste de l'application. L'écran se loge dans
+   un hôte de taille fixée (.combat-hote : la page entière, ou le volet de l'écran du MJ) et s'y
+   adapte par requêtes de conteneur, jamais par la taille de la fenêtre. */
+.combat-hote,.combat{--brass:var(--gold);--pj:var(--t-pj);--allie:var(--t-lieu);--ennemi:var(--t-rencontre);--accent:var(--mort);--accent-ink:var(--bg);--ko:var(--faint);--tap:44px;--r:6px}
+.combat-hote{container:hote / size;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;position:relative}
+.combat-hote.page{padding:10px 14px}
+.t-cadre.combat-hote{flex:1;padding:8px 10px;background:var(--bg)}
+.combat.liste{display:block;max-width:1100px}
+.combat h1{font-size:1.5rem} .combat h2{font-size:1.1rem;color:var(--brass)} .combat h3{font-size:1rem}
+.combat :is(input,select,textarea){width:auto;min-height:38px;padding:.4rem .5rem}
+.combat input[type=number]{font-family:var(--f-mono);width:4.6rem}
+.combat input[type=checkbox],.combat input[type=radio]{min-height:auto;width:1.15rem;height:1.15rem;accent-color:var(--accent)}
+.combat textarea{width:100%;min-height:80px}
+.combat label{display:flex;flex-direction:column;gap:3px;font-size:.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.combat label > :is(input,select,textarea){text-transform:none;letter-spacing:0;font-size:.95rem;color:var(--ink)}
+.combat button{white-space:normal}
+.combat button.icon{min-height:32px;min-width:32px;padding:.15rem .45rem;font-size:.9rem;line-height:1}
+.combat button.ghost{border-color:var(--line2)}
+.combat .empty{color:var(--muted);font-size:.95rem;margin:0}
+.combat .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.combat .panel-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.combat .row{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end}
+.combat .row > label{flex:1 1 120px}
+.combat .row > label.s{flex:0 0 auto}
+.combat .seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;flex-wrap:wrap}
+.combat .seg button{border:0;border-radius:0;background:transparent;min-height:36px}
+.combat .seg button[aria-pressed=true]{background:var(--ink);color:var(--surface)}
+.combat .tag{font:600 .66rem var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--c,var(--muted));border:1px solid var(--c,var(--line));border-radius:3px;padding:0 4px;white-space:nowrap}
+.combat .pj{--c:var(--pj)} .combat .allie{--c:var(--allie)} .combat .ennemi{--c:var(--ennemi)}
+.combat .conn{font-size:.8rem;padding:2px 8px;border-radius:999px;background:var(--warn);color:var(--bg)}
+.combat .libre{display:flex;flex-direction:column;gap:6px}
+.combat .formgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:10px}
+.combat .formgrid .w2{grid-column:span 2}
+.combat .formgrid .w3{grid-column:1/-1}
+.combat .formgrid input,.combat .formgrid select{width:100%}
+.combat .actions-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.combat .actions-bar .sp{flex:1}
+.combat .picker{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}
+.combat .pick{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:4px 8px;border:1px solid var(--line);border-radius:var(--r);background:var(--sunk)}
+.combat .pick span{min-width:0;overflow-wrap:anywhere}
+.combat .checks{display:flex;flex-wrap:wrap;gap:6px}
+.combat .check{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:var(--r);padding:6px 10px;background:var(--sunk);cursor:pointer;font-size:.95rem;text-transform:none;letter-spacing:0;color:var(--ink);flex-direction:row}
+.combat .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.combat .ccard{display:flex;flex-direction:column;gap:6px;padding:12px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+.combat .ccard.done{opacity:.7}
+.combat .ctop{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-bottom:10px;border-bottom:2px solid var(--ink);margin-bottom:14px}
+.combat .ctop h1{font-size:1.35rem;min-width:0;overflow-wrap:anywhere}
+.combat .round{display:flex;align-items:baseline;gap:6px}
+.combat .round .lbl{font-family:var(--f-display);color:var(--muted)}
+.combat .round .n{font:600 1.9rem/1 var(--f-mono);color:var(--accent)}
+.combat .ctop .tools{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.combat .kbd{font:.7rem var(--f-mono);border:1px solid currentColor;border-radius:3px;padding:0 4px;opacity:.6;margin-left:6px}
+.combat .banner{border:1px solid var(--warn);color:var(--warn);border-radius:var(--r);padding:8px 12px;margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.combat .cgrid{display:grid;grid-template-columns:minmax(300px,1fr) minmax(340px,1.15fr) minmax(260px,.85fr);gap:16px;align-items:start}
+.combat .col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.combat .panes{display:none}
+@container hote (max-width:1280px){
+  .combat .cgrid{grid-template-columns:minmax(300px,1fr) minmax(340px,1.1fr)}
+  .combat .col.c-log{grid-column:1/-1}
+}
+@container hote (max-width:820px){
+  .combat .cgrid{grid-template-columns:1fr}
+  .combat .panes{display:flex;position:sticky;top:calc(52px + env(safe-area-inset-top,0px));z-index:10;margin-bottom:12px;background:var(--bg);padding:4px 0}
+  .combat .panes .seg{width:100%}
+  .combat .panes .seg button{flex:1}
+  .combat .cgrid[data-pane=ordre] .c-act,.combat .cgrid[data-pane=ordre] .c-log,.combat .cgrid[data-pane=action] .c-ordre,.combat .cgrid[data-pane=action] .c-log,.combat .cgrid[data-pane=journal] .c-ordre,.combat .cgrid[data-pane=journal] .c-act{display:none}
+}
+.combat ol.order{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.combat .cbt{display:grid;grid-template-columns:3rem minmax(0,1fr) auto;gap:10px;align-items:start;background:var(--surface);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:var(--r);padding:8px 8px 8px 0}
+.combat .cbt.current{border-color:var(--c);box-shadow:0 0 0 2px var(--c)}
+.combat .cbt.down{opacity:.55}
+.combat .cbt .init{font:600 1.35rem/1 var(--f-mono);text-align:center;padding-top:4px;color:var(--c)}
+.combat .cbt .init small{display:block;font:.6rem var(--f-body);color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.combat .cbt .main{min-width:0;display:flex;flex-direction:column;gap:5px}
+.combat .cbt .name{font-weight:700;font-size:1.02rem;display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.combat .cbt .name button{all:unset;cursor:pointer;font-weight:700}
+.combat .cbt .name button:focus-visible{outline:2px solid var(--accent)}
+.combat .flag{font:600 .64rem var(--f-body);text-transform:uppercase;letter-spacing:.08em;background:var(--c);color:var(--surface);border-radius:3px;padding:1px 5px}
+.combat .stats{font:.8rem var(--f-mono);color:var(--muted);overflow-wrap:anywhere}
+.combat .hp{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.combat .bar{flex:1 1 90px;height:9px;background:var(--sunk);border-radius:5px;overflow:hidden;border:1px solid var(--line)}
+.combat .bar i{display:block;height:100%;background:var(--ok)}
+.combat .bar i.mid{background:var(--warn)}
+.combat .bar i.low{background:var(--accent)}
+.combat .hp .val{font:600 .95rem var(--f-mono)}
+.combat .quick{display:flex;gap:4px;align-items:center}
+.combat .quick input{width:3.6rem;min-height:32px;padding:.15rem .35rem}
+.combat .chips{display:flex;flex-wrap:wrap;gap:4px}
+.combat .chip{display:inline-flex;align-items:center;gap:2px;font-size:.8rem;border-radius:999px;padding:1px 2px 1px 8px;border:1px solid var(--warn);color:var(--warn)}
+.combat .chip button{border:0;background:transparent;padding:0 6px;color:inherit;min-height:24px}
+.combat .target{font-size:.84rem;color:var(--muted)}
+.combat .target b{color:var(--ink)}
+.combat .side{display:flex;flex-direction:column;gap:4px}
+.combat .capa{font-size:.88rem;white-space:pre-wrap;background:var(--sunk);border-radius:var(--r);padding:8px 10px;border:1px solid var(--line)}
+.combat .active-card{border-left:5px solid var(--c);padding-left:12px;display:flex;flex-direction:column;gap:8px}
+.combat .active-name{font-family:var(--f-display);font-size:1.7rem;line-height:1.1;font-weight:600}
+.combat .acts{display:flex;flex-wrap:wrap;gap:8px}
+.combat .act{display:flex;flex-direction:row;align-items:center;gap:8px;border:1px solid var(--line);border-radius:var(--r);padding:6px 12px;font-size:.95rem;cursor:pointer;user-select:none;background:var(--sunk);text-transform:none;letter-spacing:0;color:var(--ink);min-height:var(--tap)}
+.combat .act.used{color:var(--muted);border-style:dashed}
+.combat .act:disabled{cursor:not-allowed;opacity:.55}
+.combat .act:not(:disabled):hover{border-color:var(--accent)}
+.combat .warnbox{border:1px solid var(--warn);color:var(--warn);border-radius:var(--r);padding:6px 10px;font-size:.92rem}
+.combat .vs{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:8px;align-items:center;text-align:center}
+.combat .vs .who{font-weight:700;overflow-wrap:anywhere}
+.combat .vs .arrow{font-family:var(--f-display);color:var(--accent);font-size:1.4rem}
+.combat .result{border-radius:var(--r);padding:10px 12px;display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);background:var(--sunk)}
+.combat .result .verdict{font-family:var(--f-display);font-size:1.45rem;font-weight:600}
+.combat .result.hit .verdict{color:var(--ok)}
+.combat .result.crit .verdict{color:var(--brass)}
+.combat .result.miss .verdict{color:var(--muted)}
+.combat .result .calc{font:.86rem var(--f-mono);color:var(--muted);overflow-wrap:anywhere}
+.combat .result .dmrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.combat .big{min-height:var(--tap);font-size:1.05rem}
+.combat details > summary{cursor:pointer;font-family:var(--f-display);color:var(--brass);font-size:1.05rem;font-weight:600;list-style:none;min-height:28px}
+.combat details > summary::-webkit-details-marker{display:none}
+.combat details > summary::before{content:"+ ";font-family:var(--f-mono)}
+.combat details[open] > summary::before{content:"− "}
+.combat .logwrap{max-height:calc(100vh - 230px);overflow:auto;display:flex;flex-direction:column;gap:2px}
+@container hote (max-width:1280px){
+  .combat .logwrap{max-height:420px}
+}
+.combat .logr{font-family:var(--f-display);color:var(--brass);margin-top:8px;font-size:.95rem;border-bottom:1px solid var(--line);font-weight:600}
+.combat .logr:first-child{margin-top:0}
+.combat .loge{font-size:.9rem;padding:3px 0 3px 10px;border-left:3px solid var(--line)}
+.combat .loge.atk{border-color:var(--accent)}
+.combat .loge.turn{color:var(--muted);border-color:transparent;padding-left:0;font-style:italic}
+.combat .loge.etat{border-color:var(--warn)}
+.combat .loge.ko{border-color:var(--ink);font-weight:700}
+.combat .ref{font-size:.85rem;color:var(--muted);display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin-top:8px}
+.combat .ref b{color:var(--ink);font-weight:600}
+.combat dialog{border:1px solid var(--line);border-radius:var(--r);background:var(--surface);color:var(--ink);padding:16px;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 32px)}
+.combat dialog::backdrop{background:rgb(0 0 0 / .45)}
+.combat dialog form{display:flex;flex-direction:column;gap:12px}
+@media (prefers-reduced-motion:no-preference){
+  .combat .cbt{transition:box-shadow .15s,opacity .2s}
+  
+}
+.combat .dlg-recap{width:min(760px,calc(100vw - 32px))}
+.combat .dlg-recap .fin-actions{justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.combat .banner.fin{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.combat .banner.fin.victoire{border-color:var(--ok)}
+.combat .recap{display:flex;flex-direction:column;gap:14px}
+.combat .recap-tete{text-align:center;padding:6px 0 2px}
+.combat .recap-issue{font-family:var(--f-display);font-size:2rem;font-weight:700;color:var(--brass);line-height:1.1}
+.combat .recap.defaite .recap-issue{color:var(--accent)}
+.combat .recap-nom{color:var(--muted);margin-top:4px}
+.combat .recap-infos{display:flex;flex-wrap:wrap;justify-content:center;gap:6px 14px;margin-top:8px;font-size:.92rem}
+.combat .recap-infos span+span::before{content:"·";margin-right:14px;color:var(--muted)}
+.combat .recap-moments{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px}
+.combat .moment{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r);padding:10px;background:var(--sunk)}
+.combat .moment-ic{font-size:1.3rem;line-height:1;color:var(--brass);width:1.4em;text-align:center}
+.combat .moment.ennemi .moment-ic{color:var(--ennemi)}
+.combat .moment-t{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.combat .moment-qui{font-weight:700}
+.combat .moment-txt{font-size:.9rem}
+.combat .recap-pjs{width:100%;border-collapse:collapse;font-size:.92rem}
+.combat .recap-pjs th{font-size:.72rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:right;font-weight:600;padding:4px 6px;border-bottom:1px solid var(--line)}
+.combat .recap-pjs th:first-child,.combat .recap-pjs td:first-child{text-align:left}
+.combat .recap-pjs td{padding:6px;border-bottom:1px solid var(--line);text-align:right;vertical-align:top}
+.combat .recap-pjs tr:last-child td{border-bottom:0}
+.combat .recap-pjs .titre{display:block;font-size:.78rem;color:var(--brass);font-style:italic}
+.combat .recap-pjs tr.tombe b{color:var(--muted)}
+@container hote (max-width:560px){
+  .combat .recap-pjs th:nth-child(5),.combat .recap-pjs td:nth-child(5){display:none}
+}
+.combat{flex:1;min-height:0;display:flex;flex-direction:column}
+.combat .ctop{flex:0 0 auto;gap:6px 14px;padding-bottom:8px;margin-bottom:10px}
+.combat #banner{flex:0 0 auto}
+.combat .banner{margin-bottom:8px;padding:6px 10px}
+.combat .panes{position:static;flex:0 0 auto;margin-bottom:8px;padding:0}
+.combat .cgrid{flex:1;min-height:0;align-items:stretch;gap:12px;grid-template-columns:minmax(300px,1fr) minmax(340px,1.1fr) minmax(220px,.7fr)}
+.combat .col{min-height:0;gap:10px}
+.combat .c-log{grid-column:auto}
+.combat .panel{padding:10px 12px;gap:8px}
+.combat .p-ordre,.combat .p-log{flex:1;min-height:0}
+.combat .p-ordre > ol.order{flex:1;min-height:0;overflow:hidden}
+.combat #bTous{flex:0 0 auto}
+.combat .c-act{overflow:auto}
+.combat .c-act > *{flex:0 0 auto}
+.combat .logapercu{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:2px}
+@container hote (min-width:1181px){
+  .combat .raccourcis .b-journal{display:none}
+}
+@container hote (max-width:1180px){
+  .combat .cgrid{grid-template-columns:minmax(300px,1fr) minmax(340px,1.1fr)}
+  .combat .c-log{display:none}
+}
+@container hote (max-width:820px){
+  .combat .cgrid{grid-template-columns:minmax(240px,.9fr) minmax(300px,1.1fr)}
+}
+@container hote (min-width:701px){
+  .combat .panes{display:none}
+  .combat .cgrid[data-pane] :is(.c-ordre,.c-act){display:flex}
+}
+@container hote (max-width:700px){
+  .combat .cgrid{grid-template-columns:minmax(0,1fr)}
+  .combat .cgrid[data-pane=tour] .c-ordre{display:none}
+}
+.combat #paneSeg [data-pane=tour]{display:none}
+@container hote (max-width:600px) or (max-height:520px){
+  .combat .ctop .lib,.combat .ctop .kbd{display:none}
+  .combat .ctop{gap:4px 8px}
+  .combat .ctop .tools{gap:4px}
+}
+.combat .c-ordre{container:ordre / inline-size}
+@container ordre (max-width:400px){
+  .combat .cbt > .quick{display:none}
+  .combat .cbt{grid-template-columns:2.3rem minmax(0,1fr) auto}
+}
+.combat .cbt{grid-template-columns:2.3rem minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:5px 6px 5px 0}
+.combat .cbt .init{font-size:1.2rem;padding-top:0}
+.combat .cbt .main{gap:3px}
+.combat .cbt .name{flex-wrap:nowrap;white-space:nowrap;overflow:hidden;font-size:.98rem}
+.combat .cbt .name button{flex:0 1 auto;min-width:2.5em;display:flex;overflow:hidden}
+.combat .cbt .name button .base{overflow:hidden;text-overflow:ellipsis}
+.combat .cbt .name button span:not(.base){flex:0 0 auto;white-space:pre}
+.combat .cbt .name > span{flex:0 0 auto}
+.combat .cbt .chip{padding:0 7px;font-size:.74rem}
+.combat .cbt .hp{flex-wrap:nowrap}
+.combat .cbt .hp .val{font-size:.86rem;white-space:nowrap}
+.combat .cbt .hp .bar{flex:1 1 40px;min-width:34px}
+.combat .cbt .hp .stats{white-space:nowrap;flex:0 1 auto;overflow:hidden;text-overflow:ellipsis}
+.combat .quick input{width:3.2rem}
+.combat .active-card{gap:6px}
+.combat .active-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 12px}
+.combat button.active-name{all:unset;cursor:pointer;font-family:var(--f-display);font-size:1.45rem;line-height:1.1;font-weight:600}
+.combat button.active-name:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.combat .acts{gap:6px}
+.combat .act{min-height:38px;padding:4px 10px;font-size:.9rem}
+.combat .warnbox{padding:4px 8px;font-size:.88rem}
+.combat .ligne2{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.combat #atkForm{gap:8px}
+.combat .selecteurs{display:flex;flex-direction:column;gap:8px}
+.combat #atkForm .row{display:grid;gap:8px;align-items:end}
+.combat #atkForm .row.deux{grid-template-columns:repeat(2,minmax(0,1fr))}
+.combat #atkForm .row.trois{display:flex;flex-wrap:nowrap}
+.combat #atkForm .row.trois > label{flex:0 0 auto;min-width:0}
+.combat #atkForm .row.trois > label:last-child{flex:1 1 auto}
+.combat #atkForm .row.trois input[type=number]{width:4.6rem}
+.combat #atkForm select,.combat #atkForm .row.trois label:last-child input{width:100%}
+.combat #atkForm .vs{font-size:.95rem;gap:6px}
+.combat #atkForm .vs > div{display:flex;justify-content:center;align-items:baseline;gap:6px;white-space:nowrap;min-width:0}
+.combat #atkForm .vs .who{min-width:0;overflow:hidden;text-overflow:ellipsis}
+.combat #atkForm .vs .hint{flex:0 0 auto}
+.combat .act .court{display:none}
+.combat .ligne1{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.combat #modeInfo{font-size:.8rem;min-height:28px}
+.combat .result{padding:8px 10px;gap:5px}
+.combat .apercu{font-weight:600}
+.combat .result .dmrow.des{align-items:flex-end}
+.combat .result .dmrow.des .apercu{flex:1 1 100%}
+.combat .raccourcis{display:flex;flex-wrap:wrap;gap:6px}
+.combat .raccourcis button{flex:1 1 auto}
+@container hote (max-height:760px){
+  .combat .ctop{margin-bottom:6px;padding-bottom:6px}
+  .combat .ctop h1{font-size:1.15rem}
+  .combat .round .n{font-size:1.4rem}
+  .combat .col,.combat .cgrid{gap:6px}
+  .combat .panel{padding:7px 10px;gap:5px}
+  .combat :is(input,select){min-height:32px;padding:.2rem .45rem}
+  .combat label{font-size:.68rem;gap:1px}
+  .combat #atkForm,.combat #atkForm .row,.combat .selecteurs{gap:6px}
+  .combat .act{min-height:34px}
+  .combat .big{min-height:38px;font-size:1rem}
+  .combat .ligne2{-webkit-line-clamp:1}
+  .combat .cbt{padding:3px 6px 3px 0}
+  .combat .raccourcis,.combat #mods{display:none}
+  .combat .acts{gap:4px}
+  .combat .act{min-height:32px;padding:3px 8px;font-size:.84rem}
+  .combat button.active-name{font-size:1.25rem}
+}
+@container hote (max-height:520px){
+  .combat .active-card .reste,.combat #actInfo{display:none}
+  .combat .panel{padding:6px 8px;gap:4px}
+  .combat .panel-head h2{font-size:1rem}
+  .combat :is(input,select){min-height:30px}
+  .combat label{font-size:.66rem;gap:1px}
+  .combat .big{min-height:34px}
+  .combat #atkForm,.combat #atkForm .row,.combat .selecteurs{gap:5px}
+  .combat .result{padding:6px 8px;gap:3px}
+  .combat .result .verdict{font-size:1.15rem}
+  .combat .result .calc{font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+@container hote (max-height:520px) and (min-width:701px){
+  .combat .selecteurs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .combat .acts{flex-wrap:nowrap}
+  .combat .act{flex:1 1 auto;min-width:0;justify-content:center;padding:3px 4px;font-size:.78rem;white-space:nowrap}
+  .combat .act .long{display:none}
+  .combat .act .court{display:inline}
+}
+@container hote (max-height:520px) and (max-width:700px){
+  .combat #paneSeg [data-pane=tour]{display:block}
+  .combat .cgrid[data-pane=tour] .c-act{display:flex}
+  .combat .cgrid[data-pane=tour] .p-atk,.combat .cgrid[data-pane=action] .p-carte,.combat .p-atk .panel-head{display:none}
+  .combat .panes{margin-bottom:6px}
+  .combat .panes .seg button{min-height:32px}
+}
+.combat .fen{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;padding:12px;background:rgb(0 0 0 / .45)}
+.combat .fen-boite{display:flex;flex-direction:column;width:min(620px,100%);max-height:100%;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:var(--r);box-shadow:0 10px 40px rgb(0 0 0 / .35)}
+.combat .fen-tete{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 8px 8px 14px;border-bottom:1px solid var(--line)}
+.combat .fen-tete h2{font-size:1.15rem;min-width:0;overflow-wrap:anywhere}
+.combat .fen-corps{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:auto;padding:12px 14px}
+.combat .fen-corps > *{flex:0 0 auto}
+.combat .fen .logwrap{max-height:none}
+.combat .fen .quick button{min-height:38px}
+.combat .menu-combat{display:grid;grid-template-columns:minmax(0,1fr);gap:6px}
+.combat .menu-combat.deux{grid-template-columns:repeat(2,minmax(0,1fr))}
+.combat .menu-combat button{text-align:left;min-height:var(--tap)}
+.combat .choix{flex-direction:row;align-items:flex-start;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--sunk);cursor:pointer;text-transform:none;letter-spacing:0;color:var(--ink);font-size:.95rem}
+.combat .choix input{width:auto;min-height:0;margin-top:4px;accent-color:var(--accent)}
+.combat .choix span{display:flex;flex-direction:column;gap:2px}
+.combat .choix small{color:var(--muted);font-size:.84rem}
+
+/* ---------- récapitulatif : héros du combat, courbe des PV du groupe ---------- */
+.combat .recap-heros{text-align:center;padding:8px 10px;border:1px solid var(--brass);border-radius:var(--r);color:var(--ink)}
+.combat .recap-heros>span:first-child{color:var(--brass)}
+.combat .recap-courbe{margin:0;display:flex;flex-direction:column;gap:4px}
+.combat .recap-courbe figcaption{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.combat .recap-courbe svg{width:100%;height:70px;display:block}
+.combat .recap-courbe .g{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.combat .recap-courbe .l{fill:none;stroke:var(--pj);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.combat .recap-courbe-x{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted)}
+.combat .recap-courbe-x span{display:flex;flex-direction:column;align-items:center;min-width:2.4em}
+.combat .recap-courbe-x b{color:var(--ink);font-weight:600}
+.combat .recap-courbe-x span.bas b{color:var(--accent)}
+
+/* ---------- page des joueurs (joueur.html) : sa feuille, le combat sans chiffres, les hauts faits ---------- */
+.page-joueurs{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+.pj-barre{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top,0px));background:var(--side);border-bottom:1px solid var(--line)}
+.pj-barre .marque{padding:0}
+.pj-barre .marque small{color:var(--muted);font-size:.8rem;margin-left:4px}
+.pj-barre nav{display:flex;gap:2px;flex-wrap:wrap}
+.pj-barre nav a{text-decoration:none;padding:.4rem .75rem;border-radius:var(--r);color:var(--muted);font-size:.95rem}
+.pj-barre nav a.on{color:var(--ink);background:var(--surface2);font-weight:600}
+.pj-barre .conn{margin-left:auto;font-size:.8rem;padding:2px 8px;border-radius:999px;background:var(--warn);color:var(--bg)}
+.pj-barre #pj-changer{margin-left:auto}
+.pj-barre .conn:not([hidden]) + #pj-changer{margin-left:0}
+.page-joueurs #bandeau{position:sticky;top:calc(52px + env(safe-area-inset-top,0px));z-index:15;background:var(--sunk);border-bottom:1px solid var(--line);padding:8px 16px;font-size:.95rem}
+.page-joueurs #bandeau a{text-decoration:none;display:block}
+.page-joueurs #bandeau.moi{background:var(--mort);color:var(--bg);border-color:var(--mort)}
+.page-joueurs main{flex:1;padding:16px;padding-bottom:calc(32px + env(safe-area-inset-bottom,0px));max-width:1100px;width:100%;margin:0 auto}
+.pj-fiche{display:flex;flex-direction:column;gap:14px}
+.pj-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+.pj-tete h1{font-size:1.7rem}
+.combat .pj-choix{max-width:900px;width:100%;margin:0 auto}
+.combat .cartes-pj{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.combat .carte-pj{display:flex;flex-direction:column;gap:4px;align-items:flex-start;text-align:left;padding:14px;border-left:5px solid var(--pj);min-height:90px}
+.combat .carte-pj .nom{font-family:var(--f-display);font-size:1.3rem;font-weight:600}
+.combat .carte-pj.sel{box-shadow:0 0 0 2px var(--pj)}
+.combat .suivi{max-width:720px;width:100%;margin:0 auto;gap:14px}
+.combat .suivi-tete{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.combat .suivi-tete h1{flex:1;min-width:0;overflow-wrap:anywhere}
+.combat .round-n{font:600 2rem/1 var(--f-mono);color:var(--accent)}
+.combat .tour-de{display:flex;flex-direction:column;gap:4px;padding:16px;border-radius:var(--r);border:2px solid var(--line);background:var(--sunk)}
+.combat .tour-de .qui{font-family:var(--f-display);font-size:2.2rem;font-weight:600;line-height:1.1}
+.combat .tour-de.moi{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--sunk))}
+.combat .flag-moi{align-self:flex-start;background:var(--accent);color:var(--accent-ink);border-radius:999px;padding:3px 12px;font-weight:700}
+.combat .flag-moi.petit{padding:1px 8px;font-size:.8rem}
+.combat .ensuite{font-size:1.1rem}
+.combat .ensuite.moi b{color:var(--accent)}
+.combat .ordre-joueurs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.combat .ordre-joueurs li{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-left:5px solid var(--c);border-radius:var(--r);background:var(--surface)}
+.combat .ordre-joueurs li.courant{box-shadow:0 0 0 2px var(--c)}
+.combat .ordre-joueurs li.moi .nom{text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:3px}
+.combat .ordre-joueurs li.terre{opacity:.55}
+.combat .ordre-joueurs .qui-etats{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-width:0}
+.combat .ordre-joueurs .nom{font-weight:600;font-size:1.05rem;min-width:0;overflow-wrap:anywhere}
+.combat .ordre-joueurs .chip{padding:0 8px;font-size:.78rem}
+.combat .ordre-joueurs .etiquettes{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;flex:0 0 auto}
+.combat .hauts-faits{display:flex;flex-direction:column;gap:14px}
+.combat .hauts-faits h2{margin-top:6px}
+.combat .records{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.combat .record{border:1px solid var(--line);border-radius:var(--r);padding:12px;background:var(--sunk);display:flex;flex-direction:column;gap:8px}
+.combat .record.moi{border-color:var(--brass);box-shadow:0 0 0 1px var(--brass) inset}
+.combat .record-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.combat .record-stats div{display:flex;flex-direction:column;align-items:center}
+.combat .record-stats b{font-size:1.25rem}
+.combat .record-stats span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.combat .record-coup,.combat .record-titres{margin:0;font-size:.9rem}
+.combat .record-titres{display:flex;flex-wrap:wrap;gap:4px}
+.combat .combats-passes details{border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;margin-bottom:8px}
+.combat .combats-passes summary{cursor:pointer;display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-height:0}
+.combat .combats-passes summary::before{content:none}
+.combat .combats-passes details[open] summary{margin-bottom:12px}
+
+/* points de mana et capacités à usage limité */
+.combat .pm{color:var(--secret)}
+.combat .usages{display:flex;flex-direction:column;gap:6px}
+.combat .usages .chips button{min-height:26px;padding:0 8px;font-size:.85rem;white-space:normal;text-align:left}
+.combat .usages .chips button.used{text-decoration:line-through;opacity:.6}
+.combat .usages .row{flex-wrap:nowrap}

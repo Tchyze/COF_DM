@@ -1,0 +1,190 @@
+name: Release
+
+# Lanceurs sans installation, sur un tag vX.Y.Z (publiés dans une Release, canal stable) ou à la
+# demande (onglet Actions → Release → Run workflow) : canal « aucun » pour de simples artefacts,
+# canal « test » pour publier une préversion vX.Y.Z-test.N de la branche choisie (une PR à essayer),
+# que l'application propose à qui suit le canal Test.
+# - Windows : COF-DM.exe portable (zip) ; WebView2 est déjà présent sous Windows 10 et 11.
+# - Linux : AppImage ; demande WebKitGTK 4.1 sur le système (libwebkit2gtk-4.1-0).
+# Chaque Release porte SHA256SUMS, les empreintes de ses fichiers, et SHA256SUMS.sig, leur signature
+# Ed25519 (base64) par la clé de publication (secret COF_DM_SIGNATURE, au format PEM) : l'application
+# refuse une mise à jour qu'elle ne vérifie pas avec la clé publique de internal/majour.
+#
+# Chaîne de publication : les actions sont épinglées par SHA (la version en commentaire) ; les
+# outils téléchargés le sont par version et vérifiés par leur empreinte. Pour les mettre à jour,
+# relever le nouveau SHA ou la nouvelle empreinte sur la page de la version.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      canal:
+        description: "Publier une version d'essai (test) ou seulement compiler (aucun)"
+        type: choice
+        options: [aucun, test]
+        default: aucun
+
+permissions:
+  contents: read
+
+env:
+  APPIMAGETOOL_URL: https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+  APPIMAGETOOL_SHA256: ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0
+  # sans --runtime-file, appimagetool télécharge la dernière version du runtime sans la vérifier
+  RUNTIME_URL: https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+  RUNTIME_SHA256: 2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          CANAL: ${{ inputs.canal }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            V="${GITHUB_REF_NAME#v}"
+          elif [[ "$CANAL" == test ]]; then
+            # après la dernière version stable : X.Y.(Z+1)-test.N, plus récente qu'elle, plus ancienne que la suivante
+            D=$(gh release list --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName')
+            D="${D#v}"; D="${D:-0.0.0}"
+            IFS=. read -r MA MI CO <<< "$D"
+            V="$MA.$MI.$((CO + 1))-test.$GITHUB_RUN_NUMBER"
+          else
+            V="0.0.0-git${GITHUB_SHA::7}"
+          fi
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "Version : $V"
+
+  tests:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26" # la dernière 1.26.x ; go.mod fixe le minimum
+          check-latest: true
+      - run: go test -tags "sqlite_fts5 nogui" ./...
+
+  linux:
+    needs: [version, tests]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26" # la dernière 1.26.x ; go.mod fixe le minimum
+          check-latest: true
+      - name: Version
+        run: echo "VERSION=${{ needs.version.outputs.version }}" >> "$GITHUB_ENV"
+      - name: Dépendances (GTK, WebKitGTK 4.1)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          # webview_go cherche webkit2gtk-4.0 ; la 4.1 est compatible et disponible sur les distributions récentes
+          sudo ln -sf /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.1.pc /usr/lib/x86_64-linux-gnu/pkgconfig/webkit2gtk-4.0.pc
+      - name: Compilation
+        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -trimpath -ldflags "-s -w -X main.version=$VERSION" -o cof-dm .
+      - name: AppImage
+        run: |
+          mkdir -p AppDir/usr/bin AppDir/usr/share/applications AppDir/usr/share/icons/hicolor/256x256/apps
+          cp cof-dm AppDir/usr/bin/
+          cp build/linux/AppRun AppDir/ && chmod +x AppDir/AppRun
+          cp build/linux/cof-dm.desktop AppDir/ && cp build/linux/cof-dm.desktop AppDir/usr/share/applications/
+          cp build/icon-256.png AppDir/cof-dm.png && cp build/icon-256.png AppDir/usr/share/icons/hicolor/256x256/apps/cof-dm.png
+          ln -s cof-dm.png AppDir/.DirIcon
+          curl -fsSL -o appimagetool "$APPIMAGETOOL_URL"
+          curl -fsSL -o runtime-x86_64 "$RUNTIME_URL"
+          printf '%s  appimagetool\n%s  runtime-x86_64\n' "$APPIMAGETOOL_SHA256" "$RUNTIME_SHA256" | sha256sum --check --strict
+          chmod +x appimagetool
+          mkdir -p dist
+          ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 ./appimagetool --runtime-file runtime-x86_64 AppDir "dist/COF-DM-$VERSION-x86_64.AppImage"
+          ls -la dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux
+          path: dist/*
+
+  windows:
+    needs: [version, tests]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26" # la dernière 1.26.x ; go.mod fixe le minimum
+          check-latest: true
+      - name: Version
+        run: echo "VERSION=${{ needs.version.outputs.version }}" >> "$GITHUB_ENV"
+      - name: Icône et manifeste Windows
+        run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon build/icon.png --manifest gui --product-name "COF DM" --file-description "COF DM"
+      - name: Compilation
+        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VERSION" -o dist/COF-DM.exe .
+      - name: Archive portable
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist\COF-DM.exe, LICENSE -DestinationPath "dist\COF-DM-$env:VERSION-windows-portable.zip"
+          Get-ChildItem dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.canal == 'test'
+    needs: [version, linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Empreintes et signature
+        env:
+          COF_DM_SIGNATURE: ${{ secrets.COF_DM_SIGNATURE }}
+        run: |
+          cd dist
+          sha256sum -- * > SHA256SUMS
+          cat SHA256SUMS
+          test -n "$COF_DM_SIGNATURE" || { echo "secret COF_DM_SIGNATURE absent : version non signée, l'application la refuserait"; exit 1; }
+          umask 077
+          printf '%s\n' "$COF_DM_SIGNATURE" > "$RUNNER_TEMP/cle.pem"
+          openssl pkeyutl -sign -inkey "$RUNNER_TEMP/cle.pem" -rawin -in SHA256SUMS | base64 -w0 > SHA256SUMS.sig
+          rm -f "$RUNNER_TEMP/cle.pem"
+      - name: Version d'essai
+        if: inputs.canal == 'test'
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: Test ${{ needs.version.outputs.version }} (${{ github.ref_name }})
+          prerelease: true
+          files: dist/*
+          body: |
+            Version d'**essai** de la branche `${{ github.ref_name }}` (${{ github.sha }}), avant sa fusion. Elle est proposée par l'application à qui suit le canal **Test** (Paramètres → Mises à jour).
+      - name: Version stable
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            **Windows** : `COF-DM.exe` se lance directement, sans installation (aussi dans le zip).
+            **Linux** : rendez l'AppImage exécutable (`chmod +x`) puis lancez-la ; il faut WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` sur Debian/Ubuntu, `webkit2gtk4.1` sur Fedora).
+            **Mode portable** : créez un dossier `COF DM - données` à côté du programme pour y garder la base.
+            **Vérifier un téléchargement** : `sha256sum --check --ignore-missing SHA256SUMS` (Linux), ou comparer `Get-FileHash COF-DM.exe` à la ligne de `SHA256SUMS` (Windows). `SHA256SUMS.sig` en est la signature, que l'application vérifie avant toute mise à jour.
