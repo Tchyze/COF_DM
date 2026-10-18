@@ -4,6 +4,13 @@ Fichier de passation : ce qui a été fait, les décisions prises et ce qu'il re
 
 Dernière mise à jour : 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
 
+## Dépôt public (18 octobre 2026)
+
+`Tchyze/COF_DM` est **public** depuis le 18 octobre 2026, reparti d'un commit unique (le code de l'époque, nettoyé). L'ancien dépôt, avec tout l'historique, les PR 1 à 54 citées plus bas et les versions v1.0.0 et v1.1.0, est devenu **`Tchyze/COF_DM-historique`**, privé : les numéros de PR de ce fichier renvoient à lui. Le dépôt local a les deux remotes (`origin`, `historique`). Première version publique : **v1.2.0**.
+
+- **Clé de publication** : `~/Outil/cle-publication-cof-dm.pem` (hors dépôt), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
+- **Faire essayer une PR** : `gh workflow run release.yml --ref <branche> -f canal=test`, puis l'application (canal Test) la propose.
+
 ## Pour reprendre sur un autre poste
 
 Le MJ utilise l'application en mode serveur avec `docker compose` sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`), données dans `~/Outil/COF_DM/donnees`. Mise à jour : `git pull && docker compose up -d --build`.
