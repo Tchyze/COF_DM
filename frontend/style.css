@@ -626,3 +626,9 @@ a.version-app[href]:hover{color:var(--muted)}
 .t-aide .dest button.primary{border-style:solid;border-color:var(--gold);background:var(--gold);color:#17130a;font-weight:600}
 .t-tabs .nb{font-size:.78em;opacity:.75;margin-left:2px}
 .t-aide .dest button.recu{border-style:solid;border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);cursor:default}
+
+/* Paramètres → Claude */
+.claude-client{display:flex;flex-direction:column;gap:6px;padding-top:6px;border-top:1px solid var(--line)}
+.claude-client h4{font-size:.95rem}
+.claude-cible{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;font-size:.9rem}
+.claude-cible code{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere;min-width:0}

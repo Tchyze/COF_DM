@@ -345,6 +345,15 @@ La page n'affiche aucun cadre. Sa politique de sécurité n'admet de WebSocket q
 | `DELETE /api/medias/{id}` | Supprime. |
 | `GET /medias/{fichier}` | L'image (rangée dans le fichier de l'univers). |
 
+## Claude (application de bureau)
+
+Inscrire le serveur MCP de cette application (`<programme> -mcp`) dans Claude Desktop ou Claude Code de cet ordinateur. Sur l'ordinateur du MJ seulement (`403` depuis le réseau, même avec le jeton) ; ces routes n'existent pas sur un serveur.
+
+| Requête | Effet |
+|---|---|
+| `GET /api/claude` | `{"programme", "args", "cibles": [{"client": "desktop" \| "code", "nom", "chemin", "present", "branche", "a_jour", "erreur"?}], "commande_code"}`. `present` : le client semble installé ; `a_jour` : l'entrée lance ce programme avec ces arguments ; `commande_code` : la commande équivalente pour Claude Code. |
+| `POST /api/claude` `{"client": "desktop", "actif": true}` | Écrit (ou met à jour) l'entrée `cof-dm` de `mcpServers` dans chaque configuration présente de ce client ; `false` la retire. Le reste du fichier est gardé ; la première fois, une copie `….avant-cof-dm` est faite. Client absent : `404` ; fichier qui n'est pas du JSON : `422`, laissé tel quel. Journalisé. |
+
 ## Fonctionnalités
 
 Certaines parties de l'application sont optionnelles, réglées **univers par univers** (le réglage est rangé dans l'univers et se synchronise) : `ecran_mj`, `seances` (préparation et après-séance), `combat`, `rencontres`, `secrets`, `feuilles`, `page_joueurs`, `des`, `aides`, `regles`, `graphe`, `chronologie`, `organigramme`, `obsidian`. Coupées par défaut dans un univers neuf : `des`, `aides`, `feuilles`, `page_joueurs`. Un univers d'avant cette version garde ce dont il se sert (des feuilles de personnage : `feuilles` et `page_joueurs` ; des aides de jeu : `aides`).
