@@ -2,7 +2,7 @@
 
 Fichier de passation : ce qui a été fait, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail sur un autre poste, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
+Dernière mise à jour : 19 octobre 2026 (aides de jeu, projet 9, lot 1 : PR 4 du dépôt public) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
 
 ## Dépôt public (18 octobre 2026)
 
@@ -12,6 +12,15 @@ Dernière mise à jour : 16 octobre 2026, avec les points 11 et 12 de l'audit (P
 - **Faire essayer une PR** : `gh workflow run release.yml --ref <branche> -f canal=test`, puis l'application (canal Test) la propose.
 
 - **Version affichée** : en petit à côté de « Thème » (v1.2.0 ; une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
+
+### PR du dépôt public
+
+Les numéros ci-dessous sont ceux de `Tchyze/COF_DM` (repartis de #1) ; ceux des tableaux plus bas renvoient à `COF_DM-historique`.
+
+| PR | Contenu |
+|---|---|
+| 1, 2 | Suivi de la publication ; version affichée à côté de « Thème ». |
+| 4 | **Aides de jeu** (projet 9, lot 1). Type de fiche `aide` (forme, campagne, texte remis aux joueurs, images ; réservés au MJ : indice de, prévue pour, notes) ; relation réservée `recu` (PJ → aide), bornée par types (`De`, `Vers`, `Reservee` dans `internal/modele`) et contrôlée à la saisie, à l'échange et à la restauration. `POST /api/aides/{id}/envoyer` (à des PJ ou à tous ceux de la campagne, séance notée ; secret caché → soupçonné), `GET /api/aides`, indices dans `GET /api/secrets`. Page des joueurs : onglet « Documents » (`/api/joueur/documents`, une aide, ses images), pastille des non-lus, annonce en direct aux seuls destinataires ; une aide n'est jamais partagée. Écrans : panneau « Envoyée aux joueurs » sur la fiche de l'aide, indices sur la fiche d'un secret, ✉ dans « qui sait quoi », onglet « Aides » de l'écran du MJ (prévues pour la séance d'abord, un PJ touché la reçoit, « Tous »). Outils MCP `aides_de_jeu` et `envoyer_aide`. Tests de non-fuite (maison, compte joueur, direct), de relation réservée et de synchronisation. Vu dans Chrome à 1300 et 390 px, sans erreur de console : fiche de l'aide et envoi, secret, qui sait quoi, écran du MJ, documents et lettre et image côté joueur, arrivée en direct. |
 
 ## Pour reprendre sur un autre poste
 
@@ -55,6 +64,17 @@ Exigence ferme, pour que le logiciel se distribue sans problème. Ni liste, ni t
   - Joueur : ne voit que les fiches que le MJ partage, sans leurs champs MJ ; jamais les fiches « Secret » ; lecture seule, sauf si l'administrateur ouvre l'édition par les joueurs (trois champs texte de son PJ, et toute sa feuille de personnage sauf les notes du MJ).
 - **Plusieurs univers ouverts à la fois** ; chacun choisit le sien dans son navigateur.
 - L'application de bureau reste sans compte.
+
+### Aides de jeu (décisions du 19 octobre 2026)
+
+- Une aide de jeu est un **type de fiche** (recherche, liens, journal, synchronisation, export Obsidian d'office) ; l'envoi est une relation `recu` d'un PJ vers l'aide, avec la séance.
+- Le joueur voit **la version à jour** (le MJ corrige après l'envoi) ; le MJ peut **retirer** un envoi.
+- Indice d'un secret : l'envoi note « a l'indice » dans « qui sait quoi » et passe un secret **caché à soupçonné** ; la révélation reste un geste du MJ.
+- À la maison, **table de confiance** : qui choisit un PJ sur la page libre lit ses documents, comme sa feuille. Sur un serveur, chaque compte ne voit que ceux de son PJ.
+- Envoi depuis **la fiche de l'aide** et **l'écran du MJ** (onglet « Aides »).
+- À l'arrivée, la page du joueur montre **une pastille** et une courte annonce, sans ouvrir l'aide en grand.
+- Une aide n'apparaît **que dans les documents** du joueur, jamais comme fiche partagée.
+- **Un secret** par aide, **plusieurs images** (celles de la fiche).
 
 ### Bureau et serveur (décisions du 18 octobre 2026)
 

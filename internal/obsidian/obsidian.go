@@ -238,6 +238,8 @@ func (x *exporteur) dossier(n *note) string {
 		return "06 - Secrets"
 	case "regle":
 		return "07 - Règles"
+	case "aide":
+		return "08 - Aides de jeu"
 	}
 	return "Fiches/" + nomFichier(n.t.Pluriel)
 }

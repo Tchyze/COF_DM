@@ -26,7 +26,7 @@ import { initDes } from "./des.js";
 const GROUPES = [
   ["Monde", ["pnj", "lieu", "faction", "objet", "lore", "evenement"]],
   ["Campagnes", ["campagne", "quete", "rencontre", "seance", "pj"]],
-  ["Secrets", ["secret"]],
+  ["Secrets", ["secret", "aide"]],
   ["Règles", ["regle"]],
 ];
 

@@ -845,10 +845,16 @@ func ecrireRelation(tx execer, o *objetRecu) error {
 	if err := typeRelationValide(r.Type); err != nil {
 		return err
 	}
-	for _, f := range []int64{r.A, r.B} {
-		if _, err := lire(tx, f); err != nil {
+	var types [2]string
+	for i, f := range []int64{r.A, r.B} {
+		e, err := lire(tx, f)
+		if err != nil {
 			return invalide("relation n°%d : elle relie une fiche absente (n°%d)", id, f)
 		}
+		types[i] = e.Type
+	}
+	if err := relationPermise(r.Type, types[0], types[1]); err != nil {
+		return invalide("relation n°%d : %v", id, err)
 	}
 	if r.A == r.B {
 		return invalide("relation n°%d : une fiche ne peut pas être reliée à elle-même", id)

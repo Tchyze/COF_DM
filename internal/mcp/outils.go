@@ -242,7 +242,7 @@ func outils() []outil {
 		},
 		{
 			Nom: "qui_sait_quoi", Titre: "Qui sait quoi", Lecture: true,
-			Description: "Les secrets, et qui (PJ, PNJ, faction) sait chacun : séance où il l'a appris et comment.",
+			Description: "Les secrets, et qui (PJ, PNJ, faction) sait chacun : séance où il l'a appris et comment ; les indices (aides de jeu envoyées) que chaque PJ a reçus.",
 			Proprietes:  map[string]any{"campagne": entier("Identifiant d'une campagne")},
 			Faire:       lire("/api/secrets", "campagne"),
 		},
@@ -520,6 +520,30 @@ func outils() []outil {
 					return nil, err
 				}
 				return c.appel("POST", chemin("/api/secrets/%d/reveler", id), nil, a.copier("qui", "seance", "note"))
+			},
+		},
+		{
+			Nom: "aides_de_jeu", Titre: "Aides de jeu", Lecture: true,
+			Description: "Les aides de jeu (lettres, images, indices à remettre aux joueurs), avec le secret dont chacune est l'indice, la séance pour laquelle elle est prévue et les PJ qui l'ont déjà reçue. Le texte se lit avec lire_fiche.",
+			Proprietes:  map[string]any{"campagne": entier("Identifiant d'une campagne (ses aides et celles sans campagne)")},
+			Faire:       lire("/api/aides", "campagne"),
+		},
+		{
+			Nom: "envoyer_aide", Titre: "Envoyer une aide de jeu",
+			Description: "Envoie une aide de jeu à des PJ (ou à tous ceux de sa campagne) : elle arrive aussitôt sur leur page des joueurs, onglet Documents. Un PJ qui l'a déjà reçue est passé. Si l'aide est l'indice d'un secret « caché », il passe à « soupçonné ». À ne faire que si le MJ le demande.",
+			Proprietes: map[string]any{
+				"id":     entier("Identifiant de l'aide de jeu"),
+				"qui":    entiers("PJ qui la reçoivent"),
+				"tous":   booleen("Tous les PJ de la campagne de l'aide (au lieu de qui)"),
+				"seance": entier("Séance de l'envoi"),
+			},
+			Requis: []string{"id"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("id")
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("POST", chemin("/api/aides/%d/envoyer", id), nil, a.copier("qui", "tous", "seance"))
 			},
 		},
 		{

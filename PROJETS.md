@@ -22,7 +22,7 @@ Rappel des règles qui s'appliquent à chaque projet (voir `CLAUDE.md`) : aucune
 | 6 | Restes à vérifier (SUIVI.md) | P1 | S | ★★ | — |
 | 7 | ~~Cartes avec marqueurs liés aux fiches~~ (reporté, voir en fin de liste) | — | L | ★★★ | — |
 | 8 | ~~Cartes montrées aux joueurs, brouillard de guerre~~ (reporté, voir en fin de liste) | — | M | ★★★ | 7 |
-| 9 | Aides de jeu poussées aux joueurs | P2 | M | ★★★ | — |
+| 9 | Aides de jeu poussées aux joueurs (lot 1 fait, PR 4 du dépôt public) | P2 | M | ★★★ | — |
 | 10 | Capacités des voies utilisables | P2 | L | ★★★ | 5 |
 | 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — |
 | 12 | Montée de niveau guidée | P2 | M | ★★ | 10 (conseillé) |
@@ -107,6 +107,8 @@ La feuille porte des PM, le combattant non (`Combattant` n'a ni `Pm` ni `PmMax`)
 
 ### 9. Aides de jeu poussées aux joueurs
 Lettre, image, indice : le MJ l'envoie en direct à un, plusieurs ou tous les joueurs ; elle reste dans un onglet « Documents » de leur page. Relié au secret dont c'est un indice (« qui sait quoi » mis à jour).
+- Lot 1 (fait, PR 4 du dépôt public) : type de fiche « Aide de jeu », envoi depuis la fiche et l'onglet « Aides » de l'écran du MJ, onglet « Documents » de la page des joueurs, indices dans « qui sait quoi », outils MCP.
+- Suite possible : cocher les aides dans la préparation de séance ; les aides reçues dans l'export Obsidian « joueurs » ; envoi rapide à la volée (image collée) ; impression (projet 13).
 
 ### 10. Capacités des voies utilisables
 Les capacités sont aujourd'hui du texte. Les décrire dans le fichier de profils et voies (type, coût, utilisations, effet sur les valeurs, état) pour qu'elles s'appliquent sur la feuille et proposent une action en combat. Sans fichier, elles restent du texte.

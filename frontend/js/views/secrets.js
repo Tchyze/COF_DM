@@ -12,11 +12,17 @@ export async function mount(el, params) {
       <select id="filtre" style="width:auto"><option value="">Tous les secrets</option><option value="caché">encore cachés</option><option value="partiel">en partie connus des PJ</option><option value="révélé">révélés</option></select>
       <a href="#/nouveau/secret${camp ? "?campagne=" + camp : ""}"><button class="primary">+ Secret</button></a>
     </div>
-    <p class="hint" style="margin-bottom:12px">Cliquez une case pour indiquer qu'un PJ sait (ou ne sait plus) un secret. Le détail (depuis quelle séance, comment) se règle sur la fiche du secret.</p>
+    <p class="hint" style="margin-bottom:12px">Cliquez une case pour indiquer qu'un PJ sait (ou ne sait plus) un secret. ✉ : il a reçu une aide de jeu qui en est l'indice, sans le savoir encore. Le détail (depuis quelle séance, comment) se règle sur la fiche du secret.</p>
     <div id="tableau"></div>`;
   const charger = async () => {
     const d = await api("GET", "/api/secrets" + (camp ? "?campagne=" + camp : ""));
     const sait = new Map(d.connaissances.map(c => [c.secret + ":" + c.qui, c]));
+    const indices = new Map(); // aides de jeu reçues qui sont l'indice du secret
+    for (const i of d.indices || []) {
+      const k = i.secret + ":" + i.qui;
+      if (!indices.has(k)) indices.set(k, []);
+      indices.get(k).push(i.aide.nom);
+    }
     let secrets = d.secrets;
     if (filtre) {
       secrets = secrets.filter(sec => {
@@ -34,7 +40,11 @@ export async function mount(el, params) {
       <tbody>${secrets.map(sec => `<tr>
         <td><a class="lien-fiche" href="#/f/${sec.id}" data-id="${sec.id}">🔒 ${esc(sec.nom)}</a>${sec.carte?.importance ? ` <span class="badge">${esc(sec.carte.importance)}</span>` : ""}</td>
         <td>${valeurCourte("secret", "statut", sec.carte?.statut) || `<span class="hint">—</span>`}</td>
-        ${d.pj.map(p => { const c = sait.get(sec.id + ":" + p.id); return `<td class="case${c ? " sait" : ""}"><button data-s="${sec.id}" data-p="${p.id}" ${c ? `data-rel="${c.relation}"` : ""} aria-label="${esc(p.nom)} ${c ? "sait" : "ne sait pas"}">${c ? "✓" : ""}</button></td>`; }).join("")}
+        ${d.pj.map(p => {
+          const c = sait.get(sec.id + ":" + p.id), ind = indices.get(sec.id + ":" + p.id);
+          const titre = ind ? `${c ? "Sait. " : ""}A reçu : ${ind.join(", ")}` : "";
+          return `<td class="case${c ? " sait" : ind ? " indice" : ""}"><button data-s="${sec.id}" data-p="${p.id}" ${c ? `data-rel="${c.relation}"` : ""} ${titre ? `title="${esc(titre)}"` : ""} aria-label="${esc(p.nom)} ${c ? "sait" : ind ? "a un indice" : "ne sait pas"}">${c ? "✓" : ind ? "✉" : ""}</button></td>`;
+        }).join("")}
         <td><div class="ligne" style="gap:4px 10px">${autres(sec).map(x => `<a class="lien-fiche" href="#/f/${x.id}" data-id="${x.id}">${vignette(x, 18)}${esc(x.nom)}</a>`).join("") || `<span class="hint">—</span>`}</div></td>
       </tr>`).join("") || `<tr><td colspan="${d.pj.length + 3}" class="vide">Aucun secret ne correspond.</td></tr>`}</tbody>
     </table>${d.pj.length ? "" : `<p class="hint">Aucun PJ${camp ? " dans cette campagne" : ""} : créez les fiches PJ pour suivre ce qu'ils savent.</p>`}</div>`;

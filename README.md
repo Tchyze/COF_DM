@@ -47,6 +47,13 @@ Les champs se valident à l'enregistrement (valeurs permises, fiches référenc�
 - Page **Qui sait quoi** : un tableau secrets × PJ ; un clic sur une case indique qu'un PJ sait (ou ne sait plus).
 - Les fiches de PNJ, PJ et factions montrent les secrets qu'elles connaissent et ceux qui les concernent.
 
+### Aides de jeu
+
+- Une **aide de jeu** est une fiche : une lettre, une image, un indice, avec le texte remis aux joueurs et ses images. Réservés au MJ : le secret dont c'est l'indice, la séance pour laquelle elle est prévue, ses notes.
+- **Envoyer** : depuis la fiche de l'aide (« ✉ Envoyer… », à un, plusieurs ou tous les PJ), ou depuis l'onglet **Aides** de l'écran du MJ (un PJ touché la reçoit ; « Tous » l'envoie aux PJ de la table ; la séance de l'écran est notée). Elle arrive en direct dans l'onglet **Documents** de la page des joueurs ; ✕ la leur retire.
+- **Indice** : envoyer l'indice d'un secret encore caché le passe à « soupçonné », et « qui sait quoi » montre ✉ pour les PJ qui l'ont reçu. Le révéler reste un geste du MJ.
+- Les joueurs voient toujours la version à jour (une coquille se corrige après l'envoi), et jamais rien d'autre que le nom, la forme, le texte et les images.
+
 ### Écran du MJ
 
 La page pour jouer (**🧭 Écran du MJ**, `#/table`) : tout tient dans la fenêtre, sans défilement de page ; chaque volet défile seul s'il déborde.
@@ -81,14 +88,15 @@ Chaque joueur suit la partie sur son téléphone, à l'adresse `http://<adresse>
 
 - **Ma fiche** : la feuille de son personnage, sans les notes du MJ. Pendant un combat, ses PV et ses points de chance y bougent en direct. Elle est en lecture seule tant que le MJ n'a pas déverrouillé les feuilles ; déverrouillée, le joueur la tient lui-même (PV, ressources, repos, attaques, voies, équipement).
 - **Combat** : le round, à qui c'est le tour, qui joue ensuite, l'ordre d'initiative et les états de chacun. Aucun PV, aucune DEF, aucune attaque, aucune statistique ; les adversaires hors de combat disparaissent de la liste. Un bandeau rappelle le tour sur sa fiche et annonce « C'est à vous ! ».
+- **Documents** : les aides de jeu que le MJ lui a envoyées (lettres, images, indices), avec une pastille pour celles qu'il n'a pas encore ouvertes ; une nouvelle s'annonce aussitôt.
 - **Dés** : des tests tout faits lus sur sa feuille (caractéristiques, attaques et leurs dégâts), avec dé bonus ou malus, une formule libre, et les jets de toute la table, en direct.
 - **Hauts faits** : le récapitulatif de chaque combat terminé et les records de chaque PJ (combats, victoires, adversaires abattus, critiques, meilleur coup, titres).
 
 Les joueurs regardent le combat, ils n'y agissent pas. Tout se met à jour en temps réel.
 
-**À la maison**, la page est libre, sans mot de passe, pour les appareils du réseau local : dans **Paramètres → Tablette et réseau**, sur l'ordinateur du MJ, cochez **Ouvrir la page des joueurs au réseau local** (éteinte par défaut ; l'application doit écouter sur le réseau, donc travailler en mode local) et faites scanner son QR code. Chacun y choisit son personnage, gardé sur son appareil. N'importe qui sur ce réseau peut donc lire les feuilles des PJ ; rien d'autre de l'univers n'est accessible sans le mot de passe MJ. **Déverrouiller les feuilles** se règle au même endroit.
+**À la maison**, la page est libre, sans mot de passe, pour les appareils du réseau local : dans **Paramètres → Tablette et réseau**, sur l'ordinateur du MJ, cochez **Ouvrir la page des joueurs au réseau local** (éteinte par défaut ; l'application doit écouter sur le réseau, donc travailler en mode local) et faites scanner son QR code. Chacun y choisit son personnage, gardé sur son appareil. N'importe qui sur ce réseau peut donc lire les feuilles et les documents des PJ ; rien d'autre de l'univers n'est accessible sans le mot de passe MJ. **Déverrouiller les feuilles** se règle au même endroit.
 
-**Sur un serveur**, on y entre par son compte : un joueur n'y trouve que le PJ rattaché à son compte, les combats où il se bat et leurs hauts faits (lien « Ma feuille et le combat » dans son menu).
+**Sur un serveur**, on y entre par son compte : un joueur n'y trouve que le PJ rattaché à son compte, ses documents, les combats où il se bat et leurs hauts faits (lien « Ma feuille et le combat » dans son menu).
 
 ### En serveur, derrière nginx
 
@@ -103,7 +111,7 @@ Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche
 | Auditeur (par univers) | Lit tout, secrets du MJ compris, sans rien modifier. |
 | Joueur (par univers) | Lit les fiches que le MJ partage, sans leurs champs réservés au MJ. |
 
-Rien n'est montré aux joueurs par défaut : sur chaque fiche, le MJ clique **👁 Partager avec les joueurs** pour la rendre visible (et **Retirer aux joueurs** pour la cacher). Les champs du groupe « MJ », les relations secrètes, le tableau « qui sait quoi », les fiches « Secret », le journal et l'écran du MJ ne leur sont jamais montrés ; leur recherche ne porte que sur les noms et les tags.
+Rien n'est montré aux joueurs par défaut : sur chaque fiche, le MJ clique **👁 Partager avec les joueurs** pour la rendre visible (et **Retirer aux joueurs** pour la cacher). Les champs du groupe « MJ », les relations secrètes, le tableau « qui sait quoi », les fiches « Secret » et les aides de jeu (qui n'arrivent que par un envoi, dans leurs documents), le journal et l'écran du MJ ne leur sont jamais montrés ; leur recherche ne porte que sur les noms et les tags.
 
 Les joueurs ne modifient rien, sauf si l'administrateur coche **Édition par les joueurs** (Paramètres → Comptes du serveur) et rattache chaque compte à son PJ : le joueur peut alors modifier l'apparence, l'historique et les objectifs de ce PJ, et rien d'autre.
 
@@ -271,8 +279,8 @@ Tout ce que fait l'interface passe par une API REST documentée dans [docs/API.m
 
 `cof-dm -mcp` est un serveur [MCP](https://modelcontextprotocol.io) : Claude (Claude Desktop, Claude Code ou tout client MCP) lit et tient à jour l'univers ouvert dans l'application. Il passe par l'API, avec ses droits et sa validation ; ses écritures sont signées `claude` dans le journal.
 
-- **Lire** : schéma, recherche, fiche complète (par identifiant ou par nom), fiches liées, chronologie, qui sait quoi, organigramme, partie en cours (écran du MJ), feuille de personnage, bestiaire, difficulté d'une rencontre, combats, jets de dés, préparation d'une séance, journal, liens morts.
-- **Écrire** : lancer des dés (cachés par défaut), clore une séance, créer et modifier une fiche, l'archiver ou la restaurer, la partager avec les joueurs, créer, modifier et supprimer une relation, révéler un secret, modifier une feuille de personnage. Rien ne s'efface définitivement par ce chemin.
+- **Lire** : schéma, recherche, fiche complète (par identifiant ou par nom), fiches liées, chronologie, qui sait quoi, organigramme, partie en cours (écran du MJ), feuille de personnage, bestiaire, difficulté d'une rencontre, combats, jets de dés, préparation d'une séance, aides de jeu, journal, liens morts.
+- **Écrire** : lancer des dés (cachés par défaut), clore une séance, envoyer une aide de jeu aux PJ, créer et modifier une fiche, l'archiver ou la restaurer, la partager avec les joueurs, créer, modifier et supprimer une relation, révéler un secret, modifier une feuille de personnage. Rien ne s'efface définitivement par ce chemin.
 
 L'application doit être lancée. Sur l'ordinateur du MJ, il n'y a rien à régler : le serveur MCP trouve le port et le jeton dans le dossier de l'application (`-data` et `-port` si vous les changez). Avec Claude Code :
 

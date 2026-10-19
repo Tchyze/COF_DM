@@ -1,13 +1,15 @@
 // Page des joueurs : la feuille de son personnage, le combat en cours (l'ordre d'initiative et les
-// états, sans aucun chiffre), les dés (ses jets et ceux de la table) et les hauts faits. À la maison, la page est libre quand le MJ l'a
+// états, sans aucun chiffre), les documents (aides de jeu envoyées par le MJ), les dés (ses jets et
+// ceux de la table) et les hauts faits. À la maison, la page est libre quand le MJ l'a
 // ouverte et chacun y choisit son PJ ; sur un serveur, on y entre par son compte, avec son PJ.
 import { $, $$, esc, api, toast, lien } from "./ui.js";
 import { panneauFeuille, CARACS } from "./views/feuille.js";
 import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
 import { ligneJet, DES_RAPIDES } from "./des.js";
+import { rendu } from "./md.js";
 
 const CLE = "cof-joueur-pj";
-const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20 };
+const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0 };
 const vue = $("#vue");
 
 const lireChoix = () => { try { return +localStorage.getItem(CLE) || 0; } catch { return 0; } };
@@ -35,6 +37,7 @@ function vueChoix() {
     b.onclick = () => {
       etat.pj = etat.pjs.find(p => p.id === +b.dataset.pj);
       garderChoix(etat.pj.id);
+      etat.docs = []; chargerDocs();
       location.hash = "#/";
       route();
     };
@@ -82,6 +85,64 @@ function vueCombat() {
         <span class="etiquettes"><span class="tag ${p.camp}">${CAMPS[p.camp] || ""}</span>${p.a_terre ? `<span class="tag">À terre</span>` : ""}${p.courant ? `<span class="flag">Joue</span>` : p.suivant ? `<span class="tag">Ensuite</span>` : ""}</span>
       </li>`).join("")}</ol>
   </section>`;
+}
+
+/* ---------------------------------------------------------- documents */
+// Les aides de jeu que le MJ a envoyées à ce PJ. Celles pas encore ouvertes sur cet appareil portent
+// une pastille (sur l'onglet et sur leur carte).
+const CLE_VUS = "cof-joueur-vus";
+const lireVus = () => { try { return new Set(JSON.parse(localStorage.getItem(CLE_VUS + "-" + etat.pj?.id) || "[]")); } catch { return new Set(); } };
+function marquerVu(id) {
+  const vus = lireVus(); vus.add(id);
+  try { localStorage.setItem(CLE_VUS + "-" + etat.pj.id, JSON.stringify([...vus])); } catch { /* stockage indisponible */ }
+  peindrePastille();
+}
+const avecPJ = chemin => lien(chemin + (chemin.includes("?") ? "&" : "?") + "pj=" + etat.pj.id);
+const imageDoc = (id, f) => avecPJ(`/api/joueur/documents/${id}/images/${encodeURIComponent(f)}`);
+const dateDoc = t => new Date(t * 1000).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+
+function peindrePastille() {
+  const vus = lireVus(), n = etat.docs.filter(d => !vus.has(d.id)).length;
+  const b = $("#doc-badge");
+  b.hidden = !n; b.textContent = n || "";
+}
+
+async function chargerDocs() {
+  if (!etat.pj) return;
+  try { etat.docs = await api("GET", avecPJ("/api/joueur/documents")); } catch { /* hors ligne : on garde la liste */ }
+  peindrePastille();
+  if (etat.vue === "documents") vueDocuments();
+}
+
+function vueDocuments() {
+  vue.className = "combat";
+  if (etat.doc) { vueDocument(etat.doc); return; }
+  const vus = lireVus();
+  vue.innerHTML = `<section class="panel documents">
+      <h1>Documents</h1>
+      ${etat.docs.length ? `<div class="docs-liste">${etat.docs.map(d => `<a class="doc-carte${vus.has(d.id) ? "" : " nouveau"}" href="#/documents/${d.id}">
+          ${d.image ? `<img src="${esc(imageDoc(d.id, d.image))}" alt="" loading="lazy">` : `<span class="doc-icone" aria-hidden="true">✉</span>`}
+          <span class="c"><b>${esc(d.nom)}</b><span class="hint">${esc([d.forme, "reçu le " + dateDoc(d.recu)].filter(Boolean).join(" · "))}</span></span>
+          ${vus.has(d.id) ? "" : `<span class="flag-moi petit">nouveau</span>`}
+        </a>`).join("")}</div>`
+        : `<p class="empty">Aucun document pour l'instant. Les lettres, images et indices que le MJ vous remet arriveront ici.</p>`}
+    </section>`;
+}
+
+async function vueDocument(id) {
+  vue.innerHTML = `<section class="panel documents"><p class="hint">Chargement…</p></section>`;
+  let d;
+  try { d = await api("GET", avecPJ(`/api/joueur/documents/${id}`)); }
+  catch (e) { vue.innerHTML = `<section class="panel documents"><p class="empty">${esc(e.status === 404 ? "Ce document n'est plus disponible." : e.message)}</p><div><a href="#/documents"><button>← Documents</button></a></div></section>`; return; }
+  if (etat.vue !== "documents" || etat.doc !== id) return;
+  marquerVu(id);
+  vue.innerHTML = `<article class="panel documents doc">
+      <div class="row"><a href="#/documents"><button class="ghost petit">← Documents</button></a></div>
+      <h1>${esc(d.nom)}</h1>
+      <span class="hint">${esc([d.forme, "reçu le " + dateDoc(d.recu)].filter(Boolean).join(" · "))}</span>
+      ${d.contenu ? `<div class="md doc-texte">${rendu(d.contenu)}</div>` : ""}
+      ${d.images.map(i => `<figure><a href="${esc(imageDoc(d.id, i.fichier))}" target="_blank" rel="noopener" title="Ouvrir en grand"><img src="${esc(imageDoc(d.id, i.fichier))}" alt="${esc(i.legende || d.nom)}"></a>${i.legende ? `<figcaption>${esc(i.legende)}</figcaption>` : ""}</figure>`).join("")}
+    </article>`;
 }
 
 /* ---------------------------------------------------------- dés */
@@ -231,11 +292,13 @@ function connecter() {
     dernier = Date.now();
     const m = JSON.parse(e.data);
     if (m.type === "jet") { ajouterJets([m.jet]); return; }
-    if (m.type === "etat") { relireJets(); etat.combat = m.combat; if (etat.edition !== m.edition) { etat.edition = m.edition; rafraichirFiche(); } }
+    if (m.type === "etat") { relireJets(); chargerDocs(); etat.combat = m.combat; if (etat.edition !== m.edition) { etat.edition = m.edition; rafraichirFiche(); } }
     else if (m.type === "combat") etat.combat = m.combat;
     else if (m.type === "edition") { etat.edition = m.active; toast(m.active ? "Le MJ a déverrouillé les feuilles : vous pouvez modifier la vôtre." : "Le MJ a verrouillé les feuilles."); if (etat.vue === "fiche" && etat.pj) vueFiche(); }
     else if (m.type === "fiche" && etat.pj && m.id === etat.pj.id) rafraichirFiche();
     else if (m.type === "hauts_faits") { if (etat.vue === "hauts-faits") vueHautsFaits(); }
+    else if (m.type === "document") { if (etat.pj && m.pj.includes(etat.pj.id)) { toast(`✉ Nouveau document : ${m.nom}`); chargerDocs(); } }
+    else if (m.type === "documents") chargerDocs();
     if (etat.vue === "combat") vueCombat();
     rendreBandeau();
   };
@@ -255,7 +318,9 @@ document.addEventListener("visibilitychange", () => { if (document.visibilitySta
 /* ---------------------------------------------------------- routeur */
 async function route() {
   const nom = location.hash.replace(/^#\/?/, "") || "fiche";
-  etat.vue = !etat.pj || nom === "choix" ? "choix" : ["combat", "des", "hauts-faits"].includes(nom) ? nom : "fiche";
+  const doc = /^documents\/(\d+)$/.exec(nom);
+  etat.doc = doc ? +doc[1] : 0;
+  etat.vue = !etat.pj || nom === "choix" ? "choix" : doc ? "documents" : ["combat", "documents", "des", "hauts-faits"].includes(nom) ? nom : "fiche";
   $$("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === etat.vue));
   $("#pj-nav").hidden = !etat.pj;
   $("#pj-changer").hidden = etat.serveur || !etat.pj || etat.vue === "choix";
@@ -264,6 +329,7 @@ async function route() {
   window.scrollTo(0, 0);
   if (etat.vue === "choix") vueChoix();
   else if (etat.vue === "combat") vueCombat();
+  else if (etat.vue === "documents") vueDocuments();
   else if (etat.vue === "des") await vueDes();
   else if (etat.vue === "hauts-faits") await vueHautsFaits();
   else await vueFiche();

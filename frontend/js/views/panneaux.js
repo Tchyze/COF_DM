@@ -1,5 +1,5 @@
 // Panneaux propres à certains types de fiches : profil de combat d'un PNJ, difficulté et lancement
-// d'une rencontre, combats d'une séance et leur bilan, secrets (qui sait quoi).
+// d'une rencontre, combats d'une séance et leur bilan, secrets (qui sait quoi), envois d'une aide de jeu.
 import { $, $$, esc, api, toast, armer } from "../ui.js";
 import { lienFiche, vignette, badgeType } from "../schema.js";
 import { selecteur, selecteurMonstre } from "../composants.js";
@@ -144,10 +144,12 @@ export async function quiSait(box, f, apres) {
   const ligne = r => `<div class="rel">${lienFiche(r.autre)}<button class="ghost petit" data-suppr="${r.id}" aria-label="Il ne le sait plus">✕</button>
     ${r.contexte || r.note ? `<span class="note">${r.contexte ? `depuis ${esc(r.contexte.nom)}` : ""}${r.contexte && r.note ? " — " : ""}${esc(r.note || "")}</span>` : ""}</div>`;
   const campagne = f.data.campagne;
-  const [pjs, seances] = await Promise.all([
+  const [pjs, seances, aides] = await Promise.all([
     api("GET", "/api/entites?type=pj" + (campagne ? "&campagne=" + campagne : "")),
     api("GET", "/api/entites?type=seance" + (campagne ? "&campagne=" + campagne : "")),
+    api("GET", "/api/aides"),
   ]);
+  const indices = aides.filter(a => a.indice_de?.id === f.id);
   const optSeances = `<option value="">— séance —</option>${seances.map(s => `<option value="${s.id}">${esc(s.nom)}</option>`).join("")}`;
   box.innerHTML = `<h3>Qui le sait <span class="sp"></span><button class="petit" id="qs-ajout">＋ Quelqu'un</button><button class="petit primary" id="qs-reveler">Révéler aux PJ…</button></h3>
     <form id="qs-form" class="org-form" hidden>
@@ -167,7 +169,10 @@ export async function quiSait(box, f, apres) {
       ${groupes.pnj.length ? `<div class="rel-groupe"><small>PNJ</small>${groupes.pnj.map(ligne).join("")}</div>` : ""}
       ${groupes.faction.length ? `<div class="rel-groupe"><small>Factions</small>${groupes.faction.map(ligne).join("")}</div>` : ""}
       ${groupes.autre.length ? `<div class="rel-groupe"><small>Autres</small>${groupes.autre.map(ligne).join("")}</div>` : ""}`
-      : `<p class="vide">Personne ne le sait encore (à part vous).</p>`}`;
+      : `<p class="vide">Personne ne le sait encore (à part vous).</p>`}
+    <div class="rel-groupe"><small>Indices (aides de jeu) <a href="#/nouveau/aide?indice_de=${f.id}${campagne ? "&campagne=" + campagne : ""}" class="hint">＋ aide de jeu</a></small>
+      ${indices.length ? indices.map(a => `<div class="rel">${lienFiche(a.fiche)}<span class="note">${a.envois.length ? "reçue par " + a.envois.map(e => esc(e.pj.nom)).join(", ") : "pas encore envoyée"}</span></div>`).join("")
+        : `<p class="hint">Aucune aide de jeu n'en est l'indice.</p>`}</div>`;
   let qui = null;
   $("#qs-ajout", box).onclick = () => {
     $("#qs-form", box).hidden = false; $("#qs-rev", box).hidden = true;
@@ -207,4 +212,49 @@ export function secretsDe(box, f) {
   box.innerHTML = `<h3>Secrets <span class="sp"></span><a href="#/nouveau/secret?concerne=${f.id}"><button class="petit">＋ Secret</button></a></h3>
     ${sait.length ? `<div class="rel-groupe"><small>Ce qu'il sait</small>${sait.map(r => `<div class="rel">${lienFiche(r.autre)}${r.autre.carte?.statut ? `<span class="note" style="flex:0 0 auto;padding:0;margin:0">${esc(r.autre.carte.statut)}</span>` : ""}${r.contexte ? `<span class="note">depuis ${esc(r.contexte.nom)}</span>` : ""}</div>`).join("")}</div>` : ""}
     ${concernent.length ? `<div class="rel-groupe"><small>Le concernent</small>${concernent.map(r => `<div class="rel">${lienFiche(r.source)}${r.source.carte?.statut ? `<span class="note" style="flex:0 0 auto;padding:0;margin:0">${esc(r.source.carte.statut)}</span>` : ""}</div>`).join("")}</div>` : ""}`;
+}
+
+// ---------------------------------------------------------------- aides de jeu
+
+/** Sur une aide de jeu : à qui elle a été envoyée ; l'envoyer à des PJ ou à tous. */
+export async function envois(box, f, apres) {
+  const recus = f.relations.filter(r => r.type === "recu" && r.sens === "entrante");
+  const campagne = f.data.campagne;
+  const [pjs, seances] = await Promise.all([
+    api("GET", "/api/entites?type=pj" + (campagne ? "&campagne=" + campagne : "")),
+    api("GET", "/api/entites?type=seance" + (campagne ? "&campagne=" + campagne : "")),
+  ]);
+  const deja = new Set(recus.map(r => r.autre.id));
+  const restants = pjs.filter(p => !deja.has(p.id));
+  const prevue = f.data.prevue;
+  box.innerHTML = `<h3>Envoyée aux joueurs <span class="sp"></span>${lecture() || f.archive ? "" : `<button class="petit primary" id="ae-ouvrir">✉ Envoyer…</button>`}</h3>
+    <form id="ae-form" class="org-form" hidden>
+      <div class="champ pleine"><span class="aide">PJ qui la reçoivent</span><div class="ligne">${pjs.length ? pjs.map(p => `<label class="ligne" style="gap:6px"><input type="checkbox" value="${p.id}" ${deja.has(p.id) ? "checked disabled" : ""}>${esc(p.nom)}</label>`).join("")
+        : `<span class="vide">Aucun PJ${campagne ? " dans cette campagne" : ""}.</span>`}</div>
+        ${restants.length > 1 ? `<button type="button" class="ghost petit" id="ae-tous">Tous</button>` : ""}</div>
+      <label class="champ"><span>Lors de</span><select id="ae-seance"><option value="">— séance —</option>${seances.map(s => `<option value="${s.id}" ${s.id === prevue ? "selected" : ""}>${esc(s.nom)}</option>`).join("")}</select></label>
+      <div class="ligne pleine"><button class="primary petit" type="submit">Envoyer</button><button class="ghost petit" type="button" data-fermer>Annuler</button></div>
+    </form>
+    ${recus.length ? recus.map(r => `<div class="rel">${lienFiche(r.autre)}${r.contexte ? `<span class="note">${esc(r.contexte.nom)}</span>` : ""}${lecture() ? "" : `<button class="ghost petit" data-retirer="${r.id}" title="Retirer l'aide de ses documents" aria-label="Retirer à ${esc(r.autre.nom)}">✕</button>`}</div>`).join("")
+      : `<p class="vide">Pas encore envoyée. Elle arrivera en direct dans l'onglet « Documents » de la page des joueurs : nom, forme, texte remis et images, jamais vos notes ni le secret dont c'est l'indice.</p>`}`;
+  const form = $("#ae-form", box);
+  const ouvrir = $("#ae-ouvrir", box);
+  if (ouvrir) ouvrir.onclick = () => { form.hidden = !form.hidden; };
+  $$("[data-fermer]", box).forEach(b => b.onclick = () => { form.hidden = true; });
+  const tous = $("#ae-tous", box);
+  if (tous) tous.onclick = () => $$("#ae-form input[type=checkbox]:not(:disabled)", box).forEach(x => { x.checked = true; });
+  form.onsubmit = async e => {
+    e.preventDefault();
+    const qui = $$("#ae-form input[type=checkbox]:checked:not(:disabled)", box).map(x => +x.value);
+    if (!qui.length) { toast("Cochez les PJ qui la reçoivent.", true); return; }
+    try {
+      const r = await api("POST", `/api/aides/${f.id}/envoyer`, { qui, seance: +$("#ae-seance", box).value || 0 });
+      toast(`Envoyée à ${r.envoyes.length} PJ.${r.statut_secret ? ` Le secret passe à « ${r.statut_secret} ».` : ""}`);
+      change(); apres();
+    } catch (err) { toast(err.message, true); }
+  };
+  $$("[data-retirer]", box).forEach(b => armer(b, "Retirer ?", async () => {
+    try { await api("DELETE", "/api/relations/" + b.dataset.retirer); change(); apres(); }
+    catch (err) { toast(err.message, true); }
+  }));
 }

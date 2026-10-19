@@ -87,6 +87,22 @@ func typeRelationValide(typ string) error {
 	return invalide("Type de relation inconnu %q (types : %s).", typ, strings.Join(cles, ", "))
 }
 
+// relationPermise : la relation peut-elle relier ces deux types de fiches (« a reçu » : d'un PJ
+// vers une aide de jeu) ?
+func relationPermise(typ, a, b string) error {
+	r, _ := modele.RelationDe(typ)
+	if r.Permise(a, b) {
+		return nil
+	}
+	nom := func(t string) string {
+		if x, ok := modele.TypeDe(t); ok {
+			return x.Nom
+		}
+		return t
+	}
+	return invalide("La relation « %s » ne va pas d'une fiche %s vers une fiche %s.", r.Nom, nom(a), nom(b))
+}
+
 // Relier crée une relation de A vers B.
 func (s *Store) Relier(a, b int64, typ string, d DetailRelation, auteur string) (int64, error) {
 	if err := typeRelationValide(typ); err != nil {
@@ -103,6 +119,9 @@ func (s *Store) Relier(a, b int64, typ string, d DetailRelation, auteur string) 
 	}
 	eb, err := lire(s.db, b)
 	if err != nil {
+		return 0, err
+	}
+	if err := relationPermise(typ, ea.Type, eb.Type); err != nil {
 		return 0, err
 	}
 	var n int
@@ -137,6 +156,17 @@ func (s *Store) ModifierRelation(id int64, d DetailRelation, auteur string) erro
 	}
 	if d.Type != nil {
 		if err := typeRelationValide(*d.Type); err != nil {
+			return err
+		}
+		ea, err := lire(s.db, a)
+		if err != nil {
+			return err
+		}
+		eb, err := lire(s.db, b)
+		if err != nil {
+			return err
+		}
+		if err := relationPermise(*d.Type, ea.Type, eb.Type); err != nil {
 			return err
 		}
 		typ = *d.Type
@@ -627,4 +657,46 @@ func (s *Store) QuiSaitQuoi(campagne int64) (secrets, pj, pnj []Resume, conn []C
 		conn = []Connaissance{}
 	}
 	return
+}
+
+// ---------------------------------------------------------------- aides de jeu envoyées
+
+// Envoi : une aide de jeu envoyée à un PJ (relation « recu »).
+type Envoi struct {
+	Relation int64   `json:"relation"`
+	PJ       int64   `json:"pj"`
+	Aide     int64   `json:"aide"`
+	Seance   int64   `json:"seance,omitempty"` // contexte de la relation
+	Date     float64 `json:"date"`             // création de la relation
+}
+
+// Envois renvoie tous les envois d'aides de jeu, du plus ancien au plus récent.
+func (s *Store) Envois() ([]Envoi, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rows, err := s.db.Query(`SELECT id, a, b, COALESCE(contexte,0), cree FROM relations WHERE type='recu' ORDER BY cree, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Envoi{}
+	for rows.Next() {
+		var e Envoi
+		if err := rows.Scan(&e.Relation, &e.PJ, &e.Aide, &e.Seance, &e.Date); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// TypeDeRelation renvoie le type d'une relation.
+func (s *Store) TypeDeRelation(id int64) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var typ string
+	if err := s.db.QueryRow(`SELECT type FROM relations WHERE id=?`, id).Scan(&typ); err != nil {
+		return "", invalide("Relation introuvable.")
+	}
+	return typ, nil
 }

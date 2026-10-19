@@ -39,6 +39,7 @@ func (s *Serveur) routesPageJoueurs() {
 		m.HandleFunc("GET /api/joueur/hauts-faits", s.joueurHautsFaits)
 		m.HandleFunc("GET /api/joueur/direct", s.joueurDirect)
 		s.routesDesJoueurs(m)
+		s.routesDocumentsJoueurs(m)
 	}
 	if s.acces.comptes != nil {
 		return
@@ -51,6 +52,8 @@ func (s *Serveur) routesPageJoueurs() {
 	l.HandleFunc("GET /api/joueur/pj", s.joueurPJ)
 	l.HandleFunc("GET /api/joueur/hauts-faits", s.joueurHautsFaits)
 	l.HandleFunc("GET /api/joueur/direct", s.joueurDirect)
+	// les aides de jeu reçues par le PJ choisi
+	s.routesDocumentsJoueurs(l)
 	s.routesDesJoueurs(l) // la seule écriture hors de la feuille : un jet, qui ne touche pas à l'univers
 	l.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireLibre)
 	l.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireLibre)

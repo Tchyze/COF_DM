@@ -234,6 +234,7 @@ func (s *Serveur) routes() {
 	s.routesTable()
 	s.routesPreparation()
 	s.routesApres()
+	s.routesAides()
 	s.routesAcces()
 	s.routesDes()
 	s.routesPageJoueurs() // après routesAcces, qui crée la liste blanche du rôle « joueur »
@@ -596,6 +597,10 @@ func (s *Serveur) relier(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
+	if t, _ := modele.RelationDe(in.Type); t.Reservee {
+		erreurStore(w, store.ErrValidation{Msg: msgRelationReservee})
+		return
+	}
 	id, err := s.store.Relier(in.A, in.B, in.Type, store.DetailRelation{Note: in.Note, Rang: in.Rang, Superieur: in.Superieur, Secrete: in.Secrete, Contexte: in.Contexte}, auteurDe(r))
 	if err != nil {
 		erreurStore(w, err)
@@ -614,6 +619,19 @@ func (s *Serveur) modifierRelation(w http.ResponseWriter, r *http.Request) {
 	if err := lireJSON(r, &d); err != nil {
 		erreurStore(w, err)
 		return
+	}
+	if d.Type != nil {
+		avant, err := s.store.TypeDeRelation(id)
+		if err != nil {
+			erreurStore(w, err)
+			return
+		}
+		t1, _ := modele.RelationDe(avant)
+		t2, _ := modele.RelationDe(*d.Type)
+		if avant != *d.Type && (t1.Reservee || t2.Reservee) {
+			erreurStore(w, store.ErrValidation{Msg: msgRelationReservee})
+			return
+		}
 	}
 	if err := s.store.ModifierRelation(id, d, auteurDe(r)); err != nil {
 		erreurStore(w, err)
@@ -636,14 +654,22 @@ func (s *Serveur) organigramme(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, o)
 }
 
+// msgRelationReservee : une relation posée par l'application (envoi d'une aide de jeu).
+const msgRelationReservee = "Cette relation se pose par l'application : une aide de jeu s'envoie depuis sa fiche ou l'écran du MJ."
+
 func (s *Serveur) delier(w http.ResponseWriter, r *http.Request) {
 	id, err := idDe(r)
+	typ := ""
 	if err == nil {
+		typ, _ = s.store.TypeDeRelation(id)
 		err = s.store.Delier(id, auteurDe(r))
 	}
 	if err != nil {
 		erreurStore(w, err)
 		return
+	}
+	if typ == relRecu {
+		s.joueurs.documents() // envoi retiré : les pages des joueurs relisent leurs documents
 	}
 	repondre(w, 200, map[string]any{"supprime": true})
 }
