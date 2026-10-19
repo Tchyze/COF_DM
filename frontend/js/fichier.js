@@ -1,5 +1,6 @@
 // Menu Fichier : l'univers ouvert est un fichier .cofdm de cet ordinateur. Nouvel univers, ouvrir,
 // univers récents, enregistrer une copie, sauvegarder. Réservé à l'ordinateur du MJ.
+import { actif } from "./schema.js";
 import { $, esc, api, toast, choisirUniversOnglet, lien, dialogue } from "./ui.js";
 import { ouvrirPanneau } from "./connexion.js";
 
@@ -163,7 +164,7 @@ function ouvrirMenu(bouton, etat) {
     <button data-a="copie"><span class="ic">⎘</span>Enregistrer une copie…</button>
     <button data-a="sauver"><span class="ic">💾</span>Sauvegarder maintenant</button>
     <button data-a="sauvegardes"><span class="ic">🕘</span>Sauvegardes…</button>
-    <button data-a="obsidian"><span class="ic">📝</span>Exporter vers Obsidian…</button>
+    ${actif("obsidian") ? `<button data-a="obsidian"><span class="ic">📝</span>Exporter vers Obsidian…</button>` : ""}
     ${etat.serveur ? "" : `<hr>
     <button data-a="serveur"><span class="ic">🌐</span>Serveur et synchronisation…</button>`}`;
   const r = bouton.getBoundingClientRect();

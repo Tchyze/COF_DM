@@ -157,6 +157,10 @@ func (s *Serveur) importerFiches(w http.ResponseWriter, r *http.Request) {
 			erreurs = append(erreurs, fmt.Sprintf("n°%d : type inconnu %q", i+1, f.Type))
 			continue
 		}
+		if err := s.typeCoupe(f.Type); err != nil {
+			erreurs = append(erreurs, fmt.Sprintf("n°%d : %v", i+1, err))
+			continue
+		}
 		k := f.Type + "\x00" + strings.ToLower(strings.Join(strings.Fields(f.Nom), " "))
 		if existants[k] {
 			ignores++

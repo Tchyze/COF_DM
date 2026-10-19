@@ -368,6 +368,8 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .t-rappel.fini{background:var(--warn);border-color:var(--warn);color:#17130a;font-weight:600}
 .t-volet{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;grid-row:2}
 .t-gauche{grid-column:1} .t-centre{grid-column:2} .t-droite{grid-column:3}
+@media (min-width:900px){.table[data-sans-combat]{grid-template-columns:minmax(210px,.8fr) minmax(260px,1.6fr)}}
+.table[data-sans-combat] .t-droite,.table[data-sans-combat] .t-onglets [data-v=combat],.table[data-sans-combat] #t-large{display:none!important}
 .table[data-large] .t-centre{display:none}
 .table[data-large] .t-droite{grid-column:2/-1}
 .t-bloc{background:var(--surface);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
@@ -442,6 +444,8 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .t-coche{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
 .t-coche span{display:flex;flex-direction:column;gap:2px}
 .t-coche small{color:var(--muted);font-size:.8rem}
+#fonctions{display:flex;flex-direction:column;gap:8px}
+#fonctions .fonc-groupe{margin:8px 0 0;font:600 .74rem var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--muted)}
 .t-rappel-form{display:grid;grid-template-columns:minmax(0,1fr) 4.6rem auto auto;gap:6px;align-items:center}
 .t-onglets{display:none}
 /* connexion d'un appareil du réseau */
@@ -459,6 +463,7 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
   .table .t-volet{display:none;grid-column:1}
   .table[data-volet=joueurs] .t-gauche,.table[data-volet=quete] .t-centre,.table[data-volet=combat] .t-droite{display:flex}
   .t-onglets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;grid-area:3/1}
+  .table[data-sans-combat] .t-onglets{grid-template-columns:repeat(2,minmax(0,1fr))}
   .t-onglets button{min-height:42px}
   .table[data-volet=joueurs] .t-onglets [data-v=joueurs],.table[data-volet=quete] .t-onglets [data-v=quete],.table[data-volet=combat] .t-onglets [data-v=combat]{background:var(--gold);color:#17130a;border-color:var(--gold);font-weight:600}
   .t-tiroir,.table[data-large] .t-tiroir{grid-area:2/1/3/2;width:100%}

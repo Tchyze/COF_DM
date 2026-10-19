@@ -2,7 +2,7 @@
 
 Fichier de passation : ce qui a été fait, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail sur un autre poste, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 19 octobre 2026 (aides de jeu, projet 9, lot 1 : PR 4 du dépôt public) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
+Dernière mise à jour : 19 octobre 2026 (fonctionnalités optionnelles : PR 5 du dépôt public ; aides de jeu, projet 9, lot 1 : PR 4) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
 
 ## Dépôt public (18 octobre 2026)
 
@@ -21,6 +21,7 @@ Les numéros ci-dessous sont ceux de `Tchyze/COF_DM` (repartis de #1) ; ceux des
 |---|---|
 | 1, 2 | Suivi de la publication ; version affichée à côté de « Thème ». |
 | 4 | **Aides de jeu** (projet 9, lot 1). Type de fiche `aide` (forme, campagne, texte remis aux joueurs, images ; réservés au MJ : indice de, prévue pour, notes) ; relation réservée `recu` (PJ → aide), bornée par types (`De`, `Vers`, `Reservee` dans `internal/modele`) et contrôlée à la saisie, à l'échange et à la restauration. `POST /api/aides/{id}/envoyer` (à des PJ ou à tous ceux de la campagne, séance notée ; secret caché → soupçonné), `GET /api/aides`, indices dans `GET /api/secrets`. Page des joueurs : onglet « Documents » (`/api/joueur/documents`, une aide, ses images), pastille des non-lus, annonce en direct aux seuls destinataires ; une aide n'est jamais partagée. Écrans : panneau « Envoyée aux joueurs » sur la fiche de l'aide, indices sur la fiche d'un secret, ✉ dans « qui sait quoi », onglet « Aides » de l'écran du MJ (prévues pour la séance d'abord, un PJ touché la reçoit, « Tous »). Outils MCP `aides_de_jeu` et `envoyer_aide`. Tests de non-fuite (maison, compte joueur, direct), de relation réservée et de synchronisation. Vu dans Chrome à 1300 et 390 px, sans erreur de console : fiche de l'aide et envoi, secret, qui sait quoi, écran du MJ, documents et lettre et image côté joueur, arrivée en direct. |
+| 5 | **Fonctionnalités optionnelles** (empilée sur la PR 4). Paramètres → Fonctionnalités, par univers (meta `fonctionnalites`, synchronisée) : écran du MJ, préparation et après-séance, combat, rencontres, secrets, fiches de règles, graphe, chronologie, organigrammes, export Obsidian (activés par défaut) ; feuilles de personnage, page des joueurs, dés virtuels, aides de jeu (coupés par défaut). Un univers d'avant garde ce dont il se sert (feuilles → feuilles et page des joueurs ; aides). Coupée : routes en `404`, types hors du schéma et des listes, création refusée, outils MCP retirés, écrans et menus masqués (fiche, écran du MJ en deux colonnes sans combat, préparation, après-séance, page des joueurs réduite à ses onglets actifs) ; rien n'est effacé. `GET` / `PUT /api/fonctionnalites`. Tests : défauts, reprise, synchronisation, routes, schéma, listes, rôles, page des joueurs, MCP. Vu dans Chrome à 1300 et 390 px, sans erreur de console. |
 
 ## Pour reprendre sur un autre poste
 
@@ -64,6 +65,12 @@ Exigence ferme, pour que le logiciel se distribue sans problème. Ni liste, ni t
   - Joueur : ne voit que les fiches que le MJ partage, sans leurs champs MJ ; jamais les fiches « Secret » ; lecture seule, sauf si l'administrateur ouvre l'édition par les joueurs (trois champs texte de son PJ, et toute sa feuille de personnage sauf les notes du MJ).
 - **Plusieurs univers ouverts à la fois** ; chacun choisit le sien dans son navigateur.
 - L'application de bureau reste sans compte.
+
+### Fonctionnalités optionnelles (décisions du 19 octobre 2026)
+
+- Le cœur reste toujours là : PNJ, lieux, factions, objets, lore, événements, campagnes, quêtes, séances, PJ, bestiaire.
+- **Coupés par défaut** : dés virtuels, aides de jeu, feuilles de personnage, page des joueurs. **Optionnels, activés par défaut** : combat, rencontres, secrets, écran du MJ, préparation et après-séance, fiches de règles, et chaque outil (graphe, chronologie, organigrammes, export Obsidian), tous dans le même panneau de Paramètres.
+- Choix pris par défaut (questions laissées sans réponse, à revoir si besoin) : réglage **rangé dans l'univers** (synchronisé, il vaut pour tous les comptes d'un serveur) ; une fonctionnalité coupée est **cachée et fermée** (API et MCP compris), **sans rien effacer** ; un univers existant **garde ce dont il se sert** (ses feuilles de personnage, donc la page des joueurs ; ses aides de jeu).
 
 ### Aides de jeu (décisions du 19 octobre 2026)
 

@@ -4,7 +4,7 @@
 // avant la première écriture.
 import { $, $$, esc, api, toast } from "../ui.js";
 import { selecteur, saisieDate } from "../composants.js";
-import { typeDe } from "../schema.js";
+import { typeDe, actif as fonctionActive } from "../schema.js";
 
 const STATUTS_QUETE = () => typeDe("quete").champs.find(c => c.cle === "statut").options;
 
@@ -51,12 +51,12 @@ export async function mount(el, id) {
             <select data-statut aria-label="Statut de ${esc(q.nom)}">${STATUTS_QUETE().map(s => `<option${s === q.data.statut ? " selected" : ""}>${esc(s)}</option>`).join("")}</select></div>
           ${(q.data.etapes || []).map((e, i) => `<label class="prep-item"><input type="checkbox" data-etape="${i}"${e.fait ? " checked" : ""}><span>${esc(e.texte)}</span></label>`).join("")}
         </div>`).join(""), "Aucune quête en cours.")}
-      ${section("Secrets appris", p.secrets.map(s => `<div class="ap-secret" data-secret="${s.fiche.id}">
+      ${!fonctionActive("secrets") ? "" : section("Secrets appris", p.secrets.map(s => `<div class="ap-secret" data-secret="${s.fiche.id}">
           <div>🔒 ${fiche(s.fiche)} <span class="badge">${esc([s.importance, s.statut].filter(Boolean).join(" · "))}</span></div>
           <div class="ligne">${s.ignorent.map(n => `<label class="prep-item ap-qui"><input type="checkbox" data-qui="${pjParNom[n]}"><span>${esc(n)}</span></label>`).join("") || `<span class="hint">Tous les PJ présents le savent.</span>`}</div>
         </div>`).join(""), "Aucun secret en attente.")}
-      ${section("PNJ tombés", [...tombes.values()].map(x => `<label class="prep-item"><input type="checkbox" data-mort="${x.fiche.id}"><span>${fiche(x.fiche)} <span class="hint">à terre dans « ${esc(x.combat)} » : le noter mort</span></span></label>`).join(""), "Aucun PNJ du monde à terre dans les combats de la séance.")}
-      ${section("Rencontres", p.rencontres.map(r => `<div class="ligne ap-renc">⚔ ${fiche(r.fiche)}<span class="sp" style="flex:1"></span>
+      ${!fonctionActive("combat") ? "" : section("PNJ tombés", [...tombes.values()].map(x => `<label class="prep-item"><input type="checkbox" data-mort="${x.fiche.id}"><span>${fiche(x.fiche)} <span class="hint">à terre dans « ${esc(x.combat)} » : le noter mort</span></span></label>`).join(""), "Aucun PNJ du monde à terre dans les combats de la séance.")}
+      ${!fonctionActive("rencontres") ? "" : section("Rencontres", p.rencontres.map(r => `<div class="ligne ap-renc">⚔ ${fiche(r.fiche)}<span class="sp" style="flex:1"></span>
           <select data-renc="${r.fiche.id}" aria-label="Rencontre ${esc(r.fiche.nom)}"><option value="">pas jouée</option><option>jouée</option><option>évitée</option></select></div>`).join(""), "Aucune rencontre préparée.")}
     </div>
     <div class="ligne prep-bas">

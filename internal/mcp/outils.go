@@ -17,8 +17,9 @@ type outil struct {
 	Description string
 	Proprietes  map[string]any // propriétés du schéma JSON des arguments
 	Requis      []string
-	Lecture     bool // ne modifie rien
-	Destructif  bool // peut effacer ou remplacer quelque chose
+	Lecture     bool   // ne modifie rien
+	Destructif  bool   // peut effacer ou remplacer quelque chose
+	Fonction    string // fonctionnalité optionnelle dont il dépend (internal/modele) ; coupée, il n'est pas proposé
 	Faire       func(c *Client, a arguments) (any, error)
 }
 
@@ -225,7 +226,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "graphe", Titre: "Fiches liées", Lecture: true,
+			Nom: "graphe", Fonction: "graphe", Titre: "Fiches liées", Lecture: true,
 			Description: "Les fiches liées à une fiche (relations, champs de référence, mentions), jusqu'à 3 niveaux : nœuds et arêtes.",
 			Proprietes: map[string]any{
 				"id":         entier("Fiche de départ"),
@@ -235,19 +236,19 @@ func outils() []outil {
 			Faire:  lire("/api/graphe", "id", "profondeur"),
 		},
 		{
-			Nom: "chronologie", Titre: "Chronologie", Lecture: true,
+			Nom: "chronologie", Fonction: "chronologie", Titre: "Chronologie", Lecture: true,
 			Description: "Toutes les dates en jeu, dans l'ordre. Avec une campagne : la campagne et l'histoire du monde.",
 			Proprietes:  map[string]any{"campagne": entier("Identifiant d'une campagne")},
 			Faire:       lire("/api/chronologie", "campagne"),
 		},
 		{
-			Nom: "qui_sait_quoi", Titre: "Qui sait quoi", Lecture: true,
+			Nom: "qui_sait_quoi", Fonction: "secrets", Titre: "Qui sait quoi", Lecture: true,
 			Description: "Les secrets, et qui (PJ, PNJ, faction) sait chacun : séance où il l'a appris et comment ; les indices (aides de jeu envoyées) que chaque PJ a reçus.",
 			Proprietes:  map[string]any{"campagne": entier("Identifiant d'une campagne")},
 			Faire:       lire("/api/secrets", "campagne"),
 		},
 		{
-			Nom: "organigramme", Titre: "Organigramme d'une faction", Lecture: true,
+			Nom: "organigramme", Fonction: "organigramme", Titre: "Organigramme d'une faction", Lecture: true,
 			Description: "L'arbre d'une faction : dirigeants, membres et leurs rangs, qui répond à qui, appartenances secrètes.",
 			Proprietes:  map[string]any{"id": entier("Identifiant de la faction")},
 			Requis:      []string{"id"},
@@ -260,13 +261,13 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "partie_en_cours", Titre: "Partie en cours", Lecture: true,
+			Nom: "partie_en_cours", Fonction: "ecran_mj", Titre: "Partie en cours", Lecture: true,
 			Description: "Ce que montre l'écran du MJ : quêtes en cours, la quête choisie, sa campagne, la prochaine séance, les PJ et leur santé, la scène (fiches liées à la quête), les rencontres.",
 			Proprietes:  map[string]any{"quete": entier("Identifiant d'une quête en cours (la dernière modifiée par défaut)")},
 			Faire:       lire("/api/table", "quete"),
 		},
 		{
-			Nom: "preparer_seance", Titre: "Préparer une séance", Lecture: true,
+			Nom: "preparer_seance", Fonction: "seances", Titre: "Préparer une séance", Lecture: true,
 			Description: "Ce que la campagne d'une séance a en cours : séance précédente et son résumé, où est le groupe, PJ, fils rouges, quêtes en cours et étapes restantes, secrets non révélés avec leurs indices et les PJ qui les ignorent, PNJ probables, rencontres prêtes. Pour écrire la préparation, modifier le champ « preparation » de la séance (réservé au MJ).",
 			Proprietes:  proprieteFiche,
 			Faire: func(c *Client, a arguments) (any, error) {
@@ -278,7 +279,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "feuille_personnage", Titre: "Feuille de personnage", Lecture: true,
+			Nom: "feuille_personnage", Fonction: "feuilles", Titre: "Feuille de personnage", Lecture: true,
 			Description: "La feuille de personnage d'un PJ : caractéristiques, PV, DEF, ressources, attaques, voies, équipement, bourse, notes du MJ.",
 			Proprietes:  proprieteFiche,
 			Faire: func(c *Client, a arguments) (any, error) {
@@ -313,7 +314,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "difficulte_rencontre", Titre: "Difficulté d'une rencontre", Lecture: true,
+			Nom: "difficulte_rencontre", Fonction: "rencontres", Titre: "Difficulté d'une rencontre", Lecture: true,
 			Description: "Les créatures d'une rencontre et sa difficulté face aux PJ de sa campagne (selon le fichier de règles de l'univers).",
 			Proprietes: map[string]any{
 				"id":        entier("Identifiant de la rencontre"),
@@ -331,7 +332,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "combats", Titre: "Combats", Lecture: true,
+			Nom: "combats", Fonction: "combat", Titre: "Combats", Lecture: true,
 			Description: "Les combats de l'univers (en cours d'abord) : round, PJ, ennemis, issue, rencontre, séance.",
 			Proprietes: map[string]any{
 				"seance":   entier("Ceux d'une séance"),
@@ -340,7 +341,7 @@ func outils() []outil {
 			Faire: lire("/api/combats", "seance", "en_cours"),
 		},
 		{
-			Nom: "combat", Titre: "Lire un combat", Lecture: true,
+			Nom: "combat", Fonction: "combat", Titre: "Lire un combat", Lecture: true,
 			Description: "Un combat en entier : ordre d'initiative, combattants, journal, récapitulatif s'il est terminé.",
 			Proprietes:  map[string]any{"id": entier("Identifiant du combat")},
 			Requis:      []string{"id"},
@@ -359,7 +360,7 @@ func outils() []outil {
 			Faire:       lire("/api/journal", "limite"),
 		},
 		{
-			Nom: "jets", Titre: "Jets de dés de la table", Lecture: true,
+			Nom: "jets", Fonction: "des", Titre: "Jets de dés de la table", Lecture: true,
 			Description: "Les derniers jets de dés de la partie (MJ et joueurs, jets cachés du MJ compris), gardés tant que l'application tourne.",
 			Proprietes:  map[string]any{"depuis": entier("Seulement les jets après cet identifiant")},
 			Faire:       lire("/api/des", "depuis"),
@@ -505,7 +506,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "reveler_secret", Titre: "Révéler un secret",
+			Nom: "reveler_secret", Fonction: "secrets", Titre: "Révéler un secret",
 			Description: "Ces fiches (PJ, PNJ, factions) apprennent le secret. Le statut du secret passe à « révélé » quand tous les PJ de la campagne le savent, « en partie révélé » sinon.",
 			Proprietes: map[string]any{
 				"id":     entier("Identifiant du secret"),
@@ -523,13 +524,13 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "aides_de_jeu", Titre: "Aides de jeu", Lecture: true,
+			Nom: "aides_de_jeu", Fonction: "aides", Titre: "Aides de jeu", Lecture: true,
 			Description: "Les aides de jeu (lettres, images, indices à remettre aux joueurs), avec le secret dont chacune est l'indice, la séance pour laquelle elle est prévue et les PJ qui l'ont déjà reçue. Le texte se lit avec lire_fiche.",
 			Proprietes:  map[string]any{"campagne": entier("Identifiant d'une campagne (ses aides et celles sans campagne)")},
 			Faire:       lire("/api/aides", "campagne"),
 		},
 		{
-			Nom: "envoyer_aide", Titre: "Envoyer une aide de jeu",
+			Nom: "envoyer_aide", Fonction: "aides", Titre: "Envoyer une aide de jeu",
 			Description: "Envoie une aide de jeu à des PJ (ou à tous ceux de sa campagne) : elle arrive aussitôt sur leur page des joueurs, onglet Documents. Un PJ qui l'a déjà reçue est passé. Si l'aide est l'indice d'un secret « caché », il passe à « soupçonné ». À ne faire que si le MJ le demande.",
 			Proprietes: map[string]any{
 				"id":     entier("Identifiant de l'aide de jeu"),
@@ -547,7 +548,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "lancer_des", Titre: "Lancer des dés",
+			Nom: "lancer_des", Fonction: "des", Titre: "Lancer des dés",
 			Description: "Lance des dés pour le MJ : formule comme 1d20+3, 2d6-1, 2d20kh1 (garder le meilleur de deux), 2d20kl1 (le pire). Le jet s'affiche sur la page des joueurs, sauf s'il est caché.",
 			Proprietes: map[string]any{
 				"formule": texte("Formule de dés"),
@@ -564,7 +565,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "clore_seance", Titre: "Clore une séance",
+			Nom: "clore_seance", Fonction: "seances", Titre: "Clore une séance",
 			Description: "Reporte en une fois ce qui s'est passé pendant une séance : la séance passe « jouée », avec son résumé, ses PJ présents et sa date en jeu (qui devient aussi celle de la campagne) ; le lieu du groupe ; les étapes faites (une valeur par étape, dans l'ordre de la fiche) et le statut des quêtes ; les secrets appris (qui) ; les PNJ morts ; les rencontres jouées ou évitées ; et, si demandé, la séance suivante est créée (prévue). Tout est contrôlé avant d'écrire : une valeur refusée n'en laisse passer aucune.",
 			Proprietes: map[string]any{
 				"id":          entier("Identifiant de la séance"),
@@ -589,7 +590,7 @@ func outils() []outil {
 			},
 		},
 		{
-			Nom: "modifier_feuille", Titre: "Modifier une feuille de personnage",
+			Nom: "modifier_feuille", Fonction: "feuilles", Titre: "Modifier une feuille de personnage",
 			Description: "Modifie la feuille de personnage d'un PJ : seuls les champs donnés changent (pv_actuel, pc, pr, pm, equipement, bourse, attaques, voies…). Une liste (attaques, voies) se donne en entier. Le niveau se change sur la fiche du PJ, pas ici. Les valeurs dérivées (modificateurs, DEF, initiative) sont recalculées.",
 			Proprietes: map[string]any{
 				"id":     entier("Identifiant du PJ"),

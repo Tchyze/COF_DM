@@ -15,6 +15,8 @@ export const typeDe = cle => parType.get(cle);
 export const types = () => schema.types;
 export const champDe = (type, cle) => typeDe(type)?.champs.find(c => c.cle === cle);
 export const relationDe = cle => schema.relations.find(r => r.cle === cle);
+/** La fonctionnalité est activée dans l'univers (Paramètres → Fonctionnalités) ; inconnue : oui. */
+export const actif = cle => schema?.fonctionnalites?.[cle] !== false;
 
 /** Date en jeu en toutes lettres selon le calendrier. */
 export function texteDate(d) {

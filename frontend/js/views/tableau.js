@@ -1,6 +1,6 @@
 // Tableau de bord : le monde en un coup d'œil.
 import { esc, api, dateHeure } from "../ui.js";
-import { types, vignette, texteDate, valeurCourte } from "../schema.js";
+import { types, vignette, texteDate, valeurCourte, actif as fonctionActive } from "../schema.js";
 
 export async function mount(el) {
   const st = await api("GET", "/api/stats");
@@ -9,7 +9,7 @@ export async function mount(el) {
   const premier = st.total === 0 && !joueur;
   el.innerHTML = `
     <div class="entete"><h1>Tableau de bord</h1><span class="sp"></span>
-      ${joueur ? "" : `<a href="#/table"><button class="primary">🧭 Écran du MJ</button></a>`}
+      ${joueur || !fonctionActive("ecran_mj") ? "" : `<a href="#/table"><button class="primary">🧭 Écran du MJ</button></a>`}
       <button id="rech">🔍 Rechercher <kbd>/</kbd></button>
     </div>
     ${premier ? `<div class="panneau" style="margin-bottom:16px">

@@ -126,7 +126,8 @@ func resumeJoueur(e store.Entite) store.Resume {
 
 func (s *Serveur) schemaJoueur(w http.ResponseWriter, r *http.Request) {
 	types := []modele.Type{}
-	for _, t := range s.typesDeLUnivers() {
+	etat := s.store.Fonctionnalites()
+	for _, t := range typesActifs(etat, s.typesDeLUnivers()) {
 		if t.Cle == "secret" || t.Cle == "aide" {
 			continue
 		}
@@ -151,7 +152,7 @@ func (s *Serveur) schemaJoueur(w http.ResponseWriter, r *http.Request) {
 			relations = append(relations, r)
 		}
 	}
-	repondre(w, 200, map[string]any{"types": types, "relations": relations, "calendrier": s.store.Calendrier(), "genres": map[string]string{}})
+	repondre(w, 200, map[string]any{"types": types, "relations": relations, "calendrier": s.store.Calendrier(), "genres": map[string]string{}, "fonctionnalites": etat})
 }
 
 func (s *Serveur) statsJoueur(w http.ResponseWriter, r *http.Request) {

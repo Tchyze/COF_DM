@@ -18,6 +18,7 @@ import (
 type banc struct {
 	t   *testing.T
 	mcp *Serveur
+	st  *store.Store
 	n   int
 }
 
@@ -34,7 +35,7 @@ func nouveau(t *testing.T) *banc {
 	ts := httptest.NewServer(s)
 	t.Cleanup(ts.Close)
 	j, _ := st.Meta("api_jeton")
-	return &banc{t: t, mcp: Nouveau(NouveauClient(ts.URL, j, ""), "test")}
+	return &banc{t: t, st: st, mcp: Nouveau(NouveauClient(ts.URL, j, ""), "test")}
 }
 
 // rpc envoie une requête et rend sa réponse décodée.
@@ -297,5 +298,36 @@ func TestReponseCoupee(t *testing.T) {
 	txt := r["content"].([]map[string]any)[0]["text"].(string)
 	if !strings.HasSuffix(txt, "affinez la demande, avec un filtre ou une limite)") || len([]rune(txt)) > tailleMax+100 {
 		t.Fatalf("réponse non coupée : %d caractères", len([]rune(txt)))
+	}
+}
+
+// Une fonctionnalité coupée dans l'univers : ses outils ne sont plus proposés, et s'ils sont appelés
+// quand même, l'API les refuse.
+func TestOutilsSelonFonctionnalites(t *testing.T) {
+	b := nouveau(t)
+	noms := func() map[string]bool {
+		vus := map[string]bool{}
+		for _, x := range b.rpc("tools/list", nil)["result"].(map[string]any)["tools"].([]any) {
+			vus[x.(map[string]any)["name"].(string)] = true
+		}
+		return vus
+	}
+	if v := noms(); !v["lancer_des"] || !v["qui_sait_quoi"] {
+		t.Fatalf("tout activé : %v", v)
+	}
+	if _, err := b.st.ReglerFonctionnalites(map[string]bool{"des": false, "secrets": false}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	v := noms()
+	for _, n := range []string{"lancer_des", "jets", "qui_sait_quoi", "reveler_secret"} {
+		if v[n] {
+			t.Fatalf("outil %s proposé, fonctionnalité coupée", n)
+		}
+	}
+	if !v["chercher"] || !v["combats"] {
+		t.Fatalf("outils du cœur ou d'une fonctionnalité active retirés : %v", v)
+	}
+	if e := b.outil("lancer_des", map[string]any{"formule": "1d6"}, true); !strings.Contains(e, "404") || !strings.Contains(e, "Dés virtuels") {
+		t.Fatalf("outil appelé quand même : %s", e)
 	}
 }
