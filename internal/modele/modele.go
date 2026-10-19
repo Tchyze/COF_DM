@@ -227,6 +227,20 @@ var Types = []Type{
 		},
 	},
 	{
+		// Aide de jeu : lettre, image ou indice que le MJ envoie aux joueurs (relation « recu » d'un PJ
+		// vers l'aide). Les joueurs n'en voient que le nom, la forme, le texte remis et les images,
+		// dans l'onglet « Documents » de leur page, et seulement si elle a été envoyée à leur PJ.
+		Cle: "aide", Nom: "Aide de jeu", Pluriel: "Aides de jeu", Icone: "✉", Carte: []string{"forme", "indice_de", "campagne"},
+		Champs: []Champ{
+			{Cle: "forme", Nom: "Forme", Genre: Choix, Options: []string{"lettre", "image", "indice", "document", "autre"}},
+			{Cle: "campagne", Nom: "Campagne", Genre: Ref, Cibles: []string{"campagne"}},
+			{Cle: "contenu", Nom: "Texte remis aux joueurs", Genre: Long, Aide: "Ce que lisent les joueurs, tel quel ; les images de la fiche l'accompagnent"},
+			{Cle: "indice_de", Nom: "Indice de", Genre: Ref, Cibles: []string{"secret"}, Secret: true, Groupe: "MJ", Aide: "Le secret dont c'est un indice : « qui sait quoi » note qui l'a reçu"},
+			{Cle: "prevue", Nom: "Prévue pour", Genre: Ref, Cibles: []string{"seance"}, Secret: true, Groupe: "MJ"},
+			{Cle: "notes", Nom: "Notes du MJ", Genre: Long, Secret: true, Groupe: "MJ"},
+		},
+	},
+	{
 		Cle: "regle", Nom: "Règle", Pluriel: "Règles", Icone: "⚖", Carte: []string{"categorie", "domaine", "source"},
 		Champs: []Champ{
 			{Cle: "resume", Nom: "En une phrase", Genre: Texte},
@@ -269,35 +283,58 @@ type TypeRelation struct {
 	Cle     string `json:"cle"`
 	Nom     string `json:"nom"`     // de A vers B : « A est membre de B »
 	Inverse string `json:"inverse"` // de B vers A : « B a pour membre A »
+	// De / Vers : types de fiches permis pour A et pour B (vides : tous).
+	De   []string `json:"de,omitempty"`
+	Vers []string `json:"vers,omitempty"`
+	// Reservee : posée par une action de l'application, pas proposée parmi les relations à créer.
+	Reservee bool `json:"reservee,omitempty"`
+}
+
+// Permise : la relation peut aller d'une fiche de type a vers une fiche de type b.
+func (r TypeRelation) Permise(a, b string) bool {
+	dans := func(l []string, t string) bool {
+		if len(l) == 0 {
+			return true
+		}
+		for _, x := range l {
+			if x == t {
+				return true
+			}
+		}
+		return false
+	}
+	return dans(r.De, a) && dans(r.Vers, b)
 }
 
 // Relations proposées. « autre » prend son libellé dans la note de la relation.
 var Relations = []TypeRelation{
-	{"allie", "allié de", "allié de"},
-	{"ennemi", "ennemi de", "ennemi de"},
-	{"rival", "rival de", "rival de"},
-	{"ami", "ami de", "ami de"},
-	{"famille", "de la famille de", "de la famille de"},
-	{"parent", "parent de", "enfant de"},
-	{"conjoint", "conjoint de", "conjoint de"},
-	{"amour", "amoureux de", "aimé de"},
-	{"mentor", "mentor de", "élève de"},
-	{"membre", "membre de", "a pour membre"},
-	{"dirige", "dirige", "dirigé par"},
-	{"sert", "travaille pour", "emploie"},
-	{"informateur", "informateur de", "a pour informateur"},
-	{"dette", "a une dette envers", "créancier de"},
-	{"connait", "connaît", "connu de"},
-	{"craint", "craint", "craint par"},
-	{"cherche", "cherche", "recherché par"},
-	{"habite", "habite à", "habité par"},
-	{"frequente", "fréquente", "fréquenté par"},
-	{"possede", "possède", "possédé par"},
-	{"garde", "garde", "gardé par"},
-	{"cache", "cache", "caché par"},
-	{"trahit", "trahit", "trahi par"},
-	{"sait", "sait", "est su de"},
-	{"autre", "lié à", "lié à"},
+	{Cle: "allie", Nom: "allié de", Inverse: "allié de"},
+	{Cle: "ennemi", Nom: "ennemi de", Inverse: "ennemi de"},
+	{Cle: "rival", Nom: "rival de", Inverse: "rival de"},
+	{Cle: "ami", Nom: "ami de", Inverse: "ami de"},
+	{Cle: "famille", Nom: "de la famille de", Inverse: "de la famille de"},
+	{Cle: "parent", Nom: "parent de", Inverse: "enfant de"},
+	{Cle: "conjoint", Nom: "conjoint de", Inverse: "conjoint de"},
+	{Cle: "amour", Nom: "amoureux de", Inverse: "aimé de"},
+	{Cle: "mentor", Nom: "mentor de", Inverse: "élève de"},
+	{Cle: "membre", Nom: "membre de", Inverse: "a pour membre"},
+	{Cle: "dirige", Nom: "dirige", Inverse: "dirigé par"},
+	{Cle: "sert", Nom: "travaille pour", Inverse: "emploie"},
+	{Cle: "informateur", Nom: "informateur de", Inverse: "a pour informateur"},
+	{Cle: "dette", Nom: "a une dette envers", Inverse: "créancier de"},
+	{Cle: "connait", Nom: "connaît", Inverse: "connu de"},
+	{Cle: "craint", Nom: "craint", Inverse: "craint par"},
+	{Cle: "cherche", Nom: "cherche", Inverse: "recherché par"},
+	{Cle: "habite", Nom: "habite à", Inverse: "habité par"},
+	{Cle: "frequente", Nom: "fréquente", Inverse: "fréquenté par"},
+	{Cle: "possede", Nom: "possède", Inverse: "possédé par"},
+	{Cle: "garde", Nom: "garde", Inverse: "gardé par"},
+	{Cle: "cache", Nom: "cache", Inverse: "caché par"},
+	{Cle: "trahit", Nom: "trahit", Inverse: "trahi par"},
+	{Cle: "sait", Nom: "sait", Inverse: "est su de"},
+	{Cle: "autre", Nom: "lié à", Inverse: "lié à"},
+	// envoi d'une aide de jeu à un PJ : posée par l'envoi (POST /api/aides/{id}/envoyer), jamais à la main
+	{Cle: "recu", Nom: "a reçu", Inverse: "reçu par", De: []string{"pj"}, Vers: []string{"aide"}, Reservee: true},
 }
 
 // RelationDe renvoie un type de relation.

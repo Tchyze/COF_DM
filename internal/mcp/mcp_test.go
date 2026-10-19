@@ -210,6 +210,25 @@ func TestParcours(t *testing.T) {
 		t.Fatalf("qui_sait_quoi : %v", qsq)
 	}
 
+	// aide de jeu envoyée : l'indice compte dans « qui sait quoi », le secret est soupçonné
+	b.json("modifier_fiche", map[string]any{"id": secret["id"], "data": map[string]any{"statut": "caché"}})
+	aide := b.json("creer_fiche", map[string]any{"type": "aide", "nom": "Lettre brûlée", "data": map[string]any{"indice_de": secret["id"], "contenu": "Rendez-vous à la forge."}})
+	if r := b.json("envoyer_aide", map[string]any{"id": aide["id"], "tous": true}); fmt.Sprint(r["envoyes"]) != fmt.Sprintf("[%v]", idPj) || r["statut_secret"] != "soupçonné" {
+		t.Fatalf("envoyer_aide : %v", r)
+	}
+	var aides []map[string]any
+	_ = json.Unmarshal([]byte(b.outil("aides_de_jeu", nil, false)), &aides)
+	if len(aides) != 1 || len(aides[0]["envois"].([]any)) != 1 {
+		t.Fatalf("aides_de_jeu : %v", aides)
+	}
+	if i, _ := b.json("qui_sait_quoi", nil)["indices"].([]any); len(i) != 1 {
+		t.Fatalf("qui_sait_quoi, indices : %v", i)
+	}
+	b.outil("envoyer_aide", map[string]any{"id": idPnj, "tous": true}, true) // pas une aide
+	if e := b.outil("relier", map[string]any{"a": idPj, "b": aide["id"], "type": "recu"}, true); !strings.Contains(e, "422") {
+		t.Fatalf("relation réservée posée à la main : %s", e)
+	}
+
 	// feuille : seuls les champs donnés changent
 	b.json("modifier_feuille", map[string]any{"id": idPj, "champs": map[string]any{"equipement": "Épée, corde", "bourse": map[string]any{"po": 12}}})
 	f := b.json("feuille_personnage", map[string]any{"nom": "Aelis"})

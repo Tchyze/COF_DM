@@ -18,7 +18,12 @@ func (s *Serveur) secrets(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
-	repondre(w, 200, map[string]any{"secrets": sec, "pj": pj, "pnj": pnj, "connaissances": conn})
+	indices, err := s.indicesRecus()
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	repondre(w, 200, map[string]any{"secrets": sec, "pj": pj, "pnj": pnj, "connaissances": conn, "indices": indices})
 }
 
 // reveler : des PJ apprennent un secret (lors d'une séance). Le statut du secret suit : « révélé »

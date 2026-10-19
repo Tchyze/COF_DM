@@ -767,6 +767,9 @@ func (s *Store) Partager(id int64, partager bool, auteur string) (Entite, error)
 	if partager && e.Type == "secret" {
 		return Entite{}, invalide("Une fiche « Secret » ne se partage pas avec les joueurs.")
 	}
+	if partager && e.Type == "aide" {
+		return Entite{}, invalide("Une aide de jeu ne se partage pas : envoyez-la aux PJ, elle arrive dans leurs documents.")
+	}
 	if _, err := s.db.Exec(`UPDATE entites SET partage=? WHERE id=?`, partager, id); err != nil {
 		return Entite{}, err
 	}
@@ -883,6 +886,9 @@ func (s *Store) resume(e Entite) Resume {
 	}
 	return r
 }
+
+// ResumeDe renvoie le résumé d'une fiche (carte des listes).
+func (s *Store) ResumeDe(e Entite) Resume { return s.resume(e) }
 
 func (s *Store) resumes(es []Entite) []Resume {
 	out := make([]Resume, 0, len(es))

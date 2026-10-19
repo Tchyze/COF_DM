@@ -260,6 +260,9 @@ func (s *Store) restaurer(x Export, auteur string) error {
 		if err := typeRelationValide(r.Type); err != nil {
 			return invalide("Relation n°%d : %v", r.ID, err)
 		}
+		if err := relationPermise(r.Type, presentes[r.A], presentes[r.B]); err != nil {
+			return invalide("Relation n°%d : %v", r.ID, err)
+		}
 		vues[r.ID] = true
 		if _, err := tx.Exec(`INSERT INTO relations (id, a, b, type, note, rang, secrete, cree) VALUES (?,?,?,?,?,?,?,?)`,
 			r.ID, r.A, r.B, r.Type, strings.TrimSpace(r.Note), strings.TrimSpace(r.Rang), r.Secrete, maintenant()); err != nil {

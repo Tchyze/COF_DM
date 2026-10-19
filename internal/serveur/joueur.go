@@ -27,8 +27,11 @@ var genresJoueur = map[string]bool{
 
 func champJoueur(c modele.Champ) bool { return !c.Secret && genresJoueur[c.Genre] }
 
-// partagee : la fiche est visible des joueurs.
-func partagee(e store.Entite) bool { return e.Partage && !e.Archive && e.Type != "secret" }
+// partagee : la fiche est visible des joueurs. Une aide de jeu ne l'est jamais : elle n'arrive aux
+// joueurs que par un envoi, dans leurs documents (aides.go).
+func partagee(e store.Entite) bool {
+	return e.Partage && !e.Archive && e.Type != "secret" && e.Type != "aide"
+}
 
 func (s *Serveur) routesJoueur() {
 	m := http.NewServeMux()
@@ -50,6 +53,7 @@ func (s *Serveur) routesJoueur() {
 	m.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireJoueur)
 	m.HandleFunc("GET /api/resoudre", s.resoudreJoueur)
 	m.HandleFunc("GET /medias/{fichier}", s.mediaJoueur)
+	// les documents reçus : routes de la page des joueurs (routesDocumentsJoueurs)
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 403, "Cette partie de l'univers est réservée au MJ.")
 	})
@@ -123,7 +127,7 @@ func resumeJoueur(e store.Entite) store.Resume {
 func (s *Serveur) schemaJoueur(w http.ResponseWriter, r *http.Request) {
 	types := []modele.Type{}
 	for _, t := range s.typesDeLUnivers() {
-		if t.Cle == "secret" {
+		if t.Cle == "secret" || t.Cle == "aide" {
 			continue
 		}
 		x := modele.Type{Cle: t.Cle, Nom: t.Nom, Pluriel: t.Pluriel, Icone: t.Icone, Champs: []modele.Champ{}, Carte: []string{}}
@@ -141,7 +145,13 @@ func (s *Serveur) schemaJoueur(w http.ResponseWriter, r *http.Request) {
 		}
 		types = append(types, x)
 	}
-	repondre(w, 200, map[string]any{"types": types, "relations": modele.Relations, "calendrier": s.store.Calendrier(), "genres": map[string]string{}})
+	relations := []modele.TypeRelation{}
+	for _, r := range modele.Relations {
+		if !r.Reservee { // « a reçu » relie un PJ à une aide de jeu, que le joueur ne voit pas comme une fiche
+			relations = append(relations, r)
+		}
+	}
+	repondre(w, 200, map[string]any{"types": types, "relations": relations, "calendrier": s.store.Calendrier(), "genres": map[string]string{}})
 }
 
 func (s *Serveur) statsJoueur(w http.ResponseWriter, r *http.Request) {
