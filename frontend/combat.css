@@ -390,3 +390,19 @@
 .combat .usages .chips button{min-height:26px;padding:0 8px;font-size:.85rem;white-space:normal;text-align:left}
 .combat .usages .chips button.used{text-decoration:line-through;opacity:.6}
 .combat .usages .row{flex-wrap:nowrap}
+
+/* page des joueurs : documents (aides de jeu) */
+.pj-barre nav a .pastille{display:inline-block;min-width:1.3em;margin-left:5px;padding:0 5px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:.75rem;font-weight:700;text-align:center;line-height:1.4}
+.combat .documents{max-width:820px;width:100%;margin:0 auto;gap:12px}
+.combat .docs-liste{display:flex;flex-direction:column;gap:8px}
+.combat .doc-carte{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);border-left:5px solid var(--brass);border-radius:var(--r);background:var(--surface);text-decoration:none;color:var(--ink);min-width:0}
+.combat .doc-carte.nouveau{box-shadow:0 0 0 1px var(--accent) inset}
+.combat .doc-carte img{width:56px;height:56px;object-fit:cover;border-radius:6px;flex:0 0 auto}
+.combat .doc-carte .doc-icone{width:56px;height:56px;display:grid;place-items:center;font-size:1.6rem;border-radius:6px;background:var(--sunk);flex:0 0 auto}
+.combat .doc-carte .c{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
+.combat .doc-carte b{font-family:var(--f-display);font-size:1.1rem;overflow-wrap:anywhere}
+.combat .doc h1{overflow-wrap:anywhere}
+.combat .doc .doc-texte{font-size:1.05rem;line-height:1.6;padding:14px 16px;border-radius:var(--r);background:var(--sunk);border:1px solid var(--line);overflow-wrap:anywhere}
+.combat .doc figure{margin:0;display:flex;flex-direction:column;gap:6px}
+.combat .doc figure img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--line);display:block}
+.combat .doc figcaption{color:var(--muted);font-size:.9rem}

@@ -4,7 +4,7 @@
   --ink:#e8e3d5; --muted:#99a0ad; --faint:#6b7280; --line:#2a303d; --line2:#353c4c;
   --gold:#d6b25e; --accent:#8fb0e8; --accent-ink:#0d1220; --mort:#ee8a78; --ok:#7fcf8c; --warn:#e6b45a; --secret:#c69be0;
   --t-pnj:#e0a96d; --t-lieu:#7fc79a; --t-faction:#e57d72; --t-objet:#6cc4c4; --t-lore:#b49be6; --t-evenement:#e6a35a;
-  --t-campagne:#8fb0e8; --t-quete:#d6b25e; --t-seance:#e08fb8; --t-pj:#79b8f0; --t-regle:#a8b0bd; --t-rencontre:#e2766a; --t-secret:#c69be0;
+  --t-campagne:#8fb0e8; --t-quete:#d6b25e; --t-seance:#e08fb8; --t-pj:#79b8f0; --t-regle:#a8b0bd; --t-rencontre:#e2766a; --t-secret:#c69be0; --t-aide:#e3a86b;
   --f-display:"Palatino Linotype","Book Antiqua",Palatino,"URW Palladio L",Georgia,serif;
   --f-body:system-ui,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   --f-mono:"Cascadia Mono",Consolas,"SFMono-Regular",Menlo,monospace;
@@ -16,7 +16,7 @@
   --ink:#24211b; --muted:#625b4e; --faint:#8b8373; --line:#d6ccb5; --line2:#c9bda2;
   --gold:#8a6514; --accent:#2f4f86; --accent-ink:#f8f4ea; --mort:#a3392b; --ok:#2f7a3f; --warn:#a66a0c; --secret:#6a3d82;
   --t-pnj:#a8641f; --t-lieu:#2f7f50; --t-faction:#b0392e; --t-objet:#1f7f80; --t-lore:#6b4fa8; --t-evenement:#b0621a;
-  --t-campagne:#2f4f86; --t-quete:#8a6514; --t-seance:#a3457a; --t-pj:#28689f; --t-regle:#5d6470; --t-rencontre:#a8382c; --t-secret:#6a3d82;
+  --t-campagne:#2f4f86; --t-quete:#8a6514; --t-seance:#a3457a; --t-pj:#28689f; --t-regle:#5d6470; --t-rencontre:#a8382c; --t-secret:#6a3d82; --t-aide:#8c5212;
   --ombre:0 8px 30px rgb(60 40 10/.18);
   color-scheme:light;
 }
@@ -98,7 +98,7 @@ main{padding:22px 28px 60px;min-width:0;max-width:1480px;width:100%}
 [data-type=pnj]{--c:var(--t-pnj)} [data-type=lieu]{--c:var(--t-lieu)} [data-type=faction]{--c:var(--t-faction)}
 [data-type=objet]{--c:var(--t-objet)} [data-type=lore]{--c:var(--t-lore)} [data-type=evenement]{--c:var(--t-evenement)}
 [data-type=campagne]{--c:var(--t-campagne)} [data-type=quete]{--c:var(--t-quete)} [data-type=seance]{--c:var(--t-seance)}
-[data-type=pj]{--c:var(--t-pj)} [data-type=regle]{--c:var(--t-regle)} [data-type=rencontre]{--c:var(--t-rencontre)} [data-type=secret]{--c:var(--t-secret)}
+[data-type=pj]{--c:var(--t-pj)} [data-type=regle]{--c:var(--t-regle)} [data-type=rencontre]{--c:var(--t-rencontre)} [data-type=secret]{--c:var(--t-secret)} [data-type=aide]{--c:var(--t-aide)}
 
 /* ---------- vignettes ---------- */
 .vignette{width:var(--t,44px);height:var(--t,44px);border-radius:50%;flex:0 0 auto;display:grid;place-items:center;overflow:hidden;
@@ -345,6 +345,7 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .matrice td.case{text-align:center;padding:2px}
 .matrice td.case button{width:34px;min-height:30px;padding:0;border-style:dashed;background:transparent;color:var(--ok);font-weight:700}
 .matrice td.case.sait button{border-style:solid;border-color:var(--ok);background:color-mix(in srgb,var(--ok) 16%,transparent)}
+.matrice td.case.indice button{border-color:var(--warn);color:var(--warn)}
 @media (max-width:640px){.adv{grid-template-columns:minmax(0,1fr) 60px;}.carac{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:640px){.barre-form .hint{display:none}}
 
@@ -610,3 +611,13 @@ a.version-app[href]:hover{color:var(--muted)}
 .ap-quete select,.ap-renc select{width:auto}
 .ap-qui{border-top:0;padding:2px 10px 2px 0}
 .ap-renc{padding:4px 0}
+
+/* écran du MJ : aides de jeu */
+.t-aide{display:flex;flex-direction:column;gap:6px;padding:8px 6px;border-bottom:1px solid var(--line)}
+.t-aide .n{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.t-aide .n a{font-weight:600;text-decoration:none;color:var(--text)}
+.t-aide .dest{display:flex;flex-wrap:wrap;gap:5px}
+.t-aide .dest button{min-height:30px;padding:.1rem .65rem;border-radius:999px;font-size:.85rem;border-style:dashed;background:transparent}
+.t-aide .dest button.primary{border-style:solid;border-color:var(--gold);background:var(--gold);color:#17130a;font-weight:600}
+.t-tabs .nb{font-size:.78em;opacity:.75;margin-left:2px}
+.t-aide .dest button.recu{border-style:solid;border-color:var(--ok);color:var(--ok);background:color-mix(in srgb,var(--ok) 14%,transparent);cursor:default}

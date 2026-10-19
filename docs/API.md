@@ -75,7 +75,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 
 ### Vue des joueurs
 
-Le MJ choisit les fiches que les joueurs voient : `POST /api/entites/{id}/partage` `{"partage": true}` (`false` pour la retirer). Chaque fiche porte `"partage"` ; une fiche « Secret » ne se partage pas (`422`), une fiche archivée n'est plus montrée.
+Le MJ choisit les fiches que les joueurs voient : `POST /api/entites/{id}/partage` `{"partage": true}` (`false` pour la retirer). Chaque fiche porte `"partage"` ; une fiche « Secret » ou une aide de jeu ne se partage pas (`422` : une aide s'envoie, voir « Aides de jeu »), une fiche archivée n'est plus montrée.
 
 Un compte `joueur` n'atteint que les routes ci-dessous, en lecture ; tout le reste répond `403` (journal, export, graphe, chronologie, organigramme, écran du MJ, bestiaire, combats, secrets, écritures).
 
@@ -85,9 +85,10 @@ Un compte `joueur` n'atteint que les routes ci-dessous, en lecture ; tout le res
 | `GET /api/entites/{id}` | La fiche partagée : ses champs non réservés au MJ (ni profil de combat, ni créatures d'une rencontre), les champs `ref` / `refs` réduits aux fiches partagées, ses images. Relations : sans les relations secrètes, sans « sait », sans les notes, vers des fiches partagées seulement. `references` est vide. Une fiche cachée répond `404`, comme une fiche inexistante. |
 | `GET /api/resoudre?nom=` | L'aperçu d'une fiche partagée. |
 | `GET /medias/{fichier}` | Les images des fiches partagées. |
-| `GET /api/schema` | Le schéma sans le type « Secret » ni les champs réservés au MJ. |
+| `GET /api/schema` | Le schéma sans les types « Secret » et « Aide de jeu », sans les champs réservés au MJ ni les relations réservées. |
 | `GET /api/entites/{id}/feuille`, `PUT` | La feuille de son propre PJ seulement (voir « Feuille de personnage »). |
 | `GET /api/reference` | Les profils, peuples et voies de l'univers, pour tenir sa feuille. |
+| `GET /api/joueur/…` | La page des joueurs, restreinte à son PJ (voir « Page des joueurs »), documents compris. |
 | `GET /api/stats`, `GET /api/calendrier`, `GET /api/parametres`, `GET /api/sante` | Comptes des fiches partagées, calendrier, nom de l'univers, version. |
 
 **Édition par les joueurs.** Fermée par défaut. L'administrateur l'ouvre pour l'univers avec `PUT /api/joueurs/edition` `{"active": true}` et rattache chaque compte à son PJ avec `PATCH /api/comptes/{nom}` `{"pj": <id>}` (`0` : aucun). Un joueur peut alors `PATCH /api/entites/{id}` `{"data": {…}, "modifie"?}` sur la fiche de son PJ, si elle est partagée, pour les seuls champs que le schéma marque `"joueur": true` (apparence, historique, objectifs). Tout autre champ, le nom, les tags ou une autre fiche répondent `403` ou `422`. La fiche lue par ce joueur annonce ces champs dans `"modifiable"`, et `GET /api/acces` donne `"edition_joueurs"`.
@@ -145,7 +146,7 @@ Toute valeur refusée est expliquée dans l'erreur `422` (champ inconnu avec la 
 
 ## Relations
 
-Liens libres entre deux fiches, lus dans les deux sens (`membre` : « A membre de B » / « B a pour membre A »). Les types sont dans `/api/schema` ; `autre` prend son libellé dans `note`.
+Liens libres entre deux fiches, lus dans les deux sens (`membre` : « A membre de B » / « B a pour membre A »). Les types sont dans `/api/schema` ; `autre` prend son libellé dans `note`. Un type peut borner les fiches qu'il relie (`de`, `vers` : types de A et de B, `422` sinon) ; un type `reservee` est posé par l'application et refusé ici (`recu` : l'envoi d'une aide de jeu à un PJ, voir « Aides de jeu »), y compris en changeant le type d'une relation.
 
 | Requête | Effet |
 |---|---|
@@ -164,10 +165,19 @@ Un secret est une fiche de type `secret`. « X sait le secret S » est la relati
 
 | Requête | Effet |
 |---|---|
-| `GET /api/secrets?campagne=3` | Tableau « qui sait quoi » : `{"secrets", "pj", "pnj", "connaissances": [{"relation", "secret", "qui", "contexte", "note"}]}`. `pnj` : PNJ et factions qui savent. |
+| `GET /api/secrets?campagne=3` | Tableau « qui sait quoi » : `{"secrets", "pj", "pnj", "connaissances": [{"relation", "secret", "qui", "contexte", "note"}], "indices": [{"relation", "secret", "qui", "aide", "seance"}]}`. `pnj` : PNJ et factions qui savent. `indices` : les aides de jeu (non archivées) envoyées à un PJ (`qui`) et qui sont l'indice du secret ; recevoir un indice n'est pas savoir. |
 | `POST /api/secrets/{id}/reveler` `{"qui": [4, 5], "seance": 31, "note": "…"}` | Ces fiches apprennent le secret. Le statut passe à `révélé` quand tous les PJ de la campagne le savent, `en partie révélé` sinon ; `revelation` reçoit la séance. |
 
 Pour « ne sait plus », supprimer la relation (`DELETE /api/relations/{id}`).
+
+## Aides de jeu
+
+Une aide de jeu (lettre, image, indice) est une fiche de type `aide` : `forme`, `campagne`, `contenu` (le texte remis aux joueurs), ses images, et réservés au MJ `indice_de` (le secret dont c'est l'indice), `prevue` (la séance pour laquelle elle est prévue) et `notes`. L'envoyer à un PJ pose la relation réservée `recu` du PJ vers l'aide, avec la séance en `contexte` ; la retirer, c'est supprimer cette relation (`DELETE /api/relations/{id}`), et les pages des joueurs relisent leurs documents. Une aide n'est jamais une fiche partagée : les joueurs ne la voient que dans leurs documents.
+
+| Requête | Effet |
+|---|---|
+| `GET /api/aides?campagne=3` | Les aides non archivées (de la campagne et sans campagne) : `[{"fiche", "indice_de"?, "prevue"?, "envois": [{"relation", "pj", "seance"?, "date"}]}]`, par nom. |
+| `POST /api/aides/{id}/envoyer` `{"qui": [4, 5], "seance": 31}` ou `{"tous": true}` | Envoie l'aide à ces PJ, ou à tous ceux de sa campagne (tous sans campagne) qui ne sont ni morts ni partis. Un PJ qui l'a déjà reçue est passé. Réponse : `{"envoyes": [ids], "statut_secret"}`. Si l'aide est l'indice d'un secret `caché` (ou sans statut), il passe à `soupçonné` (`statut_secret`) ; la révélation reste `POST /api/secrets/{id}/reveler`. Les pages des joueurs des destinataires sont prévenues aussitôt. `422` : pas une aide, aide archivée, destinataire qui n'est pas un PJ, séance inconnue. |
 
 ## Bestiaire et règles
 
@@ -235,7 +245,7 @@ L'export de l'univers (`GET /api/export`) porte la version de son modèle de fic
 
 ## Page des joueurs
 
-Ce que la page des joueurs (`/joueur.html`) lit : la feuille de son personnage, le combat en cours réduit à ce qu'un joueur en voit, les hauts faits. Rien n'y permet d'agir sur un combat.
+Ce que la page des joueurs (`/joueur.html`) lit : la feuille de son personnage, le combat en cours réduit à ce qu'un joueur en voit, ses documents (aides de jeu reçues), les hauts faits. Rien n'y permet d'agir sur un combat.
 
 Deux façons d'y entrer :
 
@@ -248,7 +258,10 @@ Deux façons d'y entrer :
 | `GET /api/joueur/pj` | Les PJ parmi lesquels choisir le sien, ni morts, ni partis, ni archivés : `[{"id", "nom", "joueur", "peuple", "profil", "niveau", "statut", "feuille"}]`. |
 | `GET /api/joueur/hauts-faits` | `{"combats": [{"id", "recap"}], "records": [{"pj", "nom", "combats", "victoires", "infliges", "abattus", "critiques", "touches", "tentatives", "tombe", "meilleur_coup", "meilleur_txt", "meilleur_ou", "titres"}]}` : les combats terminés, du plus récent au plus ancien, et les records de chaque PJ. |
 | `GET /api/joueur/des?depuis=`, `POST /api/joueur/des` | Les jets de dés de la table, et un jet du joueur pour son PJ (voir « Lanceur de dés »). |
-| `GET /api/joueur/direct` | WebSocket, qui ne fait que recevoir : `{"type": "etat", "edition", "combat"}` à la connexion, puis `{"type": "combat", "combat"}` à chaque action, `{"type": "fiche", "id"}` quand une feuille change, `{"type": "edition", "active"}`, `{"type": "hauts_faits"}` quand un combat se termine, `{"type": "jet", "jet"}` à chaque jet public. `{"type": "ping"}` → `{"type": "pong"}`. Même contrôle d'origine que le suivi d'un combat. |
+| `GET /api/joueur/documents?pj=4` | Les aides de jeu reçues par le PJ, de la plus récente à la plus ancienne : `[{"id", "nom", "forme", "image", "recu"}]` (`image` : l'image principale). Sur un serveur, un compte `joueur` lit celles de son PJ, quel que soit `pj` ; à la maison et pour le MJ, `pj` est obligatoire (`404` sinon). |
+| `GET /api/joueur/documents/{id}?pj=4` | Une aide reçue par ce PJ : `{"id", "nom", "forme", "image", "recu", "contenu", "images": [{"fichier", "legende"}]}`. Rien d'autre de la fiche : ni le secret, ni la séance prévue, ni les notes ; les liens `[[Nom]]` du texte sont remplacés par leur texte (`![[…]]` retiré). Aide non reçue, archivée ou inexistante : `404`. |
+| `GET /api/joueur/documents/{id}/images/{fichier}?pj=4` | Une image de cette aide, si le PJ l'a reçue ; aucune autre image ne passe par là. |
+| `GET /api/joueur/direct` | WebSocket, qui ne fait que recevoir : `{"type": "etat", "edition", "combat"}` à la connexion, puis `{"type": "combat", "combat"}` à chaque action, `{"type": "fiche", "id"}` quand une feuille change, `{"type": "edition", "active"}`, `{"type": "hauts_faits"}` quand un combat se termine, `{"type": "jet", "jet"}` à chaque jet public, `{"type": "document", "id", "nom", "pj": [ids]}` quand une aide arrive (un compte `joueur` n'est prévenu que pour son PJ), `{"type": "documents"}` quand un envoi est retiré. `{"type": "ping"}` → `{"type": "pong"}`. Même contrôle d'origine que le suivi d'un combat. |
 | `GET /api/entites/{id}/feuille`, `PUT …` | À la maison, sur la page libre : la feuille d'un PJ sans les notes du MJ ; l'écriture demande les feuilles déverrouillées (`403` sinon) et ne touche pas aux notes du MJ. Sur un serveur, un joueur passe par les mêmes routes pour son seul PJ (« Vue des joueurs »). |
 | `GET /api/reference` | Profils, peuples et voies, pour tenir sa feuille. |
 

@@ -81,6 +81,7 @@ export async function mount(el, arg) {
   const racine = $(".table", el);
   const fiches = new Map(); // fiches affichées (pour cocher leurs étapes)
   let d = null, brut = "", trk = null, onglet = "quete", vivant = true, enVol = false;
+  let aides = null, aidesBrut = ""; // aides de jeu de la campagne (onglet « Aides »)
   // combat affiché dans le volet : son identifiant, de quoi le refermer, et celui que le MJ a écarté
   let combatVu = 0, fermerCombat = null, combatEcarte = 0;
   const lecture = !!window.cofAcces?.lecture_seule;
@@ -146,6 +147,7 @@ export async function mount(el, arg) {
   function peindreCentre() {
     const dispo = [d.quete, d.seance].filter(Boolean);
     const box = $("#t-centre", el);
+    if (onglet === "aides" || (!dispo.length && aides?.length)) { peindreAides(box, dispo); return; }
     if (!dispo.length) {
       maj(box, `<h3>Quête</h3><div class="t-defile"><p class="vide">Aucune quête en cours. Passez une quête au statut « en cours » pour la voir ici.</p>
         <div class="ligne" style="margin-top:10px"><a href="#/t/quete"><button>✦ Voir les quêtes</button></a><a href="#/nouveau/quete"><button class="primary">Nouvelle quête</button></a></div></div>`);
@@ -158,13 +160,62 @@ export async function mount(el, arg) {
     fiches.set(f.id, f);
     const haut = box._fiche === f.id ? box.querySelector(".t-defile")?.scrollTop || 0 : 0;
     box._fiche = f.id;
-    if (maj(box, `<div class="t-tete"><div class="t-tabs" role="tablist">${dispo.map(x => `<button role="tab" data-onglet="${x.type}" aria-selected="${x === f}">${esc(typeDe(x.type).icone)} ${esc(typeDe(x.type).nom)}</button>`).join("")}</div>
+    if (maj(box, `<div class="t-tete">${onglets(dispo, f.type)}
         <span class="sp"></span>${f.type === "seance" ? `<a href="#/preparer/${f.id}" title="Préparer cette séance"><button class="petit ghost">🧭 Préparer</button></a>${lecture ? "" : `<a href="#/apres/${f.id}" title="Reporter ce qui s'est passé"><button class="petit ghost">✅ Après</button></a>`}` : ""}<a href="#/f/${f.id}/modifier" title="Modifier la fiche"><button class="petit ghost" aria-label="Modifier">✎</button></a></div>
       <div class="t-defile">
         <div class="t-titre" data-type="${f.type}"><h2><a href="#/f/${f.id}" data-plein="1">${esc(f.nom)}</a></h2><div class="ligne">${cartes.map(c => `<span class="badge">${c}</span>`).join("")}</div></div>
         ${resume ? `<div class="resume">${inline(resume, res)}</div>` : ""}
         ${corps(f, t.carte)}
       </div>`)) box.querySelector(".t-defile").scrollTop = haut;
+  }
+
+  function onglets(dispo, actif) {
+    return `<div class="t-tabs" role="tablist">${dispo.map(x => `<button role="tab" data-onglet="${x.type}" aria-selected="${x.type === actif}">${esc(typeDe(x.type).icone)} ${esc(typeDe(x.type).nom)}</button>`).join("")}<button role="tab" data-onglet="aides" aria-selected="${actif === "aides"}">${esc(typeDe("aide").icone)} Aides${aides?.length ? `<span class="nb">${aides.length}</span>` : ""}</button></div>`;
+  }
+
+  // ---------------------------------------------------------------- aides de jeu
+
+  // Les aides de la campagne, celles prévues pour la séance d'abord. Un PJ touché la reçoit ; « Tous »
+  // l'envoie aux PJ de la table qui ne l'ont pas. La séance de l'écran est notée avec l'envoi.
+  function peindreAides(box, dispo) {
+    const seance = d.seance?.id || 0, pjs = d.pj.map(p => p.fiche);
+    const liste = [...(aides || [])].sort((a, b) => (b.prevue === seance && seance ? 1 : 0) - (a.prevue === seance && seance ? 1 : 0));
+    const prevues = liste.filter(a => seance && a.prevue === seance).length;
+    const nouvelle = `#/nouveau/aide?${new URLSearchParams({ ...(d.campagne ? { campagne: d.campagne.id } : {}), ...(seance ? { prevue: seance } : {}) })}`;
+    const ligne = a => {
+      const recus = new Set(a.envois.map(e => e.pj.id));
+      const manquent = pjs.filter(p => !recus.has(p.id));
+      return `<div class="t-aide" data-type="aide">
+        <div class="n"><a href="#/f/${a.fiche.id}">${esc(typeDe("aide").icone)} ${esc(a.fiche.nom)}</a>${a.fiche.carte?.forme ? `<span class="badge">${esc(a.fiche.carte.forme)}</span>` : ""}${a.indice_de ? `<span class="hint" title="Indice du secret">🔒 ${esc(a.indice_de.nom)}</span>` : ""}</div>
+        <div class="dest">${pjs.map(p => recus.has(p.id)
+          ? `<button class="recu" disabled title="Reçue${a.envois.find(e => e.pj.id === p.id)?.seance ? " lors de " + esc(a.envois.find(e => e.pj.id === p.id).seance.nom) : ""}">✓ ${esc(p.nom)}</button>`
+          : lecture ? `<button disabled>${esc(p.nom)}</button>` : `<button data-envoyer="${a.fiche.id}" data-qui="${p.id}" title="Envoyer à ${esc(p.nom)}">${esc(p.nom)}</button>`).join("")}
+          ${!lecture && manquent.length > 1 ? `<button class="primary" data-envoyer="${a.fiche.id}" data-qui="${manquent.map(p => p.id).join(",")}">✉ Tous</button>` : ""}
+          ${!pjs.length ? `<span class="hint">Aucun PJ à la table.</span>` : ""}</div>
+      </div>`;
+    };
+    maj(box, `<div class="t-tete">${onglets(dispo, "aides")}<span class="sp"></span>${lecture ? "" : `<a href="${nouvelle}" title="Nouvelle aide de jeu"><button class="petit ghost">＋ Aide</button></a>`}</div>
+      <div class="t-defile">${aides === null ? `<p class="hint">Chargement…</p>` : liste.length
+        ? `${prevues ? `<h4>Prévues pour ${esc(d.seance.nom)}</h4>` : ""}${liste.slice(0, prevues).map(ligne).join("")}${prevues && liste.length > prevues ? `<h4>Autres aides</h4>` : ""}${liste.slice(prevues).map(ligne).join("")}`
+        : `<p class="vide">Aucune aide de jeu${d.campagne ? " pour cette campagne" : ""}. Une lettre, une image, un indice : créez-la, puis touchez un PJ pour la lui envoyer en direct (onglet « Documents » de sa page).</p>`}</div>`);
+  }
+
+  async function chargerAides() {
+    try {
+      const r = await api("GET", "/api/aides" + (d?.campagne ? "?campagne=" + d.campagne.id : ""));
+      const texte = JSON.stringify(r);
+      if (!vivant || texte === aidesBrut) return;
+      aidesBrut = texte; aides = r;
+      if (d) peindreCentre();
+    } catch { /* hors ligne : on garde la liste */ }
+  }
+
+  async function envoyerAide(id, qui) {
+    try {
+      const r = await api("POST", `/api/aides/${id}/envoyer`, { qui, seance: d.seance?.id || 0 });
+      toast(`Envoyée à ${r.envoyes.length} PJ.${r.statut_secret ? ` Le secret passe à « ${r.statut_secret} ».` : ""}`);
+      await chargerAides();
+    } catch (e) { toast(e.message, true); }
   }
 
   // ---------------------------------------------------------------- combat
@@ -346,6 +397,7 @@ export async function mount(el, arg) {
     brut = texte;
     d = r;
     peindreBarre(); peindrePJ(); peindreScene(); peindreCentre(); peindreCombat();
+    chargerAides();
   }
 
   // ---------------------------------------------------------------- gestes
@@ -376,6 +428,8 @@ export async function mount(el, arg) {
     if (!pop.hidden && !e.target.closest("#t-pop")) fermerPop();
     const tab = e.target.closest("[data-onglet]");
     if (tab) { onglet = tab.dataset.onglet; peindreCentre(); return; }
+    const envoi = e.target.closest("[data-envoyer]");
+    if (envoi) { envoyerAide(+envoi.dataset.envoyer, envoi.dataset.qui.split(",").map(Number)); return; }
     const combat = e.target.closest("[data-combat]");
     if (combat) { montrer(+combat.dataset.combat).then(peindreCombat); racine.dataset.volet = "combat"; return; }
     if (e.target.closest("#t-large")) { racine.toggleAttribute("data-large"); return; }
@@ -406,7 +460,7 @@ export async function mount(el, arg) {
     if (e.key !== "Escape") return;
     if (!pop.hidden) fermerPop(); else if (!tiroir.hidden) fermerTiroir();
   };
-  const retour = () => { if (!document.hidden) { charger(d?.quete?.id || 0); sonder(); } };
+  const retour = () => { if (!document.hidden) { charger(d?.quete?.id || 0); sonder(); chargerAides(); } };
   document.addEventListener("keydown", touche);
   document.addEventListener("visibilitychange", retour);
   window.addEventListener("focus", retour);

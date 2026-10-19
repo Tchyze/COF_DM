@@ -52,7 +52,7 @@ export async function creer(el, type, params) {
 
 const PANNEAUX = {
   pnj: panneaux.combatPNJ, rencontre: panneaux.rencontre,
-  seance: panneaux.combatsSeance, secret: panneaux.quiSait,
+  seance: panneaux.combatsSeance, secret: panneaux.quiSait, aide: panneaux.envois,
 };
 export const COURTS = new Set(["texte", "choix", "nombre", "booleen", "ref", "refs", "date_jeu", "date"]);
 export const RESUMES = ["resume", "impression", "but"];
@@ -69,7 +69,7 @@ function lecture(el, f) {
   const etapes = t.champs.find(c => c.genre === "etapes");
   const joueur = !!window.cofAcces?.joueur; // vue des joueurs : la fiche seule, sans les outils du MJ
   // sur un serveur, le MJ choisit les fiches que les joueurs voient (jamais une fiche « Secret »)
-  const partageable = !!window.cofAcces?.serveur && !window.cofAcces.lecture_seule && f.type !== "secret";
+  const partageable = !!window.cofAcces?.serveur && !window.cofAcces.lecture_seule && f.type !== "secret" && f.type !== "aide";
   // la feuille de personnage : pour le MJ et l'auditeur sur tout PJ, pour un joueur sur le sien
   const sienne = joueur && window.cofAcces.compte?.pj === f.id;
   const feuille = f.type === "pj" && (!joueur || sienne);
@@ -249,14 +249,14 @@ function relations(el, f) {
   const dansOrga = r => f.type === "faction" && r.sens === "entrante" && (r.type === "membre" || r.type === "dirige");
   const nbOrga = f.relations.filter(dansOrga).length;
   for (const r of f.relations) {
-    if (dansOrga(r) || r.type === "sait") continue;
+    if (dansOrga(r) || r.type === "sait" || (f.type === "aide" && r.type === "recu")) continue; // envois : leur panneau
     if (!groupes.has(r.libelle)) groupes.set(r.libelle, []);
     groupes.get(r.libelle).push(r);
   }
   box.innerHTML = `<h3>Relations <span class="sp"></span><button class="petit" id="rel-ajout">＋ Relier</button></h3>
     <form id="rel-form" class="formulaire" hidden style="gap:8px">
       <select id="rel-type" aria-label="Type de relation">
-        ${schema.relations.map(r => `<option value="${r.cle}:a">${esc(f.nom)} ${esc(r.nom)}…</option>${r.inverse !== r.nom ? `<option value="${r.cle}:b">${esc(f.nom)} ${esc(r.inverse)}…</option>` : ""}`).join("")}
+        ${schema.relations.filter(r => !r.reservee).map(r => `<option value="${r.cle}:a">${esc(f.nom)} ${esc(r.nom)}…</option>${r.inverse !== r.nom ? `<option value="${r.cle}:b">${esc(f.nom)} ${esc(r.inverse)}…</option>` : ""}`).join("")}
       </select>
       <div id="rel-cible"></div>
       <input id="rel-rang" placeholder="Rang dans la faction" hidden>
