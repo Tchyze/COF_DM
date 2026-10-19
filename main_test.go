@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -29,4 +31,44 @@ func TestEcouterFenetreLibre(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.Close()
+}
+
+// L'application a dû prendre un autre port que celui de config.json : cof-dm -mcp le lit dans
+// le port publié, et retombe sur config.json quand elle ne tourne plus.
+func TestPortPublie(t *testing.T) {
+	dossier := t.TempDir()
+	if err := ecrireConfig(dossier, config{Port: 8100}); err != nil {
+		t.Fatal(err)
+	}
+	if p := portApplication(dossier); p != 8100 {
+		t.Fatalf("sans port publié : %d, attendu 8100 (config.json)", p)
+	}
+	if err := publierPort(dossier, 8101); err != nil {
+		t.Fatal(err)
+	}
+	if p := portApplication(dossier); p != 8101 {
+		t.Fatalf("port publié : %d, attendu 8101", p)
+	}
+	// l'application relancée par une mise à jour a publié le sien : l'ancienne n'y touche pas
+	if err := os.WriteFile(filepath.Join(dossier, fichierPort), []byte(`{"port":8102,"pid":-1}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	retirerPort(dossier)
+	if p := portApplication(dossier); p != 8102 {
+		t.Fatalf("port d'une autre instance effacé : %d", p)
+	}
+	if err := publierPort(dossier, 8101); err != nil {
+		t.Fatal(err)
+	}
+	retirerPort(dossier)
+	if p := portApplication(dossier); p != 8100 {
+		t.Fatalf("après l'arrêt : %d, attendu 8100", p)
+	}
+	// un fichier abîmé ne compte pas
+	if err := os.WriteFile(filepath.Join(dossier, fichierPort), []byte(`{"port":80}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if p := portApplication(dossier); p != 8100 {
+		t.Fatalf("port publié invalide : %d", p)
+	}
 }
