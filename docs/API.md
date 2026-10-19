@@ -254,7 +254,7 @@ Deux façons d'y entrer :
 
 | Requête | Effet |
 |---|---|
-| `GET /api/joueur/etat` | `{"serveur", "pj", "edition", "combat", "univers", "de"}` : `serveur` dit si l'on entre par un compte, `pj` est alors le PJ du compte ; `edition` : les feuilles sont déverrouillées ; `combat` : voir ci-dessous, ou `null` ; `de` : le dé des tests (partie `combat` des règles, 20 à défaut). |
+| `GET /api/joueur/etat` | `{"serveur", "pj", "edition", "combat", "univers", "de", "fonctionnalites"}` : `serveur` dit si l'on entre par un compte, `pj` est alors le PJ du compte ; `edition` : les feuilles sont déverrouillées ; `combat` : voir ci-dessous, ou `null` ; `de` : le dé des tests (partie `combat` des règles, 20 à défaut). |
 | `GET /api/joueur/pj` | Les PJ parmi lesquels choisir le sien, ni morts, ni partis, ni archivés : `[{"id", "nom", "joueur", "peuple", "profil", "niveau", "statut", "feuille"}]`. |
 | `GET /api/joueur/hauts-faits` | `{"combats": [{"id", "recap"}], "records": [{"pj", "nom", "combats", "victoires", "infliges", "abattus", "critiques", "touches", "tentatives", "tombe", "meilleur_coup", "meilleur_txt", "meilleur_ou", "titres"}]}` : les combats terminés, du plus récent au plus ancien, et les records de chaque PJ. |
 | `GET /api/joueur/des?depuis=`, `POST /api/joueur/des` | Les jets de dés de la table, et un jet du joueur pour son PJ (voir « Lanceur de dés »). |
@@ -345,11 +345,29 @@ La page n'affiche aucun cadre. Sa politique de sécurité n'admet de WebSocket q
 | `DELETE /api/medias/{id}` | Supprime. |
 | `GET /medias/{fichier}` | L'image (rangée dans le fichier de l'univers). |
 
+## Fonctionnalités
+
+Certaines parties de l'application sont optionnelles, réglées **univers par univers** (le réglage est rangé dans l'univers et se synchronise) : `ecran_mj`, `seances` (préparation et après-séance), `combat`, `rencontres`, `secrets`, `feuilles`, `page_joueurs`, `des`, `aides`, `regles`, `graphe`, `chronologie`, `organigramme`, `obsidian`. Coupées par défaut dans un univers neuf : `des`, `aides`, `feuilles`, `page_joueurs`. Un univers d'avant cette version garde ce dont il se sert (des feuilles de personnage : `feuilles` et `page_joueurs` ; des aides de jeu : `aides`).
+
+| Requête | Effet |
+|---|---|
+| `GET /api/fonctionnalites` | `[{"cle", "nom", "description", "groupe", "defaut", "types"?, "active"}]`. |
+| `PUT /api/fonctionnalites` `{"des": true, "combat": false}` | Active ou coupe ; les autres gardent leur état. Clé inconnue : `422`. Journalisé. Réservé à qui écrit (MJ ; ni auditeur, ni joueur). Couper `page_joueurs` déconnecte les appareils qui la suivaient. |
+
+Une fonctionnalité coupée :
+
+- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
+- ses types de fiches (`rencontre`, `secret`, `aide`, `regle`) quittent le schéma, et avec eux les champs qui ne désignent qu'eux ; ils sortent de `GET /api/entites` et ne se créent plus (`422`, import compris). Une fiche existante reste lisible par `GET /api/entites/{id}` ;
+- la préparation d'une séance ne remonte plus ses secrets (`secrets`) ni ses rencontres (`rencontres`) ;
+- rien n'est effacé : ses données restent dans l'univers, voyagent avec la synchronisation et l'export, et reviennent à la réactivation.
+
+Le serveur MCP ne propose pas les outils d'une fonctionnalité coupée (il lit `GET /api/fonctionnalites` à chaque `tools/list`).
+
 ## Autres
 
 | Requête | Effet |
 |---|---|
-| `GET /api/schema` | Types, champs, relations, calendrier, genres de champ. |
+| `GET /api/schema` | Types, champs, relations, calendrier, genres de champ, et `fonctionnalites` (`{"des": false, …}`, voir « Fonctionnalités »). Les types et les champs d'une fonctionnalité coupée n'y figurent pas. |
 | `GET /api/stats` | Comptes par type, liens morts, journal récent, campagnes, séances, quêtes en cours. |
 | `GET /api/resoudre?nom=Mont-Veille` | La fiche qui porte ce nom et sa phrase de présentation. |
 | `GET /api/liens-morts` | Les `[[Nom]]` qui ne mènent à aucune fiche, et où ils sont. |

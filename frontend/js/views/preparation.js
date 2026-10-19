@@ -3,7 +3,7 @@
 // Le MJ coche ce qu'il garde, ajoute ses notes, et l'ensemble s'ajoute au champ « Préparation » de
 // la séance, en Markdown, avec des [[liens]] vers les fiches.
 import { $, $$, esc, api, toast } from "../ui.js";
-import { vignette } from "../schema.js";
+import { vignette, actif as fonctionActive } from "../schema.js";
 
 const lecture = () => !!window.cofAcces?.lecture_seule;
 const lien = nom => `[[${String(nom).replace(/[[\]|]/g, " ").trim()}]]`;
@@ -58,12 +58,12 @@ export async function mount(el, id) {
           ${q.etapes_restantes.length ? `<br>Reste : ${q.etapes_restantes.map(esc).join(" · ")} <span class="hint">(${q.etapes_faites} faite${q.etapes_faites > 1 ? "s" : ""})</span>` : ""}
           ${[q.commanditaire && "commanditaire : " + q.commanditaire, q.lieu && "lieu : " + q.lieu].filter(Boolean).length ? `<br><span class="hint">${esc([q.commanditaire && "commanditaire : " + q.commanditaire, q.lieu && "lieu : " + q.lieu].filter(Boolean).join(" · "))}</span>` : ""}`)).join("")
         + (p.quetes_a_venir.length ? `<p class="hint">À venir : ${p.quetes_a_venir.map(fiche).join(", ")}</p>` : ""), "Aucune quête en cours dans cette campagne.")}
-      ${section("Secrets à semer", p.secrets.map((s, i) => t("s" + i, `🔒 ${fiche(s.fiche)} <span class="badge">${esc([s.importance, s.statut].filter(Boolean).join(" · "))}</span>
+      ${!fonctionActive("secrets") ? "" : section("Secrets à semer", p.secrets.map((s, i) => t("s" + i, `🔒 ${fiche(s.fiche)} <span class="badge">${esc([s.importance, s.statut].filter(Boolean).join(" · "))}</span>
           ${s.resume ? `<br><span class="hint">${esc(court(s.resume))}</span>` : ""}
           ${s.indices ? `<br>Indices : ${esc(court(s.indices, 300))}` : `<br><span class="hint">Aucun indice noté : comment les PJ peuvent-ils le découvrir ?</span>`}
           ${s.ignorent.length ? `<br><span class="hint">Ne le savent pas : ${esc(s.ignorent.join(", "))}</span>` : ""}`, s.importance !== "détail")).join(""), "Aucun secret en attente dans cette campagne.")}
       ${section("PNJ à avoir sous la main", p.pnj.map((x, i) => t("p" + i, `<span class="prep-pnj">${vignette(x.fiche, 26)} ${fiche(x.fiche)}${x.secret ? ` <span title="Des secrets du MJ">🔒</span>` : ""}</span> <span class="hint">${esc(x.raison)}${x.resume ? " — " + esc(court(x.resume, 120)) : ""}</span>`)).join(""), "Aucun PNJ lié aux quêtes en cours ni là où est le groupe.")}
-      ${section("Rencontres prêtes", p.rencontres.map((r, i) => t("r" + i, `⚔ ${fiche(r.fiche)}${r.creatures ? ` <span class="hint">${esc(r.creatures)}</span>` : ""}${r.lieu || r.quete ? `<br><span class="hint">${esc([r.lieu, r.quete && "quête : " + r.quete].filter(Boolean).join(" · "))}</span>` : ""}`)).join(""), "Aucune rencontre préparée.")}
+      ${!fonctionActive("rencontres") ? "" : section("Rencontres prêtes", p.rencontres.map((r, i) => t("r" + i, `⚔ ${fiche(r.fiche)}${r.creatures ? ` <span class="hint">${esc(r.creatures)}</span>` : ""}${r.lieu || r.quete ? `<br><span class="hint">${esc([r.lieu, r.quete && "quête : " + r.quete].filter(Boolean).join(" · "))}</span>` : ""}`)).join(""), "Aucune rencontre préparée.")}
       <section class="panneau"><h3>Notes</h3>
         <textarea id="prep-notes" placeholder="Ouverture, ambiance, ce que vous voulez absolument placer…"${lecture() ? " disabled" : ""}></textarea>
       </section>

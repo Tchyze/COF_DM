@@ -2,7 +2,7 @@
 // au centre, le combat à droite (l'écran de combat, logé dans le volet). Une fiche touchée s'ouvre dans un
 // tiroir, sans quitter l'écran.
 import { $, $$, esc, api, toast, armer } from "../ui.js";
-import { typeDe, champDe, vignette, lienFiche, badgeType, valeurCourte } from "../schema.js";
+import { typeDe, champDe, vignette, lienFiche, badgeType, valeurCourte, actif as fonctionActive } from "../schema.js";
 import { rendu, inline, resolveur } from "../md.js";
 import { ecran as ecranCombat, lancerCombat } from "./combat.js";
 import { lireMonstre, blocMonstre } from "../monstres.js";
@@ -114,7 +114,7 @@ export async function mount(el, arg) {
       const ton = e.pv <= 0 ? "ko" : pct <= 25 ? "bas" : pct <= 50 ? "moyen" : "haut";
       vie = `<span class="t-pv ${ton}"><i style="width:${pct}%"></i><span>${e.pv <= 0 ? "à terre · " : ""}${e.pv} / ${e.pv_max} PV</span></span>
         <span class="t-stats"><span>DEF <b>${e.defense}</b></span><span>Init <b>${e.init}</b></span><span>PC <b>${e.pc}</b>/${e.pc_max}</span><span>PR <b>${e.pr}</b>/${e.pr_max}</span>${e.pm_max ? `<span>PM <b>${e.pm}</b>/${e.pm_max}</span>` : ""}</span>`;
-    } else vie = `<span class="t-stats">pas encore de feuille de personnage</span>`;
+    } else if (fonctionActive("feuilles")) vie = `<span class="t-stats">pas encore de feuille de personnage</span>`;
     return `<a class="t-pj${p.statut === "absent" ? " absent" : ""}" href="#/f/${p.fiche.id}" data-type="pj">
       ${vignette(p.fiche, 36)}
       <span class="c"><span class="n"><b>${esc(p.fiche.nom)}</b>${sous ? `<small>${esc(sous)}</small>` : ""}${p.statut === "absent" ? `<span class="badge">absent</span>` : ""}</span>
@@ -147,7 +147,7 @@ export async function mount(el, arg) {
   function peindreCentre() {
     const dispo = [d.quete, d.seance].filter(Boolean);
     const box = $("#t-centre", el);
-    if (onglet === "aides" || (!dispo.length && aides?.length)) { peindreAides(box, dispo); return; }
+    if (avecAides && (onglet === "aides" || (!dispo.length && aides?.length))) { peindreAides(box, dispo); return; }
     if (!dispo.length) {
       maj(box, `<h3>Quête</h3><div class="t-defile"><p class="vide">Aucune quête en cours. Passez une quête au statut « en cours » pour la voir ici.</p>
         <div class="ligne" style="margin-top:10px"><a href="#/t/quete"><button>✦ Voir les quêtes</button></a><a href="#/nouveau/quete"><button class="primary">Nouvelle quête</button></a></div></div>`);
@@ -161,7 +161,7 @@ export async function mount(el, arg) {
     const haut = box._fiche === f.id ? box.querySelector(".t-defile")?.scrollTop || 0 : 0;
     box._fiche = f.id;
     if (maj(box, `<div class="t-tete">${onglets(dispo, f.type)}
-        <span class="sp"></span>${f.type === "seance" ? `<a href="#/preparer/${f.id}" title="Préparer cette séance"><button class="petit ghost">🧭 Préparer</button></a>${lecture ? "" : `<a href="#/apres/${f.id}" title="Reporter ce qui s'est passé"><button class="petit ghost">✅ Après</button></a>`}` : ""}<a href="#/f/${f.id}/modifier" title="Modifier la fiche"><button class="petit ghost" aria-label="Modifier">✎</button></a></div>
+        <span class="sp"></span>${f.type === "seance" && avecSeances ? `<a href="#/preparer/${f.id}" title="Préparer cette séance"><button class="petit ghost">🧭 Préparer</button></a>${lecture ? "" : `<a href="#/apres/${f.id}" title="Reporter ce qui s'est passé"><button class="petit ghost">✅ Après</button></a>`}` : ""}<a href="#/f/${f.id}/modifier" title="Modifier la fiche"><button class="petit ghost" aria-label="Modifier">✎</button></a></div>
       <div class="t-defile">
         <div class="t-titre" data-type="${f.type}"><h2><a href="#/f/${f.id}" data-plein="1">${esc(f.nom)}</a></h2><div class="ligne">${cartes.map(c => `<span class="badge">${c}</span>`).join("")}</div></div>
         ${resume ? `<div class="resume">${inline(resume, res)}</div>` : ""}
@@ -169,8 +169,10 @@ export async function mount(el, arg) {
       </div>`)) box.querySelector(".t-defile").scrollTop = haut;
   }
 
-  function onglets(dispo, actif) {
-    return `<div class="t-tabs" role="tablist">${dispo.map(x => `<button role="tab" data-onglet="${x.type}" aria-selected="${x.type === actif}">${esc(typeDe(x.type).icone)} ${esc(typeDe(x.type).nom)}</button>`).join("")}<button role="tab" data-onglet="aides" aria-selected="${actif === "aides"}">${esc(typeDe("aide").icone)} Aides${aides?.length ? `<span class="nb">${aides.length}</span>` : ""}</button></div>`;
+  const avecAides = fonctionActive("aides"), avecCombat = fonctionActive("combat"), avecSeances = fonctionActive("seances");
+  if (!avecCombat) racine.dataset.sansCombat = "";
+  function onglets(dispo, courant) {
+    return `<div class="t-tabs" role="tablist">${dispo.map(x => `<button role="tab" data-onglet="${x.type}" aria-selected="${x.type === courant}">${esc(typeDe(x.type).icone)} ${esc(typeDe(x.type).nom)}</button>`).join("")}${avecAides ? `<button role="tab" data-onglet="aides" aria-selected="${courant === "aides"}">${esc(typeDe("aide").icone)} Aides${aides?.length ? `<span class="nb">${aides.length}</span>` : ""}</button>` : ""}</div>`;
   }
 
   // ---------------------------------------------------------------- aides de jeu
@@ -201,6 +203,7 @@ export async function mount(el, arg) {
   }
 
   async function chargerAides() {
+    if (!avecAides) return;
     try {
       const r = await api("GET", "/api/aides" + (d?.campagne ? "?campagne=" + d.campagne.id : ""));
       const texte = JSON.stringify(r);
@@ -241,6 +244,7 @@ export async function mount(el, arg) {
   }
 
   function peindreCombat() {
+    if (!avecCombat) return;
     const cb = trk?.combat;
     const etat = !trk ? `<span class="hint">…</span>`
       : cb ? `<button class="petit${cb.id === combatVu ? "" : " primary"}" data-combat="${cb.id}" title="Afficher ce combat">▶ ${esc(cb.nom)} · round ${cb.round}</button>`

@@ -1,7 +1,7 @@
 // Panneaux propres à certains types de fiches : profil de combat d'un PNJ, difficulté et lancement
 // d'une rencontre, combats d'une séance et leur bilan, secrets (qui sait quoi), envois d'une aide de jeu.
 import { $, $$, esc, api, toast, armer } from "../ui.js";
-import { lienFiche, vignette, badgeType } from "../schema.js";
+import { lienFiche, vignette, badgeType, actif as fonctionActive } from "../schema.js";
 import { selecteur, selecteurMonstre } from "../composants.js";
 import { lireMonstre, blocMonstre, nc } from "../monstres.js";
 import { lancerCombat } from "./combat.js";
@@ -69,7 +69,7 @@ export async function rencontre(box, f) {
         ${r.conditions.length ? `<div class="ligne"><label class="hint" for="cond">Conditions</label><select id="cond"><option value="">normales</option>${r.conditions.map(c => `<option value="${esc(c.cle)}" ${c.cle === condition ? "selected" : ""}>${esc(c.libelle)}</option>`).join("")}</select></div>` : ""}`;
     }
     zone.innerHTML = `${lignes ? `<ul class="attaques">${lignes}</ul>` : `<p class="vide">Aucune créature : ajoutez-en dans « Modifier » (monstres du bestiaire) ou des PNJ présents qui ont un profil de combat.</p>`}${evaluation}
-      ${lecture() ? "" : `<div class="ligne"><button class="primary" id="lancer">⚔ Lancer le combat</button><span class="hint">avec les PJ en jeu de la campagne</span></div>`}`;
+      ${lecture() || !fonctionActive("combat") ? "" : `<div class="ligne"><button class="primary" id="lancer">⚔ Lancer le combat</button><span class="hint">avec les PJ en jeu de la campagne</span></div>`}`;
     if ($("#cond", zone)) $("#cond", zone).onchange = ev => { condition = ev.target.value; peindre(); };
     if ($("#lancer", zone)) armer($("#lancer", zone), "Lancer ?", async () => {
       try { const c = await lancerCombat({ rencontre: f.id }); location.hash = "#/combat/" + c.id; }
@@ -147,7 +147,7 @@ export async function quiSait(box, f, apres) {
   const [pjs, seances, aides] = await Promise.all([
     api("GET", "/api/entites?type=pj" + (campagne ? "&campagne=" + campagne : "")),
     api("GET", "/api/entites?type=seance" + (campagne ? "&campagne=" + campagne : "")),
-    api("GET", "/api/aides"),
+    fonctionActive("aides") ? api("GET", "/api/aides") : [],
   ]);
   const indices = aides.filter(a => a.indice_de?.id === f.id);
   const optSeances = `<option value="">— séance —</option>${seances.map(s => `<option value="${s.id}">${esc(s.nom)}</option>`).join("")}`;
@@ -170,9 +170,9 @@ export async function quiSait(box, f, apres) {
       ${groupes.faction.length ? `<div class="rel-groupe"><small>Factions</small>${groupes.faction.map(ligne).join("")}</div>` : ""}
       ${groupes.autre.length ? `<div class="rel-groupe"><small>Autres</small>${groupes.autre.map(ligne).join("")}</div>` : ""}`
       : `<p class="vide">Personne ne le sait encore (à part vous).</p>`}
-    <div class="rel-groupe"><small>Indices (aides de jeu) <a href="#/nouveau/aide?indice_de=${f.id}${campagne ? "&campagne=" + campagne : ""}" class="hint">＋ aide de jeu</a></small>
+    ${fonctionActive("aides") ? `<div class="rel-groupe"><small>Indices (aides de jeu) <a href="#/nouveau/aide?indice_de=${f.id}${campagne ? "&campagne=" + campagne : ""}" class="hint">＋ aide de jeu</a></small>
       ${indices.length ? indices.map(a => `<div class="rel">${lienFiche(a.fiche)}<span class="note">${a.envois.length ? "reçue par " + a.envois.map(e => esc(e.pj.nom)).join(", ") : "pas encore envoyée"}</span></div>`).join("")
-        : `<p class="hint">Aucune aide de jeu n'en est l'indice.</p>`}</div>`;
+        : `<p class="hint">Aucune aide de jeu n'en est l'indice.</p>`}</div>` : ""}`;
   let qui = null;
   $("#qs-ajout", box).onclick = () => {
     $("#qs-form", box).hidden = false; $("#qs-rev", box).hidden = true;

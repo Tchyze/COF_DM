@@ -239,6 +239,13 @@ func (s *Serveur) preparation(w http.ResponseWriter, r *http.Request) {
 		rp = append(rp, rencontrePrep{rencontreTable: t, Quete: quete})
 	}
 	out["rencontres"] = rp
+	// une fonctionnalité coupée ne remonte pas dans la préparation
+	if !s.store.Active("secrets") {
+		out["secrets"] = []secretPrep{}
+	}
+	if !s.store.Active("rencontres") {
+		out["rencontres"] = []rencontrePrep{}
+	}
 	repondre(w, 200, out)
 }
 

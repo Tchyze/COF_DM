@@ -3,7 +3,7 @@
 //          #/bestiaire[/<id>|/nouveau]  #/createur
 //          #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres
 import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers } from "./ui.js";
-import { chargerSchema, schema, typeDe, vignette, badgeType } from "./schema.js";
+import { chargerSchema, schema, typeDe, vignette, badgeType, actif as fonctionActive } from "./schema.js";
 import * as tableau from "./views/tableau.js";
 import * as table from "./views/table.js";
 import * as liste from "./views/liste.js";
@@ -26,7 +26,8 @@ import { initDes } from "./des.js";
 const GROUPES = [
   ["Monde", ["pnj", "lieu", "faction", "objet", "lore", "evenement"]],
   ["Campagnes", ["campagne", "quete", "rencontre", "seance", "pj"]],
-  ["Secrets", ["secret", "aide"]],
+  ["Secrets", ["secret"]],
+  ["Joueurs", ["aide"]],
   ["Règles", ["regle"]],
 ];
 
@@ -55,6 +56,13 @@ async function route() {
   if (window.cofAcces?.lecture_seule && (nom === "nouveau" || nom === "apres" || b === "modifier")) {
     toast("Votre compte lit cet univers sans pouvoir le modifier.", true);
     location.replace(nom === "f" ? "#/f/" + a : "#/");
+    return;
+  }
+  // écrans d'une fonctionnalité coupée dans cet univers
+  const ecrans = { table: "ecran_mj", preparer: "seances", apres: "seances", graphe: "graphe", combat: "combat", secrets: "secrets", chronologie: "chronologie" };
+  if (ecrans[nom] && !fonctionActive(ecrans[nom])) {
+    toast("Cette fonctionnalité est désactivée dans cet univers (Paramètres → Fonctionnalités).", true);
+    location.replace("#/");
     return;
   }
   if (typeof nettoyage === "function") nettoyage();
@@ -100,23 +108,23 @@ async function dessinerNav() {
   const joueur = !!window.cofAcces?.joueur; // vue des joueurs : les fiches partagées, sans les outils du MJ
   $("#nav").innerHTML =
     lien("accueil", "#/", "🏠", "Tableau de bord") +
-    (joueur ? "" : lien("table", "#/table", "🧭", "Écran du MJ")) +
+    (joueur || !fonctionActive("ecran_mj") ? "" : lien("table", "#/table", "🧭", "Écran du MJ")) +
     GROUPES.map(([g, cles]) => {
       const connus = cles.filter(typeDe); // le schéma d'un joueur n'a pas tous les types
       if (!connus.length) return "";
       return `<h4>${g}</h4>` + connus.map(c => {
         const t = typeDe(c);
         return lien(c, `#/t/${c}`, t.icone, t.pluriel, compte[c]);
-      }).join("") + (g === "Secrets" ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : "");
+      }).join("") + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : "");
     }).join("") +
-    (joueur ? "" : `<h4>Combat</h4>` + lien("combat", "#/combat", "⚔", "Combats") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire")) +
+    (joueur ? "" : `<h4>${fonctionActive("combat") ? "Combat" : "Bestiaire"}</h4>` + (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire")) +
     `<h4>Outils</h4>` +
-    (joueur ? "" : lien("graphe", "#/graphe", "🕸", "Graphe") +
-      lien("chronologie", "#/chronologie", "📅", "Chronologie") +
+    (joueur ? "" : (fonctionActive("graphe") ? lien("graphe", "#/graphe", "🕸", "Graphe") : "") +
+      (fonctionActive("chronologie") ? lien("chronologie", "#/chronologie", "📅", "Chronologie") : "") +
       lien("liens", "#/liens", "⛓", "Liens morts") +
       lien("journal", "#/journal", "📒", "Journal")) +
     lien("parametres", "#/parametres", "⚙", "Paramètres") +
-    (joueur ? `<h4>Jouer</h4><a href="/joueur.html"><span class="ic">🎲</span>Ma feuille et le combat</a>` : "");
+    (joueur && fonctionActive("page_joueurs") ? `<h4>Jouer</h4><a href="/joueur.html"><span class="ic">🎲</span>Ma page de joueur</a>` : "");
   const { parts } = lireHash();
   const actif = !parts[0] ? "accueil" : parts[0] === "t" ? parts[1] : parts[0] === "f" ? fiche.typeCourant() : parts[0];
   $$("#nav a").forEach(x => x.classList.toggle("on", x.dataset.cle === actif));
@@ -336,7 +344,7 @@ function ecranCompte(acces) {
   try { await chargerSchema(); }
   catch (e) { $("#vue").innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
   await dessinerNav();
-  if (!acces.joueur) initDes({ lecture: !!acces.lecture_seule }); // un joueur lance depuis sa page
+  if (!acces.joueur && fonctionActive("des")) initDes({ lecture: !!acces.lecture_seule }); // un joueur lance depuis sa page
   route();
 })();
 export { schema };

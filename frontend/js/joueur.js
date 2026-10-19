@@ -9,7 +9,11 @@ import { ligneJet, DES_RAPIDES } from "./des.js";
 import { rendu } from "./md.js";
 
 const CLE = "cof-joueur-pj";
-const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0 };
+const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0, fonctions: {} };
+// les onglets et la fonctionnalité de l'univers dont chacun dépend (Paramètres → Fonctionnalités)
+const ONGLETS = [["fiche", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["des", "des"], ["hauts-faits", "combat"]];
+const fonction = cle => etat.fonctions[cle] !== false;
+const onglets = () => ONGLETS.filter(([, f]) => fonction(f)).map(([v]) => v);
 const vue = $("#vue");
 
 const lireChoix = () => { try { return +localStorage.getItem(CLE) || 0; } catch { return 0; } };
@@ -108,7 +112,7 @@ function peindrePastille() {
 }
 
 async function chargerDocs() {
-  if (!etat.pj) return;
+  if (!etat.pj || !fonction("aides")) return;
   try { etat.docs = await api("GET", avecPJ("/api/joueur/documents")); } catch { /* hors ligne : on garde la liste */ }
   peindrePastille();
   if (etat.vue === "documents") vueDocuments();
@@ -273,7 +277,7 @@ async function vueHautsFaits() {
 /* bandeau permanent, hors de la vue du combat : à qui le tour */
 function rendreBandeau() {
   const b = $("#bandeau"), c = etat.combat;
-  const visible = !!c && c.ordre.length > 0 && etat.vue !== "combat" && !!etat.pj;
+  const visible = !!c && c.ordre.length > 0 && etat.vue !== "combat" && !!etat.pj && fonction("combat");
   b.hidden = !visible;
   if (!visible) return;
   const courant = c.ordre.find(p => p.courant), suivant = c.ordre.find(p => p.suivant);
@@ -320,7 +324,9 @@ async function route() {
   const nom = location.hash.replace(/^#\/?/, "") || "fiche";
   const doc = /^documents\/(\d+)$/.exec(nom);
   etat.doc = doc ? +doc[1] : 0;
-  etat.vue = !etat.pj || nom === "choix" ? "choix" : doc ? "documents" : ["combat", "documents", "des", "hauts-faits"].includes(nom) ? nom : "fiche";
+  const permis = onglets();
+  etat.vue = !etat.pj || nom === "choix" ? "choix" : doc ? "documents" : permis.includes(nom) ? nom : permis[0] || "rien";
+  if (etat.vue !== "choix" && etat.vue !== "rien" && !permis.includes(etat.vue)) etat.vue = permis[0] || "rien";
   $$("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === etat.vue));
   $("#pj-nav").hidden = !etat.pj;
   $("#pj-changer").hidden = etat.serveur || !etat.pj || etat.vue === "choix";
@@ -328,6 +334,7 @@ async function route() {
   vue.onclick = null;
   window.scrollTo(0, 0);
   if (etat.vue === "choix") vueChoix();
+  else if (etat.vue === "rien") { vue.className = "combat"; vue.innerHTML = `<section class="panel pj-choix"><h1>${esc(etat.pj.nom)}</h1><p class="empty">Rien à suivre pour l'instant : le MJ n'a activé ni les feuilles, ni le combat, ni les documents, ni les dés.</p></section>`; }
   else if (etat.vue === "combat") vueCombat();
   else if (etat.vue === "documents") vueDocuments();
   else if (etat.vue === "des") await vueDes();
@@ -352,7 +359,9 @@ async function demarrer() {
     else fermee("COF DM ne répond pas", esc(err.message));
     return;
   }
-  Object.assign(etat, { serveur: e.serveur, edition: e.edition, combat: e.combat, de: e.de || 20 });
+  Object.assign(etat, { serveur: e.serveur, edition: e.edition, combat: e.combat, de: e.de || 20, fonctions: e.fonctionnalites || {} });
+  const permis = onglets();
+  $$("[data-nav]").forEach(a => { a.hidden = !permis.includes(a.dataset.nav); });
   $("#pj-univers").textContent = e.univers || "";
   etat.pjs = await api("GET", "/api/joueur/pj").catch(() => []);
   // sur un serveur, le PJ est celui du compte ; à la maison, celui choisi sur cet appareil

@@ -187,6 +187,16 @@ Un clic sur la zone ouvre le panneau : passer de **Client seul** à **Serveur** 
 - Les changements se fusionnent **champ par champ**. Si le même champ a changé des deux côtés, la valeur du serveur reste en place partout, et la vôtre attend dans la liste **Conflits**, où vous choisissez. Une fiche supprimée d'un côté et modifiée de l'autre est gardée et signalée.
 - Tout voyage (fiches, relations, images, feuilles, bestiaire, règles, calendrier, journal, combats terminés), sauf un combat en cours, qui se joue d'un seul côté.
 
+### Fonctionnalités
+
+**Paramètres → Fonctionnalités** : chaque univers active ce dont il se sert. PNJ, lieux, factions, objets, lore, événements, campagnes, quêtes, séances, PJ et bestiaire sont toujours là ; le reste s'active ou se coupe d'un clic :
+
+- **Partie** : écran du MJ, préparation et après-séance, combat, rencontres, secrets (activés par défaut) ;
+- **Joueurs** : feuilles de personnage, page des joueurs, dés virtuels, aides de jeu (coupés par défaut) ;
+- **Outils** : fiches de règles, graphe, chronologie, organigrammes, export vers Obsidian (activés par défaut).
+
+Couper une fonctionnalité la retire du menu, des fiches, de l'écran du MJ, de la page des joueurs, de l'API et des outils de Claude, sans rien effacer : ses fiches et ses données restent dans l'univers et reviennent quand on la réactive. Sur un serveur, le réglage vaut pour tous les comptes de l'univers (le MJ le change ; l'auditeur et les joueurs non). Un univers créé avant cette version garde ce dont il se sert déjà (ses feuilles de personnage et la page des joueurs, ses aides de jeu).
+
 ### Mises à jour
 
 L'application de bureau se met à jour seule, sur votre clic : **Paramètres → Mises à jour**, ou le badge **⬆** en bas à gauche quand une version attend. Elle cherche au lancement puis toutes les six heures.

@@ -2,7 +2,7 @@
 import { $, $$, esc, api, toast, armer, dateHeure, lien, enTetesUnivers } from "../ui.js";
 import { panneauCompte, panneauComptes } from "./comptes.js";
 import { panneauBibliotheque } from "./bibliotheque.js";
-import { schema, chargerSchema, lienFiche, badgeType } from "../schema.js";
+import { schema, chargerSchema, lienFiche, badgeType, actif as fonctionActive } from "../schema.js";
 import { taille, dialogueObsidian } from "../fichier.js";
 import { panneauMaj } from "../majour.js";
 
@@ -59,21 +59,21 @@ async function panneauAcces(box) {
         <div class="acces-adresses">${adresses.map(u => `<figure><img src="/api/acces/qr?url=${encodeURIComponent(u)}" alt="QR code de ${esc(u)}" loading="lazy"><code>${esc(u)}</code></figure>`).join("")}</div>
         <p class="hint">Si la page ne s'ouvre pas, le pare-feu de cet ordinateur bloque sans doute le port ${esc(new URL(a.adresses[0]).port)} : autorisez COF DM sur les réseaux privés.</p>`
       : `<p class="alerte">Cet ordinateur n'a pas d'adresse sur un réseau local : est-il connecté au Wi-Fi ou au réseau ?</p>`}` : ""}
-    <h3 style="margin-top:6px">Page des joueurs</h3>
+    ${!fonctionActive("page_joueurs") ? `<h3 style="margin-top:6px">Page des joueurs</h3><p class="hint">Désactivée dans cet univers : elle s'active dans le panneau « Fonctionnalités ».</p>` : `<h3 style="margin-top:6px">Page des joueurs</h3>
     <p class="hint">Chaque joueur y trouve la feuille de son personnage, l'ordre d'initiative du combat en cours (avec les états, sans PV ni statistiques) et les hauts faits. Elle s'ouvre <b>sans mot de passe</b> aux appareils du réseau local : n'importe qui sur ce réseau lit les feuilles des PJ, jamais vos notes ni le reste de l'univers.</p>
     <label class="t-coche"><input type="checkbox" id="acc-joueurs" ${a.page_joueurs ? "checked" : ""} ${a.relie && !a.page_joueurs ? "disabled" : ""}>
       <span>Ouvrir la page des joueurs au réseau local<small>${a.reseau ? "Prend effet aussitôt." : "Sans effet tant que l'application n'écoute pas sur le réseau."}</small></span></label>
     <label class="t-coche"><input type="checkbox" id="acc-edition" ${a.edition_joueurs ? "checked" : ""}>
       <span>Déverrouiller les feuilles<small>Les joueurs modifient alors leur feuille, sauf vos notes. Réglage de cet univers.</small></span></label>
     ${a.page_joueurs && a.reseau && a.adresses.length ? `<div class="acces-adresses">${a.adresses.map(u => `<figure><img src="/api/acces/qr?url=${encodeURIComponent(u + "/joueur.html")}" alt="QR code de la page des joueurs" loading="lazy"><code>${esc(u)}/joueur.html</code></figure>`).join("")}</div>` : ""}
-    <p class="hint"><a href="${lien("/joueur.html")}" target="_blank" rel="noopener">Voir la page des joueurs</a> depuis cet ordinateur.</p>`;
+    <p class="hint"><a href="${lien("/joueur.html")}" target="_blank" rel="noopener">Voir la page des joueurs</a> depuis cet ordinateur.</p>`}`;
   const maj = () => panneauAcces(box);
-  $("#acc-joueurs", box).onchange = async e => {
+  if ($("#acc-joueurs", box)) $("#acc-joueurs", box).onchange = async e => {
     try { await api("POST", "/api/acces/joueurs", { active: e.target.checked }); toast(e.target.checked ? "Page des joueurs ouverte." : "Page des joueurs fermée."); }
     catch (err) { toast(err.message, true); }
     maj();
   };
-  $("#acc-edition", box).onchange = async e => {
+  if ($("#acc-edition", box)) $("#acc-edition", box).onchange = async e => {
     try { await api("PUT", "/api/joueurs/edition", { active: e.target.checked }); toast(e.target.checked ? "Feuilles déverrouillées." : "Feuilles verrouillées."); }
     catch (err) { toast(err.message, true); }
     maj();
@@ -97,6 +97,26 @@ async function panneauAcces(box) {
   });
 }
 
+/** Fonctionnalités de l'univers : ce que le MJ active ou coupe. Rien n'est effacé en coupant. */
+async function panneauFonctions(box) {
+  const l = await api("GET", "/api/fonctionnalites");
+  const lecture = !!window.cofAcces?.lecture_seule;
+  const groupes = [...new Set(l.map(f => f.groupe))];
+  box.innerHTML = `<h3>Fonctionnalités</h3>
+    <p class="hint">Activez ce dont vous vous servez dans cet univers${window.cofAcces?.serveur ? " (pour tous ses comptes)" : ""}. PNJ, lieux, factions, objets, lore, campagnes, quêtes, séances, PJ et bestiaire sont toujours là. Couper une fonctionnalité la retire de l'interface sans rien effacer : ses fiches et ses données reviennent quand on la réactive.</p>
+    ${groupes.map(g => `<h4 class="fonc-groupe">${esc(g)}</h4>${l.filter(f => f.groupe === g).map(f => `<label class="t-coche"><input type="checkbox" data-fonc="${esc(f.cle)}" ${f.active ? "checked" : ""} ${lecture ? "disabled" : ""}>
+      <span>${esc(f.nom)}<small>${esc(f.description)}</small></span></label>`).join("")}`).join("")}`;
+  box.onchange = async e => {
+    const c = e.target.closest("[data-fonc]");
+    if (!c) return;
+    try {
+      await api("PUT", "/api/fonctionnalites", { [c.dataset.fonc]: c.checked });
+      toast(`${l.find(f => f.cle === c.dataset.fonc).nom} : ${c.checked ? "activée" : "désactivée"}.`);
+      setTimeout(() => location.reload(), 600); // menu, boutons et écrans se refont avec le nouvel état
+    } catch (err) { toast(err.message, true); c.checked = !c.checked; }
+  };
+}
+
 export async function parametres(el) {
   if (window.cofAcces?.joueur) { // un joueur ne règle que son compte
     el.innerHTML = `<div class="entete"><h1>Paramètres</h1></div><div class="grille-param"><section class="panneau" id="compte"></section></div>`;
@@ -111,6 +131,7 @@ export async function parametres(el) {
   el.innerHTML = `
     <div class="entete"><h1>Paramètres</h1></div>
     <div class="grille-param">
+      <section class="panneau" id="fonctions"></section>
       <section class="panneau" id="cal">
         <h3>Calendrier du monde</h3>
         <p class="hint">Sert aux dates en jeu (séances, événements, campagnes). Par défaut : douze mois de trente jours, une décade et cinq jours complémentaires.</p>
@@ -138,7 +159,7 @@ export async function parametres(el) {
         <div class="ligne">
           <button id="sauver">💾 Sauvegarder maintenant</button>
           <a href="${lien("/api/export")}" download><button>⬇ Exporter en JSON</button></a>
-          <button id="obsidian">📝 Exporter vers Obsidian…</button>
+          ${fonctionActive("obsidian") ? `<button id="obsidian">📝 Exporter vers Obsidian…</button>` : ""}
           <button id="restaurer">⬆ Restaurer un export…</button>
           <input type="file" id="fichier" accept="application/json,.json" hidden>
         </div>
@@ -154,6 +175,7 @@ export async function parametres(el) {
     </div>`;
 
   const monter = (id, f) => f($(id, el)).catch(e => { $(id, el).innerHTML = `<div class="erreur">${esc(e.message)}</div>`; });
+  monter("#fonctions", panneauFonctions);
   if (surPlace) monter("#acces", panneauAcces);
   if (surPlace && !serveur) monter("#maj", panneauMaj);
   // reprendre d'un autre univers touche aux fichiers : ordinateur du MJ, ou administrateur du serveur
@@ -241,7 +263,7 @@ export async function parametres(el) {
     }));
   };
   peindreSauvegardes().catch(e => toast(e.message, true));
-  $("#obsidian", el).onclick = dialogueObsidian;
+  if ($("#obsidian", el)) $("#obsidian", el).onclick = dialogueObsidian;
   $("#sauver", el).onclick = async () => {
     try { const r = await api("POST", "/api/sauvegarde"); toast("Sauvegarde : " + r.fichier); peindreSauvegardes(); }
     catch (e) { toast(e.message, true); }

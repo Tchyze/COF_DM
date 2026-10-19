@@ -1,6 +1,6 @@
 // Une fiche : lecture, édition, création.
 import { $, $$, esc, api, toast, armer, dateHeure, lien } from "../ui.js";
-import { schema, types, typeDe, relationDe, vignette, lienFiche, badgeType, valeurCourte } from "../schema.js";
+import { schema, types, typeDe, relationDe, vignette, lienFiche, badgeType, valeurCourte, actif as fonctionActive } from "../schema.js";
 import { rendu, inline, resolveur } from "../md.js";
 import { selecteur, saisieDate, completerLiens, hauteurAuto, selecteurMonstre, editeurAdversaires } from "../composants.js";
 import * as panneaux from "./panneaux.js";
@@ -72,7 +72,9 @@ function lecture(el, f) {
   const partageable = !!window.cofAcces?.serveur && !window.cofAcces.lecture_seule && f.type !== "secret" && f.type !== "aide";
   // la feuille de personnage : pour le MJ et l'auditeur sur tout PJ, pour un joueur sur le sien
   const sienne = joueur && window.cofAcces.compte?.pj === f.id;
-  const feuille = f.type === "pj" && (!joueur || sienne);
+  const feuille = f.type === "pj" && (!joueur || sienne) && fonctionActive("feuilles");
+  // panneau propre au type ; celui d'une séance montre ses combats
+  const special = f.type === "seance" && !fonctionActive("combat") ? null : PANNEAUX[f.type];
 
   el.innerHTML = `
     <div class="fiche-tete" data-type="${f.type}">
@@ -83,9 +85,9 @@ function lecture(el, f) {
         ${resume ? `<div class="resume">${inline(resume, res)}</div>` : ""}
         <div class="actions">
           <a href="#/f/${f.id}/modifier"><button class="primary">✎ Modifier</button></a>
-          <a href="#/graphe/${f.id}"><button>🕸 Graphe</button></a>
-          ${f.type === "seance" && !joueur ? `<a href="#/preparer/${f.id}"><button title="Rassembler les quêtes, secrets, PNJ et rencontres de la campagne">🧭 Préparer</button></a>` : ""}
-          ${f.type === "seance" && !joueur && !window.cofAcces?.lecture_seule ? `<a href="#/apres/${f.id}"><button title="Reporter ce qui s'est passé et préparer la séance suivante">✅ Après la séance</button></a>` : ""}
+          ${fonctionActive("graphe") ? `<a href="#/graphe/${f.id}"><button>🕸 Graphe</button></a>` : ""}
+          ${f.type === "seance" && !joueur && fonctionActive("seances") ? `<a href="#/preparer/${f.id}"><button title="Rassembler les quêtes, secrets, PNJ et rencontres de la campagne">🧭 Préparer</button></a>` : ""}
+          ${f.type === "seance" && !joueur && !window.cofAcces?.lecture_seule && fonctionActive("seances") ? `<a href="#/apres/${f.id}"><button title="Reporter ce qui s'est passé et préparer la séance suivante">✅ Après la séance</button></a>` : ""}
           ${liensCreation(f)}
           <span style="flex:1"></span>
           ${partageable ? `<button id="partager" class="${f.partage ? "" : "ghost"}" title="Les joueurs ne voient jamais les champs réservés au MJ">${f.partage ? "Retirer aux joueurs" : "👁 Partager avec les joueurs"}</button>` : ""}
@@ -95,7 +97,7 @@ function lecture(el, f) {
       </div>
     </div>
     ${f.modifiable?.length ? `<div class="ligne" style="margin-bottom:14px"><button class="primary" id="ma-fiche">✎ Modifier ma fiche</button><span class="hint">Vous pouvez modifier : ${f.modifiable.map(k => esc(t.champs.find(c => c.cle === k)?.nom || k)).join(", ")}.</span></div>` : ""}
-    ${f.type === "faction" ? `<section class="panneau" id="organigramme" style="margin-bottom:18px"></section>` : ""}
+    ${f.type === "faction" && fonctionActive("organigramme") ? `<section class="panneau" id="organigramme" style="margin-bottom:18px"></section>` : ""}
     <div class="fiche-corps">
       <div class="colonne">
         ${Object.entries(groupes).map(([g, cs]) => `<section class="panneau"${g === "MJ" ? ' style="border-style:dashed"' : ""}>
@@ -103,7 +105,7 @@ function lecture(el, f) {
           <dl class="proprietes">${cs.map(c => `<div><dt>${esc(c.nom)}</dt><dd>${f.dates?.[c.cle] ? esc(f.dates[c.cle]) : valeurCourte(f.type, c.cle, f.data[c.cle], refs)}</dd></div>`).join("")}</dl>
         </section>`).join("")}
         ${feuille ? `<section class="panneau" id="p-feuille"></section>` : ""}
-        ${PANNEAUX[f.type] ? `<section class="panneau" id="p-special"></section>` : ""}
+        ${special ? `<section class="panneau" id="p-special"></section>` : ""}
         ${etapes && f.data[etapes.cle]?.length ? `<section class="panneau"><h3>${esc(etapes.nom)} <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">${f.data[etapes.cle].filter(e => e.fait).length} / ${f.data[etapes.cle].length}</span></h3>
           <ul class="etapes" id="etapes">${f.data[etapes.cle].map((e, i) => `<li><label><input type="checkbox" data-i="${i}" ${e.fait ? "checked" : ""}><span class="${e.fait ? "fait" : ""}">${inline(e.texte, res)}</span></label></li>`).join("")}</ul></section>` : ""}
         ${longs.map(c => `<section class="panneau section-md${c.secret ? " secret" : ""}"><h3>${esc(c.nom)}</h3><div class="md">${rendu(f.data[c.cle], res)}</div></section>`).join("")}
@@ -111,7 +113,7 @@ function lecture(el, f) {
         ${sectionReferences(f)}
       </div>
       <aside class="colonne">
-        ${["pnj", "pj", "faction"].includes(f.type) ? `<section class="panneau" id="p-secrets"></section>` : ""}
+        ${["pnj", "pj", "faction"].includes(f.type) && fonctionActive("secrets") ? `<section class="panneau" id="p-secrets"></section>` : ""}
         <section class="panneau" id="relations"></section>
         <section class="panneau" id="images"></section>
         <section class="panneau meta-fiche">
@@ -126,7 +128,7 @@ function lecture(el, f) {
   const rafraichir = () => recharger(el, f.id);
   if (feuille) panneauFeuille($("#p-feuille", el), f, { joueur,
     peutEcrire: joueur ? !!window.cofAcces.edition_joueurs : !window.cofAcces?.lecture_seule });
-  if (PANNEAUX[f.type] && !joueur) PANNEAUX[f.type]($("#p-special", el), f, rafraichir);
+  if (special && !joueur) special($("#p-special", el), f, rafraichir);
   if ($("#p-secrets", el) && !joueur) panneaux.secretsDe($("#p-secrets", el), f);
   const maFiche = $("#ma-fiche", el);
   if (maFiche) maFiche.onclick = () => editerMaFiche(f, t, rafraichir);
@@ -138,7 +140,7 @@ function lecture(el, f) {
       recharger(el, f.id);
     } catch (err) { toast(err.message, true); }
   };
-  if (f.type === "faction" && !joueur) organigramme($("#organigramme", el), f, () => { window.dispatchEvent(new Event("cof-change")); recharger(el, f.id); });
+  if ($("#organigramme", el) && !joueur) organigramme($("#organigramme", el), f, () => { window.dispatchEvent(new Event("cof-change")); recharger(el, f.id); });
   $(".fiche-tete .vignette", el).onclick = () => { if (f.medias.length) visionneuse(f, 0, () => recharger(el, f.id)); else $("#depot", el)?.click(); };
 
   const coches = $("#etapes", el);
