@@ -58,6 +58,10 @@ type Options struct {
 	// Dialogue ouvre la boîte « Ouvrir » ou « Enregistrer » du système et renvoie le fichier choisi
 	// ("" : annulé) ; nil : le chemin se saisit dans l'interface.
 	Dialogue func(enregistrer bool, nom, dossier string) (string, error)
+	// Programme : ce programme (l'exe, l'AppImage), et ArgsMCP les arguments à ajouter à -mcp, pour
+	// l'inscrire dans Claude Desktop ou Claude Code (claude.go). Vide : pas d'inscription.
+	Programme string
+	ArgsMCP   []string
 }
 
 type Serveur struct {
@@ -236,6 +240,7 @@ func (s *Serveur) routes() {
 	s.routesApres()
 	s.routesAides()
 	s.routesFonctionnalites()
+	s.routesClaude()
 	s.routesAcces()
 	s.routesDes()
 	s.routesPageJoueurs() // après routesAcces, qui crée la liste blanche du rôle « joueur »

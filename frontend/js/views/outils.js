@@ -117,6 +117,46 @@ async function panneauFonctions(box) {
   };
 }
 
+/** Claude : brancher COF DM sur Claude Desktop et Claude Code de cet ordinateur, sans ligne de commande. */
+async function panneauClaude(box) {
+  let d;
+  try { d = await api("GET", "/api/claude"); }
+  catch (e) { if (e.status === 404) { box.remove(); return; } throw e; }
+  const etat = c => c.erreur ? `<span class="alerte">${esc(c.erreur)}</span>`
+    : !c.present ? `<span class="hint">non installé sur cet ordinateur</span>`
+    : !c.branche ? `<span class="hint">pas encore branché</span>`
+    : c.a_jour ? `<span class="ok-pastille">●</span> branché` : `<span class="ko-pastille">●</span> branché sur un autre emplacement du programme`;
+  const parClient = cl => d.cibles.filter(c => c.client === cl);
+  const bloc = (cl, nom, aide) => {
+    const l = parClient(cl), present = l.some(c => c.present), branche = l.some(c => c.branche), aJour = l.filter(c => c.present).every(c => c.a_jour);
+    return `<div class="claude-client"><h4>${nom}</h4>
+      ${l.map(c => `<div class="claude-cible">${etat(c)}<code title="${esc(c.chemin)}">${esc(c.chemin)}</code></div>`).join("")}
+      <div class="ligne">${present ? `<button class="${branche && aJour ? "" : "primary"}" data-claude="${cl}" data-actif="1">${branche ? (aJour ? "Réinscrire" : "Mettre à jour") : "Brancher COF DM"}</button>` : ""}
+        ${branche ? `<button class="ghost" data-claude="${cl}" data-actif="0">Débrancher</button>` : ""}</div>
+      <p class="hint">${aide}</p></div>`;
+  };
+  box.innerHTML = `<h3>Claude</h3>
+    <p class="hint">Claude (l'assistant d'Anthropic) peut lire et tenir à jour l'univers ouvert ici : chercher, résumer, créer des fiches, relier, préparer une séance… Ses écritures sont signées « claude » dans le journal ; il n'efface jamais rien définitivement. COF DM doit être ouvert pendant que Claude s'en sert.</p>
+    ${bloc("desktop", "Claude Desktop", "Après le branchement, quittez complètement Claude Desktop (icône de la zone de notification → Quitter) puis relancez-le : COF DM apparaît dans ses outils.")}
+    ${bloc("code", "Claude Code", "Fermez puis relancez Claude Code. Ou, dans un terminal :")}
+    <div class="ligne"><code class="jeton" id="claude-cmd" style="flex:1;min-width:0">${esc(d.commande_code)}</code><button class="petit" id="claude-copier">Copier</button></div>`;
+  box.onclick = async e => {
+    const b = e.target.closest("[data-claude]");
+    if (b) {
+      try {
+        await api("POST", "/api/claude", { client: b.dataset.claude, actif: b.dataset.actif === "1" });
+        toast(b.dataset.actif === "1" ? "COF DM est branché. Relancez Claude pour le voir." : "COF DM est débranché.");
+      } catch (err) { toast(err.message, true); }
+      panneauClaude(box);
+      return;
+    }
+    if (e.target.closest("#claude-copier")) {
+      try { await navigator.clipboard.writeText(d.commande_code); toast("Commande copiée."); }
+      catch { toast("Copie impossible : sélectionnez la commande à la main.", true); }
+    }
+  };
+}
+
 export async function parametres(el) {
   if (window.cofAcces?.joueur) { // un joueur ne règle que son compte
     el.innerHTML = `<div class="entete"><h1>Paramètres</h1></div><div class="grille-param"><section class="panneau" id="compte"></section></div>`;
@@ -142,6 +182,7 @@ export async function parametres(el) {
         <div class="ligne"><button class="primary" id="enr-cal">Enregistrer le calendrier</button><span class="hint" id="jours-an"></span></div>
       </section>
       ${surPlace && !serveur ? `<section class="panneau" id="maj"></section>` : ""}
+      ${surPlace && !serveur ? `<section class="panneau" id="claude"></section>` : ""}
       ${surPlace ? `<section class="panneau" id="acces"></section>` : ""}
       ${serveur ? `<section class="panneau" id="compte"></section>` : ""}
       ${admin ? `<section class="panneau" id="comptes"></section>` : ""}
@@ -178,6 +219,7 @@ export async function parametres(el) {
   monter("#fonctions", panneauFonctions);
   if (surPlace) monter("#acces", panneauAcces);
   if (surPlace && !serveur) monter("#maj", panneauMaj);
+  if (surPlace && !serveur) monter("#claude", panneauClaude);
   // reprendre d'un autre univers touche aux fichiers : ordinateur du MJ, ou administrateur du serveur
   monter("#biblio", box => panneauBibliotheque(box, { peutReprendre: surPlace || admin }));
   if (serveur) monter("#compte", panneauCompte);

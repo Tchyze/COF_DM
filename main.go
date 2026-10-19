@@ -164,6 +164,22 @@ func resserrer(dossier string) {
 	}
 }
 
+// programmeCourant : le chemin de ce programme, tel qu'un autre programme le relance (l'AppImage
+// plutôt que son point de montage temporaire).
+func programmeCourant() string {
+	if p := os.Getenv("APPIMAGE"); p != "" {
+		return p
+	}
+	p, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	if r, err := filepath.EvalSymlinks(p); err == nil {
+		p = r
+	}
+	return p
+}
+
 // envRelance : présent quand l'application vient d'être relancée par une mise à jour.
 const envRelance = "COF_DM_RELANCE"
 
@@ -268,6 +284,14 @@ func main() {
 		c := lireConfig(dossier) // le port enregistré, pas celui de -port
 		c.Reseau = ouvrir
 		return ecrireConfig(dossier, c)
+	}
+	if !*modeServeur {
+		opt.Programme = programmeCourant()
+		if *dataFlag != "" { // le dossier par défaut (ou portable) se retrouve seul
+			if abs, err := filepath.Abs(dossier); err == nil {
+				opt.ArgsMCP = []string{"-data", abs}
+			}
+		}
 	}
 	if *modeServeur {
 		opt.Dialogue, opt.Config = nil, nil
