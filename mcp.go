@@ -27,7 +27,7 @@ func lancerMCP(dossier string, port int) {
 	base := strings.TrimSpace(os.Getenv("COF_DM_URL"))
 	if base == "" {
 		if port == 0 {
-			port = lireConfig(dossier).Port
+			port = portApplication(dossier) // le port pris au lancement, pas forcément celui de config.json
 		}
 		base = fmt.Sprintf("http://127.0.0.1:%d", port)
 	}

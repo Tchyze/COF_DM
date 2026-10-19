@@ -2,7 +2,7 @@
 
 Fichier de passation : ce qui a été fait, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail sur un autre poste, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
+Dernière mise à jour : 19 octobre 2026 (port du serveur MCP, PR 3 du dépôt public) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
 
 ## Dépôt public (18 octobre 2026)
 
@@ -12,6 +12,15 @@ Dernière mise à jour : 16 octobre 2026, avec les points 11 et 12 de l'audit (P
 - **Faire essayer une PR** : `gh workflow run release.yml --ref <branche> -f canal=test`, puis l'application (canal Test) la propose.
 
 - **Version affichée** : en petit à côté de « Thème » (v1.2.0 ; une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
+
+### PR du dépôt public
+
+Les numéros ci-dessous sont ceux de `Tchyze/COF_DM` (repartis de #1) ; ceux des tableaux plus bas renvoient à `COF_DM-historique`.
+
+| PR | Contenu |
+|---|---|
+| 1, 2 | Suivi de la publication ; version affichée à côté de « Thème ». |
+| 3 | **Port du serveur MCP** : l'application publie le port qu'elle a réellement pris dans `port.json` de son dossier de données (port et PID, effacé en quittant s'il est encore le sien) ; `-mcp` le lit avant `config.json`. Sous Windows, quand le relais de WSL tient 127.0.0.1:8100 pour le serveur Docker, l'exe prend 8101 et `-mcp` joignait le serveur Docker. Test `TestPortPublie` ; essayé avec une instance sans fenêtre sur ce poste (8100 tenu par Docker) : `-mcp` joint 8101, `port.json` retiré à l'arrêt. |
 
 ## Pour reprendre sur un autre poste
 
