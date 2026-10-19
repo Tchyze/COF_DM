@@ -100,6 +100,47 @@ func ecrireConfig(dossier string, c config) error {
 	return os.WriteFile(filepath.Join(dossier, "config.json"), b, 0o600)
 }
 
+// fichierPort : le port que l'application lancée a réellement pris, publié dans son dossier de
+// données. Il diffère de config.json quand le port voulu était pris (sous Windows, le relais de WSL
+// tient 127.0.0.1:8100 pour un serveur Docker) : cof-dm -mcp le lit pour joindre cette application.
+const fichierPort = "port.json"
+
+type portPublie struct {
+	Port int `json:"port"`
+	PID  int `json:"pid"`
+}
+
+func publierPort(dossier string, port int) error {
+	b, _ := json.Marshal(portPublie{Port: port, PID: os.Getpid()})
+	return os.WriteFile(filepath.Join(dossier, fichierPort), b, 0o600)
+}
+
+// retirerPort efface le port publié en quittant, s'il est encore le sien : l'application relancée
+// par une mise à jour a déjà publié le sien.
+func retirerPort(dossier string) {
+	chemin := filepath.Join(dossier, fichierPort)
+	b, err := os.ReadFile(chemin)
+	if err != nil {
+		return
+	}
+	var p portPublie
+	if json.Unmarshal(b, &p) == nil && p.PID == os.Getpid() {
+		_ = os.Remove(chemin)
+	}
+}
+
+// portApplication : le port où joindre l'application de cet ordinateur. Celui qu'elle a publié en
+// se lançant, sinon celui de config.json.
+func portApplication(dossier string) int {
+	if b, err := os.ReadFile(filepath.Join(dossier, fichierPort)); err == nil {
+		var p portPublie
+		if json.Unmarshal(b, &p) == nil && p.Port >= 1024 && p.Port <= 65535 {
+			return p.Port
+		}
+	}
+	return lireConfig(dossier).Port
+}
+
 // resserrer : les données d'une installation d'avant étaient lisibles par les autres comptes de
 // l'ordinateur. Les univers contiennent les secrets du MJ : seul leur propriétaire les lit.
 func resserrer(dossier string) {
@@ -260,6 +301,10 @@ func main() {
 	// laissent passer un export ou une restauration avec images sur un réseau lent)
 	srv := &http.Server{Handler: app, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 5 * time.Minute,
 		WriteTimeout: 10 * time.Minute, IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
+	if err := publierPort(dossier, port); err != nil {
+		log.Printf("port non publié pour cof-dm -mcp : %v", err)
+	}
+	defer retirerPort(dossier)
 	go func() {
 		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Printf("serveur arrêté : %v", err)
