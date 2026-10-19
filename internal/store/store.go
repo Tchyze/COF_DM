@@ -200,6 +200,10 @@ func Ouvrir(chemin string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("mise à jour des fiches : %w", err)
 	}
+	if err := fixerFonctionnalites(s.db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	return s, nil
 }
 

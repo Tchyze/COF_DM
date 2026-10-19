@@ -148,9 +148,12 @@ func (s *Serveur) methode(nom string, params json.RawMessage) (any, *erreurRPC) 
 	case "ping":
 		return map[string]any{}, nil
 	case "tools/list":
+		actives := s.fonctionsActives()
 		l := make([]map[string]any, 0, len(s.outils))
 		for _, o := range s.outils {
-			l = append(l, o.description())
+			if o.Fonction == "" || actives == nil || actives[o.Fonction] {
+				l = append(l, o.description())
+			}
 		}
 		return map[string]any{"tools": l}, nil
 	case "tools/call":
@@ -178,6 +181,27 @@ const tailleMax = 120_000
 
 // appeler exécute un outil. Une erreur de l'API (fiche refusée, introuvable…) est rendue comme
 // résultat en erreur, lisible par l'assistant, et non comme une erreur du protocole.
+// fonctionsActives : les fonctionnalités activées dans l'univers visé (nil : inconnues, application
+// d'une version d'avant ou injoignable ; tous les outils sont alors proposés, l'API refusera).
+func (s *Serveur) fonctionsActives() map[string]bool {
+	brut, err := s.api.appel("GET", "/api/fonctionnalites", nil, nil)
+	if err != nil {
+		return nil
+	}
+	var l []struct {
+		Cle    string `json:"cle"`
+		Active bool   `json:"active"`
+	}
+	if json.Unmarshal(brut, &l) != nil {
+		return nil
+	}
+	out := map[string]bool{}
+	for _, f := range l {
+		out[f.Cle] = f.Active
+	}
+	return out
+}
+
 func (s *Serveur) appeler(o *outil, args map[string]any) map[string]any {
 	res, err := o.Faire(s.api, arguments(args))
 	if err != nil {

@@ -159,13 +159,13 @@ func (s *Serveur) servirComptes(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 403, "Votre compte n'a pas accès à cet univers.")
 		return
 	case role == comptes.Joueur: // liste blanche, contenu filtré (joueur.go)
-		s.joueur.ServeHTTP(w, r)
+		s.servir(s.joueur, w, r)
 		return
 	case !lecture && role != comptes.MJ:
 		erreur(w, 403, "Votre compte lit cet univers sans pouvoir le modifier.")
 		return
 	}
-	s.mux.ServeHTTP(w, r)
+	s.servir(s.mux, w, r)
 }
 
 // ---------------------------------------------------------------- routes

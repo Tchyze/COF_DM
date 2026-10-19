@@ -70,7 +70,7 @@ func (s *Serveur) pageJoueursOuverte() bool {
 		return false
 	}
 	v, _ := s.reg.Meta(metaPageJoueurs)
-	return v == "1"
+	return v == "1" && s.store.Active("page_joueurs")
 }
 
 // routeLibre : la requête vise la page des joueurs (ses données ; les fichiers de l'interface sont
@@ -305,7 +305,8 @@ func (s *Serveur) joueurEtat(w http.ResponseWriter, r *http.Request) {
 		de = c.De
 	}
 	repondre(w, 200, map[string]any{"serveur": s.acces.comptes != nil, "pj": pj, "edition": s.editionJoueurs(),
-		"combat": s.combatJoueurs(pj, restreint), "univers": nomUnivers(s.store.Chemin()), "de": de})
+		"combat": s.combatJoueurs(pj, restreint), "univers": nomUnivers(s.store.Chemin()), "de": de,
+		"fonctionnalites": s.store.Fonctionnalites()})
 }
 
 // pjJoueur : un PJ dans la liste de la page.

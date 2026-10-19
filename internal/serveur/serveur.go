@@ -145,7 +145,7 @@ func (s *Serveur) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if len(auteur) > 40 {
 			auteur = auteur[:40]
 		}
-		s.mux.ServeHTTP(w, r.WithContext(contexte(r, auteur)))
+		s.servir(s.mux, w, r.WithContext(contexte(r, auteur)))
 		return
 	}
 	switch {
@@ -161,7 +161,7 @@ func (s *Serveur) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			erreur(w, 403, "Requête refusée.")
 			return
 		}
-		s.libre.ServeHTTP(w, r.WithContext(contexte(sansSession(r), "joueur")))
+		s.servir(s.libre, w, r.WithContext(contexte(sansSession(r), "joueur")))
 		return
 	case ouvert(r):
 		r = sansSession(r)
@@ -173,7 +173,7 @@ func (s *Serveur) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 403, "Requête refusée.")
 		return
 	}
-	s.mux.ServeHTTP(w, r)
+	s.servir(s.mux, w, r)
 }
 
 // enTetes : ce que toute réponse dit au navigateur. L'application ne s'affiche dans le cadre
@@ -235,6 +235,7 @@ func (s *Serveur) routes() {
 	s.routesPreparation()
 	s.routesApres()
 	s.routesAides()
+	s.routesFonctionnalites()
 	s.routesAcces()
 	s.routesDes()
 	s.routesPageJoueurs() // après routesAcces, qui crée la liste blanche du rôle « joueur »
@@ -338,8 +339,10 @@ func entierParam(r *http.Request, nom string) int64 {
 // ---------------------------------------------------------------- schéma, statistiques
 
 func (s *Serveur) schema(w http.ResponseWriter, r *http.Request) {
+	etat := s.store.Fonctionnalites()
 	repondre(w, 200, map[string]any{
-		"types": s.typesDeLUnivers(), "relations": modele.Relations, "calendrier": s.store.Calendrier(),
+		"types": typesActifs(etat, s.typesDeLUnivers()), "relations": modele.Relations, "calendrier": s.store.Calendrier(),
+		"fonctionnalites": etat,
 		"genres": map[string]string{
 			modele.Texte: "chaîne d'une ligne", modele.Long: "Markdown ; [[Nom]] crée un lien vers la fiche de ce nom",
 			modele.Choix: "une des options", modele.Nombre: "nombre", modele.Booleen: "true / false",
@@ -386,7 +389,14 @@ func (s *Serveur) lister(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
-	repondre(w, 200, l)
+	// les fiches d'une fonctionnalité coupée sortent des listes (elles restent lisibles par leur lien)
+	etat, gardes := s.store.Fonctionnalites(), l[:0]
+	for _, x := range l {
+		if typeActif(etat, x.Type) {
+			gardes = append(gardes, x)
+		}
+	}
+	repondre(w, 200, gardes)
 }
 
 // ficheComplete : la fiche et tout ce qui l'entoure.
@@ -488,6 +498,10 @@ func (s *Serveur) creer(w http.ResponseWriter, r *http.Request) {
 		Tags []string       `json:"tags"`
 	}
 	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	if err := s.typeCoupe(in.Type); err != nil {
 		erreurStore(w, err)
 		return
 	}

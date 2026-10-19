@@ -54,9 +54,9 @@ const (
 	ChampExiste = "*"
 )
 
-// reglagesSync : les réglages de l'univers qui se synchronisent ; les autres (édition par les
-// joueurs, page des joueurs…) tiennent à chaque côté.
-var reglagesSync = []string{"calendrier", MetaRegles, MetaReference}
+// reglagesSync : les réglages de l'univers qui se synchronisent (dont les fonctionnalités
+// activées) ; les autres (édition par les joueurs, page des joueurs…) tiennent à chaque côté.
+var reglagesSync = []string{"calendrier", MetaRegles, MetaReference, MetaFonctions}
 
 // Changement : la valeur d'un champ, telle qu'un relevé l'a vue à son numéro d'ordre.
 type Changement struct {
@@ -638,6 +638,12 @@ func appliquerReglage(tx execer, o *objetRecu) error {
 			return invalide("profils et voies : %v", err)
 		}
 		texte = canonique(ref)
+	case o.cle == MetaFonctions:
+		choix, err := lireFonctions(c.Valeur)
+		if err != nil {
+			return err
+		}
+		texte = canonique(choix)
 	default:
 		return invalide("réglage %q : il ne se synchronise pas", o.cle)
 	}
