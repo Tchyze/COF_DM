@@ -292,7 +292,7 @@ Tout ce que fait l'interface passe par une API REST documentée dans [docs/API.m
 - **Lire** : schéma, recherche, fiche complète (par identifiant ou par nom), fiches liées, chronologie, qui sait quoi, organigramme, partie en cours (écran du MJ), feuille de personnage, bestiaire, difficulté d'une rencontre, combats, jets de dés, préparation d'une séance, aides de jeu, journal, liens morts.
 - **Écrire** : lancer des dés (cachés par défaut), clore une séance, envoyer une aide de jeu aux PJ, créer et modifier une fiche, l'archiver ou la restaurer, la partager avec les joueurs, créer, modifier et supprimer une relation, révéler un secret, modifier une feuille de personnage. Rien ne s'efface définitivement par ce chemin.
 
-L'application doit être lancée. Sur l'ordinateur du MJ, il n'y a rien à régler : le serveur MCP trouve le port et le jeton dans le dossier de l'application (`-data` et `-port` si vous les changez). Avec Claude Code :
+L'application doit être lancée. Sur l'ordinateur du MJ, il n'y a rien à régler : le serveur MCP trouve le port et le jeton dans le dossier de l'application (`-data` si vous le changez). Le port est celui que l'application a réellement pris en se lançant (`port.json`), même si le port voulu était occupé ; `-port` l'impose. Avec Claude Code :
 
 ```bash
 claude mcp add cof-dm -- /chemin/vers/COF-DM-x.y.z-x86_64.AppImage -mcp
@@ -322,7 +322,7 @@ Au lancement, l'application ouvre sa fenêtre ; ses données sont dans :
 
 **Mode portable** : un dossier `COF DM - données` placé à côté du programme (ou de l'AppImage) est utilisé à la place, pour tout emporter sur une clé USB.
 
-On y trouve `univers/` (les univers créés sans choisir d'emplacement), `sauvegardes/` (un dossier par univers), `reglages.json` (univers ouvert, mot de passe MJ haché, jeton d'API), `config.json` et `cof-dm.log`.
+On y trouve `univers/` (les univers créés sans choisir d'emplacement), `sauvegardes/` (un dossier par univers), `reglages.json` (univers ouvert, mot de passe MJ haché, jeton d'API), `config.json`, `cof-dm.log` et, tant que l'application tourne, `port.json` (le port qu'elle a pris, lu par `-mcp`).
 
 ```
 cof-dm -port 8100         port (par défaut 8100 ; le suivant libre s'il est pris)
