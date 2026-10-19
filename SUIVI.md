@@ -10,7 +10,7 @@ Dernière mise à jour : 19 octobre 2026 (Claude depuis Paramètres : PR 6 du d�
 
 - **Clé de publication** : `~/Outil/cle-publication-cof-dm.pem` (hors dépôt), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
 - **Faire essayer une PR** : `gh workflow run release.yml --ref <branche> -f canal=test`, puis l'application (canal Test) la propose. Une PR n'est fusionnée qu'après l'essai du MJ. Plusieurs PR à essayer ensemble : une branche `essai` qui les réunit, sans jamais la fusionner.
-- **État au 19 octobre 2026** : PR 4 (aides de jeu) et 5 (fonctionnalités) essayées par le MJ (`1.2.2-test.7`, branche `essai`, serveur Docker compris) et fusionnées. PR 3 (port MCP) et PR 6 (Paramètres → Claude, empilée sur la 3) en attente de leur essai dans Claude Desktop ; la branche `essai` se supprime une fois la PR 3 fusionnée.
+- **État au 19 octobre 2026** : PR 4 (aides de jeu) et 5 (fonctionnalités) essayées par le MJ (`1.2.2-test.7`, branche `essai`, serveur Docker compris) et fusionnées. PR 3 (port MCP) et PR 6 (Paramètres → Claude) essayées par le MJ dans Claude Desktop sous Windows (`1.2.2-test.8`) et fusionnées. Branche `essai` supprimée.
 
 - **Version affichée** : en petit à côté de « Thème » (v1.2.0 ; une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
 
@@ -259,7 +259,7 @@ Rien en attente (PR 35 et 36).
 
 ## À vérifier à la main
 
-- **Serveur MCP** : le brancher dans Claude Desktop (Windows, Paramètres → Claude) et dans Claude Code, et vérifier que l'exe, compilé en sous-système graphique, parle bien sur les tubes que lui donne le client.
+- **Serveur MCP** : branché dans Claude Desktop sous Windows par Paramètres → Claude et essayé par le MJ (19 octobre 2026 : l'exe, compilé en sous-système graphique, parle bien sur les tubes de Claude Desktop, et `-mcp` joint l'application sur le port qu'elle a pris). Reste à essayer : Claude Code.
 
 - **Export vers Obsidian** : ouvrir le zip dans le vrai vault (rendu des propriétés et des tableaux, liens).
 
