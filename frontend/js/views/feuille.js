@@ -19,7 +19,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   const url = `/api/entites/${fiche.id}/feuille`;
   try { F = await api("GET", url); }
   catch (e) { box.innerHTML = `<h3>Feuille de personnage</h3><p class="alerte">${esc(e.message)}</p>`; return; }
-  api("GET", "/api/reference").then(r => { REF = r; }, () => {});
+  // le MJ lit toute la bibliothèque ; un joueur, les voies de ce PJ, son profil et son peuple
+  api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; }, () => {});
   const R = () => F.regles || {};
   const pvActuel = () => F.pv_actuel ?? F.pv;
 

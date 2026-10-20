@@ -4,12 +4,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
+
+// ici : les en-têtes d'un bureau de la même version que le serveur.
+var ici = []string{"X-COF-Version", "1.2.3", "X-COF-Protocole", strconv.Itoa(store.VersionProtocole), "X-COF-Modele", strconv.Itoa(store.VersionModele)}
 
 // deguise : le serveur a, vu du bureau, la version et les numéros donnés (sante : la réponse de
 // GET /api/sante, nil pour ceux du vrai serveur ; sans « protocole », un serveur d'avant les
@@ -185,8 +189,12 @@ func TestServeurVersionsCopie(t *testing.T) {
 	if w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": "Vieux"}, ancien...); w.Code != 426 || !strings.Contains(w.Body.String(), "1.2.0) est plus ancienne") {
 		t.Fatalf("copie pour un bureau plus ancien : %d %s", w.Code, w.Body.String())
 	}
-	if w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": "Portable"}); w.Code != 200 {
+	// sans en-têtes : la 1.2.2, au modèle 1, plus ancienne que ce serveur
+	if w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": "Portable"}); w.Code != 426 {
 		t.Fatalf("copie d'un bureau d'avant les numéros : %d", w.Code)
+	}
+	if w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": "Portable"}, ici...); w.Code != 200 {
+		t.Fatalf("copie d'un bureau à jour : %d", w.Code)
 	}
 	if c, v := meneur.faire("POST", "/api/sync", map[string]any{"replique": 1, "curseur": 0, "changements": []any{}}, ancien...); c != 426 {
 		t.Fatalf("échange d'un bureau plus ancien : %d %v", c, v)
@@ -215,14 +223,14 @@ func TestVersionServeurAdmin(t *testing.T) {
 	if c, _ := meneur.faire("GET", "/api/univers/version", nil); c != 403 {
 		t.Fatalf("version du serveur pour un MJ : %d", c)
 	}
-	for _, p := range []struct{ nom, modele string }{{"Vieux portable", "0"}, {"Portable", ""}, {"Tour", "99"}} {
+	for _, p := range []struct{ nom, modele string }{{"Vieux portable", "0"}, {"Portable", ""}, {"Tour", "99"}, {"Poste", strconv.Itoa(store.VersionModele)}} {
 		h := []string{"X-COF-Version", "1.0.0", "X-COF-Modele", p.modele}
 		if p.modele == "" {
 			h = nil
 		}
-		// un bureau plus ancien ne tire pas de copie : il est inscrit comme un bureau d'avant les numéros,
-		// puis passe avec ses en-têtes
-		w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": p.nom})
+		// un bureau plus ancien ne tire pas de copie : il est inscrit comme un bureau à jour, puis passe
+		// avec ses en-têtes
+		w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": p.nom}, ici...)
 		if w.Code != 200 {
 			t.Fatalf("copie %s : %d", p.nom, w.Code)
 		}
@@ -238,7 +246,8 @@ func TestVersionServeurAdmin(t *testing.T) {
 		cp := x.(map[string]any)
 		ecarts[cp["nom"].(string)] = cp["ecart"]
 	}
-	if ecarts["Vieux portable"] != ecartServeurRecent || ecarts["Portable"] != "" || ecarts["Tour"] != ecartBureauRecent {
+	// « Portable », sans en-têtes, est pris pour la 1.2.2 : au modèle 1, plus ancien que ce serveur
+	if ecarts["Vieux portable"] != ecartServeurRecent || ecarts["Portable"] != ecartServeurRecent || ecarts["Tour"] != ecartBureauRecent || ecarts["Poste"] != "" {
 		t.Fatalf("écarts des postes : %v", ecarts)
 	}
 }

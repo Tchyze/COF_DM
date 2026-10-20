@@ -122,7 +122,7 @@ func TestBestiaire(t *testing.T) {
 	}
 	// l'export de l'univers emporte bestiaire et règles, et la restauration les rend
 	x, err := b.s.store.Exporter()
-	if err != nil || len(x.Documents) != 3 || len(x.Reference) == 0 || len(x.Regles) == 0 {
+	if err != nil || len(x.Documents) != 5 || len(x.Reference) != 0 || len(x.Regles) == 0 { // 3 monstres, un profil, une voie
 		t.Fatalf("export : %d documents, %v", len(x.Documents), err)
 	}
 	b.local("DELETE", loup, nil)

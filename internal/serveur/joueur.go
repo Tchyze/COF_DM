@@ -38,7 +38,7 @@ func (s *Serveur) routesJoueur() {
 	m.HandleFunc("GET /api/sante", s.sante)
 	m.HandleFunc("GET /api/schema", s.schemaJoueur)
 	m.HandleFunc("GET /api/calendrier", s.lireCalendrier)
-	m.HandleFunc("GET /api/reference", s.referenceLire) // profils et voies : utiles au joueur qui tient sa feuille
+	m.HandleFunc("GET /api/reference", s.referenceJoueur(s.monPJ)) // ?pj= : les voies, le profil et le peuple de son PJ
 	m.HandleFunc("GET /api/stats", s.statsJoueur)
 	m.HandleFunc("GET /api/parametres", func(w http.ResponseWriter, r *http.Request) {
 		repondre(w, 200, map[string]any{"jeton": "", "adresse": "", "version": s.opt.Version,

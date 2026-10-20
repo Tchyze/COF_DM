@@ -17,9 +17,13 @@ import "strconv"
 // Modèle 1 : celui de la version 1.2.2 (aides de jeu, fonctionnalités optionnelles). Un serveur ou
 // un bureau qui ne publie pas ses numéros est plus ancien que cette règle : 1 depuis la 1.2.2, 0
 // avant (internal/synchro).
+//
+// Modèle 2 : les profils, peuples et voies sont rangés un par un (collections « profils »,
+// « peuples », « voies ») et non plus dans le réglage « reference » ; ils portent une étiquette
+// (officielle ou maison), et les capacités leurs bonus, leur action en combat et leurs utilisations.
 const (
 	VersionProtocole = 1
-	VersionModele    = 1
+	VersionModele    = 2
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

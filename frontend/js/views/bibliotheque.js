@@ -17,6 +17,8 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
   const lecture = !!window.cofAcces?.lecture_seule;
   const [ref, monstres, regles] = await Promise.all([api("GET", "/api/reference"), api("GET", "/api/bestiaire"), api("GET", "/api/regles")]);
   const listes = regles.listes || {};
+  const nbRef = ref.profils.length + ref.peuples.length + ref.voies.length;
+  const maison = [...ref.profils, ...ref.peuples, ...ref.voies].filter(x => x.etiquette === "maison").length;
   const nbListes = Object.values(listes).reduce((n, l) => n + (l?.length || 0), 0);
   const aDesRegles = nbListes > 0 || !!regles.creature || !!regles.personnage || !!regles.rencontre || !!regles.combat;
   // ce que le fichier apporte, partie par partie : il ne crée aucune fiche, on ne le voit qu'ici
@@ -36,7 +38,7 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
   }
   box.innerHTML = `<h3>Bestiaire et règles</h3>
     <p class="hint">Rangés dans cet univers : <b>${monstres.length}</b> monstre${monstres.length > 1 ? "s" : ""} (<a href="#/bestiaire">bestiaire</a>),
-      <b>${ref.profils.length}</b> profil${ref.profils.length > 1 ? "s" : ""}, <b>${ref.peuples.length}</b> peuple${ref.peuples.length > 1 ? "s" : ""}, <b>${ref.voies.length}</b> voie${ref.voies.length > 1 ? "s" : ""}.
+      <b>${ref.profils.length}</b> profil${ref.profils.length > 1 ? "s" : ""}, <b>${ref.peuples.length}</b> peuple${ref.peuples.length > 1 ? "s" : ""}, <b>${ref.voies.length}</b> voie${ref.voies.length > 1 ? "s" : ""}${nbRef ? ` (${nbRef - maison} officiel${nbRef - maison > 1 ? "s" : ""}, ${maison} maison)` : ""}.
       Le contenu des livres n'est pas fourni avec l'application : il s'importe depuis vos fichiers.</p>
     <p class="hint"><b>Fichier de règles</b> : ${aDesRegles ? `${regles.titre ? `« ${esc(regles.titre)} »` : "importé"}. Il règle le fonctionnement de l'application :`
       : "aucun. Sans lui, peuples, profils, tailles et catégories se saisissent librement, le créateur de monstre et la difficulté des rencontres ne sont pas proposés, et le combat est minimal."}</p>
@@ -49,7 +51,11 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
     </div>
     <div class="ligne">
       <button id="bib-ref">⬆ Importer des profils et voies (JSON)…</button><input type="file" id="bib-ref-f" accept="application/json,.json" hidden>
-      ${ref.profils.length + ref.peuples.length + ref.voies.length ? `<button class="danger" id="bib-vider">Retirer les profils et voies</button>` : ""}
+      <select id="bib-ref-etiquette" style="width:auto" aria-label="Étiquette des éléments importés" title="Étiquette des éléments importés : une simple marque pour trier, rien n'est verrouillé">
+        <option value="">Étiquette du fichier</option><option value="officielle">Tout en officielle</option><option value="maison">Tout en maison</option>
+      </select>
+      ${nbRef ? `<a href="${lien("/api/reference/export")}" download><button>⬇ Exporter les profils et voies</button></a>
+      <button class="danger" id="bib-vider">Retirer les profils et voies</button>` : ""}
     </div>
     <h3 style="margin-top:14px">D'un univers à l'autre</h3>
     <p class="hint">Reprend le bestiaire, le fichier de règles et les profils et voies d'un autre univers. Rien n'est retiré : les fiches officielles déjà présentes sont mises à jour, un monstre maison du même nom n'est pas ajouté deux fois.</p>
@@ -86,7 +92,8 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
     const contenu = await lireJSON(e.target);
     if (!contenu) return;
     try {
-      const d = await api("POST", "/api/reference/import", contenu);
+      const etiquette = $("#bib-ref-etiquette", box).value;
+      const d = await api("POST", `/api/reference/import${etiquette ? `?etiquette=${etiquette}` : ""}`, contenu);
       dire(`Profils et voies importés : ${d.total.profils} profils, ${d.total.peuples} peuples, ${d.total.voies} voies.` +
         (d.alertes?.length ? `<br>${d.alertes.slice(0, 8).map(esc).join("<br>")}` : ""));
     } catch (err) { toast(err.message, true); }

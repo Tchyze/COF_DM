@@ -30,6 +30,8 @@ func normaliserDoc(coll string, data []byte) ([]byte, error) {
 			return nil, fmt.Errorf("combat illisible")
 		}
 		return data, nil
+	case reference.CollProfils, reference.CollPeuples, reference.CollVoies:
+		return reference.NormaliserDoc(coll, data)
 	}
 	return nil, fmt.Errorf("collection inconnue")
 }
@@ -48,8 +50,9 @@ type Export struct {
 	Entites    []Entite          `json:"entites"`
 	Relations  []RelationBrute   `json:"relations"`
 	Medias     []Media           `json:"medias"`
-	// Bestiaire et bibliothèque de règles. Absents d'un export plus ancien : la restauration garde
-	// alors ceux de l'univers.
+	// Bestiaire, profils, peuples et voies, bibliothèque de règles. Absents d'un export plus ancien :
+	// la restauration garde alors ceux de l'univers. Reference : les profils, peuples et voies d'un
+	// export d'avant le modèle 2, rangés depuis dans Documents.
 	Documents []DocumentExport `json:"documents,omitempty"`
 	Reference json.RawMessage  `json:"reference,omitempty"`
 	Regles    json.RawMessage  `json:"regles,omitempty"`
@@ -67,7 +70,8 @@ type DocumentExport struct {
 	Modifie float64         `json:"modifie"`
 }
 
-// MetaReference : clé du réglage de l'univers qui garde les profils, peuples et voies.
+// MetaReference : clé de l'ancien réglage qui gardait les profils, peuples et voies (avant le
+// modèle 2), repris un par un (reprendreReference).
 const MetaReference = "reference"
 
 // MetaRegles : clé du réglage de l'univers qui garde le fichier de règles (listes, tables).
@@ -136,9 +140,6 @@ func (s *Store) Exporter() (Export, error) {
 			return x, err
 		}
 		var ref string
-		if s.db.QueryRow(`SELECT valeur FROM meta WHERE cle=?`, MetaReference).Scan(&ref) == nil && json.Valid([]byte(ref)) {
-			x.Reference = json.RawMessage(ref)
-		}
 		if s.db.QueryRow(`SELECT valeur FROM meta WHERE cle=?`, MetaRegles).Scan(&ref) == nil && ref != "" && json.Valid([]byte(ref)) {
 			x.Regles = json.RawMessage(ref)
 		}
@@ -350,15 +351,20 @@ func (s *Store) restaurer(x Export, auteur string) error {
 			}
 		}
 	}
-	if len(x.Reference) > 0 {
+	if len(x.Reference) > 0 { // export d'avant le modèle 2 : ses profils, peuples et voies remplacent ceux de l'univers
 		ref, err := reference.Lire(x.Reference)
 		if err != nil {
 			return invalide("Profils et voies de l'export : %v", err)
 		}
-		rj, _ := json.Marshal(ref)
-		if _, err := tx.Exec(`INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, ?)`, MetaReference, string(rj)); err != nil {
+		if _, err := tx.Exec(`DELETE FROM documents WHERE coll IN (?,?,?)`, reference.CollProfils, reference.CollPeuples, reference.CollVoies); err != nil {
 			return err
 		}
+		if err := reprendre(tx, ref, auteur); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM meta WHERE cle=?`, MetaReference); err != nil {
+		return err
 	}
 	if len(x.Regles) > 0 {
 		rg, err := regles.Relire(x.Regles)
