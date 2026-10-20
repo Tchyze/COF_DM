@@ -1,7 +1,7 @@
 // Routeur et cadre de l'application.
 // Routes : #/  #/t/<type>  #/f/<id>  #/f/<id>/modifier  #/nouveau/<type>?nom=…  #/nouveau?nom=…
 //          #/bestiaire[/<id>|/nouveau]  #/createur
-//          #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres
+//          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres
 import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers } from "./ui.js";
 import { chargerSchema, schema, typeDe, vignette, badgeType, actif as fonctionActive } from "./schema.js";
 import * as tableau from "./views/tableau.js";
@@ -13,6 +13,7 @@ import * as chronologie from "./views/chronologie.js";
 import * as outils from "./views/outils.js";
 import * as secrets from "./views/secrets.js";
 import * as bestiaire from "./views/bestiaire.js";
+import * as voies from "./views/voies.js";
 import * as combat from "./views/combat.js";
 import * as createur from "./views/createur.js";
 import * as synchro from "./views/synchro.js";
@@ -85,6 +86,7 @@ async function route() {
     else if (nom === "apres" && +a) { actif = "seance"; nettoyage = await apres.mount(el, +a); }
     else if (nom === "graphe") { actif = "graphe"; nettoyage = await graphe.mount(el, +a || 0); }
     else if (nom === "bestiaire") { actif = "bestiaire"; nettoyage = await bestiaire.mount(el, a); }
+    else if (nom === "voies") { actif = "parametres"; nettoyage = await voies.mount(el, a); }
     else if (nom === "createur") { actif = "bestiaire"; nettoyage = await createur.mount(el); }
     else if (nom === "combat") { actif = "combat"; nettoyage = await combat.mount(el, a); }
     else if (nom === "secrets") { actif = "secrets"; nettoyage = await secrets.mount(el, params); }

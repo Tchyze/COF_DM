@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/Tchyze/cof_dm/internal/reference"
 )
@@ -239,4 +240,285 @@ func (s *Store) reprendreALOuverture() error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// ---------------------------------------------------------------- éditeur, élément par élément
+
+// majusculeInitiale : un message d'erreur qui commence par une majuscule et finit par un point.
+func majusculeInitiale(s string) string {
+	r := []rune(s)
+	if len(r) == 0 {
+		return s
+	}
+	return strings.ToUpper(string(r[0])) + string(r[1:]) + "."
+}
+
+// collReference : la collection est-elle celle de profils, de peuples ou de voies ?
+func collReference(coll string) bool {
+	return coll == reference.CollProfils || coll == reference.CollPeuples || coll == reference.CollVoies
+}
+
+// identite : la référence et le nom d'un élément rangé.
+type identite struct{ Ref, Nom string }
+
+func identiteDe(data []byte) identite {
+	var x identite
+	_ = json.Unmarshal(data, &x)
+	return x
+}
+
+// verifierUnique refuse un élément qui a la même identité (référence, ou nom sans référence)
+// qu'un autre de sa collection.
+func verifierUnique(tx execer, coll string, id int64, x identite) error {
+	rows, err := tx.Query(`SELECT id, data FROM documents WHERE coll=? AND id<>?`, coll, id)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	cible := reference.Ident(x.Ref, x.Nom)
+	for rows.Next() {
+		var autre int64
+		var data string
+		if err := rows.Scan(&autre, &data); err != nil {
+			return err
+		}
+		y := identiteDe([]byte(data))
+		if reference.Ident(y.Ref, y.Nom) == cible || (x.Ref != "" && y.Ref == x.Ref) {
+			return invalide("« %s » existe déjà dans la bibliothèque.", y.Nom)
+		}
+	}
+	return rows.Err()
+}
+
+// CreerElement ajoute un profil, un peuple ou une voie à la bibliothèque.
+func (s *Store) CreerElement(coll string, data []byte, auteur string) (int64, []byte, error) {
+	if !collReference(coll) {
+		return 0, nil, ErrIntrouvable
+	}
+	norm, err := reference.NormaliserDoc(coll, data)
+	if err != nil {
+		return 0, nil, invalide("%s", majusculeInitiale(err.Error()))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	x := identiteDe(norm)
+	if err := verifierUnique(tx, coll, 0, x); err != nil {
+		return 0, nil, err
+	}
+	id, err := prochainID(tx, "documents")
+	if err != nil {
+		return 0, nil, err
+	}
+	t := maintenant()
+	if _, err := tx.Exec(`INSERT INTO documents (id, coll, data, cree, modifie) VALUES (?,?,?,?,?)`, id, coll, string(norm), t, t); err != nil {
+		return 0, nil, err
+	}
+	noter(tx, coll+" : création", 0, x.Nom, "", auteur)
+	return id, norm, tx.Commit()
+}
+
+// ModifierElement remplace un profil, un peuple ou une voie. Une voie renommée l'est aussi sur les
+// feuilles qui la désignaient par son nom, et dans les voies des profils et des peuples.
+func (s *Store) ModifierElement(coll string, id int64, data []byte, auteur string) ([]byte, error) {
+	if !collReference(coll) {
+		return nil, ErrIntrouvable
+	}
+	norm, err := reference.NormaliserDoc(coll, data)
+	if err != nil {
+		return nil, invalide("%s", majusculeInitiale(err.Error()))
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	ancien, err := lireDoc(tx, coll, id)
+	if err != nil {
+		return nil, err
+	}
+	avant, apres := identiteDe(ancien.Data), identiteDe(norm)
+	if err := verifierUnique(tx, coll, id, apres); err != nil {
+		return nil, err
+	}
+	if _, err := tx.Exec(`UPDATE documents SET data=?, modifie=? WHERE id=?`, string(norm), maintenant(), id); err != nil {
+		return nil, err
+	}
+	detail := ""
+	if coll == reference.CollVoies && reference.Cle(avant.Nom) != reference.Cle(apres.Nom) {
+		n, err := renommerVoie(tx, avant, apres)
+		if err != nil {
+			return nil, err
+		}
+		detail = fmt.Sprintf("renommée « %s » → « %s » (%d feuilles)", avant.Nom, apres.Nom, n)
+	}
+	noter(tx, coll+" : modification", 0, apres.Nom, detail, auteur)
+	return norm, tx.Commit()
+}
+
+// SupprimerElement retire un profil, un peuple ou une voie. Les feuilles gardent leur copie des
+// noms : la voie y devient une voie libre.
+func (s *Store) SupprimerElement(coll string, id int64, auteur string) error {
+	if !collReference(coll) {
+		return ErrIntrouvable
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := lireDoc(s.db, coll, id)
+	if err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`DELETE FROM documents WHERE id=? AND coll=?`, id, coll); err != nil {
+		return err
+	}
+	noter(s.db, coll+" : suppression", 0, identiteDe(d.Data).Nom, "", auteur)
+	return nil
+}
+
+// designe : la voie d'une feuille (nom, ref) désigne-t-elle la voie x de la bibliothèque ?
+func designe(nom, ref string, x identite) bool {
+	if ref != "" && x.Ref != "" {
+		return ref == x.Ref
+	}
+	return reference.Cle(nom) == reference.Cle(x.Nom)
+}
+
+// renommerVoie suit le renommage d'une voie sur les feuilles et dans les profils et les peuples.
+func renommerVoie(tx execer, avant, apres identite) (int, error) {
+	rows, err := tx.Query(`SELECT entite, data FROM feuilles`)
+	if err != nil {
+		return 0, err
+	}
+	maj := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var data string
+		if err := rows.Scan(&id, &data); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		var f map[string]any
+		if json.Unmarshal([]byte(data), &f) != nil {
+			continue
+		}
+		voies, _ := f["voies"].([]any)
+		change := false
+		for _, x := range voies {
+			v, _ := x.(map[string]any)
+			nom, _ := v["nom"].(string)
+			ref, _ := v["ref"].(string)
+			if v != nil && designe(nom, ref, avant) {
+				v["nom"], change = apres.Nom, true
+			}
+		}
+		if change {
+			b, _ := json.Marshal(f)
+			maj[id] = string(b)
+		}
+	}
+	rows.Close()
+	for id, data := range maj {
+		if _, err := tx.Exec(`UPDATE feuilles SET data=?, modifie=? WHERE entite=?`, data, maintenant(), id); err != nil {
+			return 0, err
+		}
+	}
+	// les voies d'un profil ou d'un peuple sont désignées par leur nom ou leur référence
+	rows, err = tx.Query(`SELECT id, data FROM documents WHERE coll IN (?,?)`, reference.CollProfils, reference.CollPeuples)
+	if err != nil {
+		return 0, err
+	}
+	docs := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var data string
+		if err := rows.Scan(&id, &data); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		var el map[string]any
+		if json.Unmarshal([]byte(data), &el) != nil {
+			continue
+		}
+		voies, _ := el["voies"].([]any)
+		change := false
+		for i, x := range voies {
+			if nom, _ := x.(string); avant.Ref == "" || nom != avant.Ref {
+				if reference.Cle(nom) == reference.Cle(avant.Nom) {
+					voies[i], change = apres.Nom, true
+				}
+			}
+		}
+		if change {
+			b, _ := json.Marshal(el)
+			docs[id] = string(b)
+		}
+	}
+	rows.Close()
+	for id, data := range docs {
+		if _, err := tx.Exec(`UPDATE documents SET data=?, modifie=? WHERE id=?`, data, maintenant(), id); err != nil {
+			return 0, err
+		}
+	}
+	return len(maj), nil
+}
+
+// Utilisation : un PJ dont la feuille a une voie de la bibliothèque, à tel rang, avec ses
+// « divers » (bonus saisis à la main).
+type Utilisation struct {
+	ID         int64          `json:"id"`
+	Nom        string         `json:"nom"`
+	Rang       int            `json:"rang"`
+	DefDivers  int            `json:"def_divers"`
+	InitDivers int            `json:"init_divers"`
+	AttDivers  map[string]int `json:"att_divers"`
+}
+
+// UtilisationsVoie : les PJ dont la feuille a la voie id.
+func (s *Store) UtilisationsVoie(id int64) ([]Utilisation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, err := lireDoc(s.db, reference.CollVoies, id)
+	if err != nil {
+		return nil, err
+	}
+	x := identiteDe(d.Data)
+	rows, err := s.db.Query(`SELECT f.entite, e.nom, f.data FROM feuilles f JOIN entites e ON e.id = f.entite ORDER BY e.nom`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Utilisation{}
+	for rows.Next() {
+		var u Utilisation
+		var data string
+		if err := rows.Scan(&u.ID, &u.Nom, &data); err != nil {
+			return nil, err
+		}
+		var f struct {
+			Voies []struct {
+				Nom, Ref string
+				Rang     int
+			} `json:"voies"`
+			DefDivers  int            `json:"def_divers"`
+			InitDivers int            `json:"init_divers"`
+			AttDivers  map[string]int `json:"att_divers"`
+		}
+		if json.Unmarshal([]byte(data), &f) != nil {
+			continue
+		}
+		for _, v := range f.Voies {
+			if designe(v.Nom, v.Ref, x) {
+				u.Rang, u.DefDivers, u.InitDivers, u.AttDivers = v.Rang, f.DefDivers, f.InitDivers, f.AttDivers
+				out = append(out, u)
+				break
+			}
+		}
+	}
+	return out, rows.Err()
 }

@@ -586,6 +586,11 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
 .fp-vcase-ed{padding:2px}
 .fp-vcase-ed input{width:100%;min-height:0;padding:3px 6px;font-size:.9rem;background:transparent;border-color:transparent}
 .fp-vcase-ed input:hover,.fp-vcase-ed input:focus{border-color:var(--line2);background:var(--surface)}
+.v-rang{border:1px solid var(--line2);border-radius:var(--r);padding:6px 10px;background:var(--sunk)}
+.v-rang summary{cursor:pointer}
+.v-rang-nom{color:var(--muted);margin-left:6px}
+.v-bonus{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.v-bonus select,.v-bonus input{min-height:0;width:auto;max-width:100%}
 .fp-bulle{position:fixed;z-index:1000;background:var(--surface);color:var(--ink);border:1px solid var(--line2);border-radius:var(--r);box-shadow:var(--ombre);padding:8px 10px;font-size:.9rem;pointer-events:none}
 .fp-bulle ul{margin:6px 0 0;padding-left:1.2em}
 .fp-bulle .bst-texte{margin-top:4px}

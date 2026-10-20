@@ -42,6 +42,10 @@ func (s *Serveur) routesBestiaire() {
 	m.HandleFunc("GET /api/reference/export", s.referenceExporter)
 	m.HandleFunc("POST /api/reference/import", s.referenceImporter)
 	m.HandleFunc("DELETE /api/reference", s.referenceVider)
+	m.HandleFunc("POST /api/reference/{coll}", s.elementCreer)
+	m.HandleFunc("GET /api/reference/{coll}/{id}", s.elementLire)
+	m.HandleFunc("PUT /api/reference/{coll}/{id}", s.elementModifier)
+	m.HandleFunc("DELETE /api/reference/{coll}/{id}", s.elementSupprimer)
 	m.HandleFunc("GET /api/regles", s.reglesLire)
 	m.HandleFunc("POST /api/regles/import", s.reglesImporter)
 	m.HandleFunc("DELETE /api/regles", s.reglesVider)
@@ -463,6 +467,163 @@ func (s *Serveur) referenceExporter(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Disposition", `attachment; filename="profils-et-voies-cof-dm.json"`)
 	repondre(w, 200, ref)
+}
+
+// ---------------------------------------------------------------- éditeur de la bibliothèque
+
+const msgElementIntrouvable = "Élément introuvable dans la bibliothèque."
+
+// elementDe : un élément rangé, avec son identifiant, prêt à répondre.
+func elementDe(id int64, data []byte) map[string]any {
+	el := map[string]any{}
+	_ = json.Unmarshal(data, &el)
+	el["id"] = id
+	return el
+}
+
+// utiliseePar : les PJ dont la feuille a cette voie, ou dont la fiche a ce profil ou ce peuple.
+func (s *Serveur) utiliseePar(coll string, id int64, nom string) ([]store.Utilisation, error) {
+	if coll == reference.CollVoies {
+		return s.store.UtilisationsVoie(id)
+	}
+	champ := map[string]string{reference.CollProfils: "profil", reference.CollPeuples: "peuple"}[coll]
+	liste, err := s.store.Lister(store.Filtre{Type: "pj"})
+	if err != nil {
+		return nil, err
+	}
+	out := []store.Utilisation{}
+	for _, x := range liste {
+		e, err := s.store.Lire(x.ID)
+		if err != nil {
+			continue
+		}
+		if v, _ := e.Data[champ].(string); v != "" && reference.Cle(v) == reference.Cle(nom) {
+			out = append(out, store.Utilisation{ID: e.ID, Nom: e.Nom})
+		}
+	}
+	return out, nil
+}
+
+func (s *Serveur) elementLire(w http.ResponseWriter, r *http.Request) {
+	coll := r.PathValue("coll")
+	id, _ := idDe(r)
+	d, err := s.store.LireDoc(coll, id)
+	if err != nil || (coll != reference.CollProfils && coll != reference.CollPeuples && coll != reference.CollVoies) {
+		erreur(w, 404, msgElementIntrouvable)
+		return
+	}
+	var x struct{ Nom string }
+	_ = json.Unmarshal(d.Data, &x)
+	par, err := s.utiliseePar(coll, id, x.Nom)
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	repondre(w, 200, map[string]any{"element": elementDe(id, d.Data), "utilisee_par": par})
+}
+
+func (s *Serveur) elementCreer(w http.ResponseWriter, r *http.Request) {
+	corps, err := lireCorps(r, tailleImport)
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	id, data, err := s.store.CreerElement(r.PathValue("coll"), corps, auteurDe(r))
+	if errors.Is(err, store.ErrIntrouvable) {
+		erreur(w, 404, "Collection inconnue : profils, peuples ou voies.")
+		return
+	}
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	repondre(w, 201, map[string]any{"element": elementDe(id, data)})
+}
+
+// elementModifier : la réponse signale les feuilles dont un bonus de la voie (DEF, initiative,
+// attaque) pourrait compter deux fois avec ce que le MJ y a saisi à la main (« divers »).
+func (s *Serveur) elementModifier(w http.ResponseWriter, r *http.Request) {
+	coll := r.PathValue("coll")
+	id, _ := idDe(r)
+	corps, err := lireCorps(r, tailleImport)
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	data, err := s.store.ModifierElement(coll, id, corps, auteurDe(r))
+	if errors.Is(err, store.ErrIntrouvable) {
+		erreur(w, 404, msgElementIntrouvable)
+		return
+	}
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	out := map[string]any{"element": elementDe(id, data), "avertissements": []avertissementDivers{}}
+	if coll == reference.CollVoies {
+		var v reference.Voie
+		_ = json.Unmarshal(data, &v)
+		par, _ := s.store.UtilisationsVoie(id)
+		out["avertissements"] = avertissementsDivers(v, par)
+	}
+	repondre(w, 200, out)
+}
+
+type avertissementDivers struct {
+	ID       int64  `json:"id"`
+	Nom      string `json:"nom"`
+	Capacite string `json:"capacite"`
+	Champ    string `json:"champ"`
+}
+
+// avertissementsDivers : pour chaque PJ qui a atteint le rang d'une capacité à bonus de DEF,
+// d'initiative ou d'attaque, et dont le « divers » de ce champ n'est pas nul.
+func avertissementsDivers(v reference.Voie, par []store.Utilisation) []avertissementDivers {
+	out := []avertissementDivers{}
+	for _, u := range par {
+		vus := map[string]bool{}
+		for r, c := range v.Rangs {
+			if r >= u.Rang {
+				break
+			}
+			for _, b := range c.Bonus {
+				var champ string
+				switch {
+				case b.Cible == "def" && u.DefDivers != 0:
+					champ = "DEF, divers"
+				case b.Cible == "init" && u.InitDivers != 0:
+					champ = "Init, divers"
+				case b.Cible == "att" && (u.AttDivers["C"] != 0 || u.AttDivers["D"] != 0 || u.AttDivers["M"] != 0):
+					champ = "Attaques, divers"
+				case b.Cible == "att_c" && u.AttDivers["C"] != 0:
+					champ = "Contact, divers"
+				case b.Cible == "att_d" && u.AttDivers["D"] != 0:
+					champ = "Distance, divers"
+				case b.Cible == "att_m" && u.AttDivers["M"] != 0:
+					champ = "Magique, divers"
+				}
+				if champ != "" && !vus[champ] {
+					vus[champ] = true
+					out = append(out, avertissementDivers{ID: u.ID, Nom: u.Nom, Capacite: c.Nom, Champ: champ})
+				}
+			}
+		}
+	}
+	return out
+}
+
+// elementSupprimer : les feuilles gardent leur copie de la voie, devenue voie libre.
+func (s *Serveur) elementSupprimer(w http.ResponseWriter, r *http.Request) {
+	id, _ := idDe(r)
+	if err := s.store.SupprimerElement(r.PathValue("coll"), id, auteurDe(r)); err != nil {
+		if errors.Is(err, store.ErrIntrouvable) {
+			erreur(w, 404, msgElementIntrouvable)
+			return
+		}
+		erreurStore(w, err)
+		return
+	}
+	repondre(w, 200, map[string]bool{"ok": true})
 }
 
 // referenceVider retire tous les profils, peuples et voies (les feuilles ne changent pas).
