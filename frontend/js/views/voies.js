@@ -1,9 +1,10 @@
-// Voies, profils et peuples de l'univers : liste filtrée et éditeur, ouvert depuis Paramètres →
-// Bestiaire et règles. Aucun contenu n'est fourni : le MJ saisit ou importe le sien. L'étiquette
+// Voies, profils et peuples de l'univers : liste filtrée et éditeur, dans la partie « Règles » du
+// menu (et depuis Paramètres → Bestiaire et règles). Aucun contenu n'est fourni : le MJ saisit ou importe le sien. L'étiquette
 // (officielle ou maison) sert à trier, elle ne verrouille rien.
 import { $, $$, esc, api, toast, armer } from "../ui.js";
 
-const GENRES = { voies: ["voie", "Voies"], profils: ["profil", "Profils"], peuples: ["peuple", "Peuples"] };
+// genre : [nom d'un élément, titre de l'onglet, féminin]
+const GENRES = { voies: ["voie", "Voies", true], profils: ["profil", "Profils", false], peuples: ["peuple", "Peuples", false] };
 const CARACS = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"];
 const CIBLES = [["pv", "PV max"], ["pm", "PM max"], ["def", "DEF"], ["init", "Initiative"], ["att", "Toutes les attaques"], ["att_c", "Attaque au contact"],
   ["att_d", "Attaque à distance"], ["att_m", "Attaque magique"], ["rd", "RD"], ...CARACS.map(c => [c, `${c} (valeur)`])];
@@ -24,7 +25,8 @@ function vide(genre, rangs) {
 }
 
 export async function mount(el, arg) {
-  const genre = GENRES[arg] ? arg : "voies", [unite] = GENRES[genre];
+  const genre = GENRES[arg] ? arg : "voies", [unite, , fem] = GENRES[genre];
+  const un = fem ? "une" : "un", nouv = fem ? "Nouvelle" : "Nouveau", aucun = fem ? "Aucune" : "Aucun";
   const lecture = !!window.cofAcces?.lecture_seule; // auditeur : consulter sans modifier
   let regles = {};
   try { regles = await api("GET", "/api/regles"); } catch { /* sans règles : saisie libre */ }
@@ -35,8 +37,7 @@ export async function mount(el, arg) {
 
   el.innerHTML = `
     <div class="entete"><h1>Voies, profils et peuples</h1><span class="sp"></span>
-      <a href="#/parametres"><button class="ghost">← Paramètres</button></a>
-      ${lecture ? "" : `<button class="primary" id="v-nouveau">＋ Nouveau ${unite}</button>`}</div>
+      ${lecture ? "" : `<button class="primary" id="v-nouveau">＋ ${nouv} ${unite}</button>`}</div>
     <div class="ligne" role="tablist" style="margin-bottom:12px">${Object.entries(GENRES).map(([k, [, titre]]) =>
       `<a href="#/voies/${k}" role="tab" aria-selected="${k === genre}"><button class="${k === genre ? "primary" : ""}">${titre}</button></a>`).join("")}</div>
     <div class="bst">
@@ -46,7 +47,7 @@ export async function mount(el, arg) {
         <p class="hint" id="v-compte"></p>
         <div class="bst-liste" id="v-liste"></div>
       </section>
-      <section class="panneau" id="v-fiche"><p class="vide">Choisissez un ${unite} dans la liste${lecture ? "" : " ou créez-en un"}.</p></section>
+      <section class="panneau" id="v-fiche"><p class="vide">Choisissez ${un} ${unite} dans la liste${lecture ? "" : ` ou créez-en ${un}`}.</p></section>
     </div>`;
   const fiche = $("#v-fiche", el);
   $("#v-q", el).oninput = e => { filtre.q = e.target.value; rendreListe(); };
@@ -69,7 +70,7 @@ export async function mount(el, arg) {
         <span class="hint">${genre === "voies" ? (x.rangs || []).map(c => c.nom).filter(Boolean).map(esc).join(" · ") || "Aucune capacité nommée"
           : (x.voies || []).map(esc).join(" · ") || "Aucune voie"}</span>
       </button>`).join("")
-      : `<p class="vide">${tous.length ? "Rien ne correspond aux filtres." : `Aucun ${unite}. Importez un fichier depuis Paramètres → Bestiaire et règles${lecture ? "" : `, ou créez-en un`}.`}</p>`;
+      : `<p class="vide">${tous.length ? "Rien ne correspond aux filtres." : `${aucun} ${unite}. Importez un fichier depuis Paramètres → Bestiaire et règles${lecture ? "" : `, ou créez-en ${un}`}.`}</p>`;
     $$("#v-liste [data-id]", el).forEach(b => b.onclick = () => ouvrir(+b.dataset.id));
   }
 
@@ -152,7 +153,7 @@ export async function mount(el, arg) {
       ${zone("Description", "description", x.description)}`;
     fiche.innerHTML = `<form id="v-form" class="colonne" style="gap:10px" novalidate>
       <fieldset class="colonne" style="gap:10px;border:0;padding:0;margin:0"${lecture ? " disabled" : ""}>
-        <div class="ligne"><h2 style="flex:1;margin:0">${nouveau ? `Nouveau ${unite}` : esc(x.nom)}</h2>${x.etiquette ? `<span class="badge">${esc(x.etiquette)}</span>` : ""}</div>
+        <div class="ligne"><h2 style="flex:1;margin:0">${nouveau ? `${nouv} ${unite}` : esc(x.nom)}</h2>${x.etiquette ? `<span class="badge">${esc(x.etiquette)}</span>` : ""}</div>
         ${usage}
         <div class="bst-grille">${texte("Nom", "nom", x.nom, "required")}${choix("Étiquette", "etiquette", [["officielle", "Officielle"], ["maison", "Maison"]], x.etiquette || "maison")}
           ${texte("Référence", "ref", x.ref, 'title="Identifiant stable, qui sert à reconnaître l\'élément d\'un fichier à l\'autre" placeholder="facultative"')}</div>
@@ -171,7 +172,7 @@ export async function mount(el, arg) {
         try {
           await api("DELETE", `/api/reference/${genre}/${x.id}`);
           toast(`« ${x.nom} » retiré${genre === "voies" ? "e" : ""} de la bibliothèque.`);
-          sel = null; fiche.innerHTML = `<p class="vide">Choisissez un ${unite} dans la liste.</p>`; charger();
+          sel = null; fiche.innerHTML = `<p class="vide">Choisissez ${un} ${unite} dans la liste.</p>`; charger();
         } catch (e) { toast(e.message, true); }
       });
     }
