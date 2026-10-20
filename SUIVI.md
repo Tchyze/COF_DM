@@ -2,7 +2,7 @@
 
 Fichier de passation : ce qui a été fait, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail sur un autre poste, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 20 octobre 2026 (bureau et serveur de versions différentes : PR 7 à 9, en essai) ; avant, 19 octobre 2026 (version 1.2.2 publiée ; Claude depuis Paramètres : PR 6 du dépôt public ; fonctionnalités optionnelles : PR 5 ; aides de jeu, projet 9, lot 1 : PR 4 ; port du serveur MCP : PR 3) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
+Dernière mise à jour : 20 octobre 2026 (bureau et serveur de versions différentes : PR 7 à 9, en essai ; décisions sur les voies saisies par le MJ) ; avant, 19 octobre 2026 (version 1.2.2 publiée ; Claude depuis Paramètres : PR 6 du dépôt public ; fonctionnalités optionnelles : PR 5 ; aides de jeu, projet 9, lot 1 : PR 4 ; port du serveur MCP : PR 3) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
 
 ## Dépôt public (18 octobre 2026)
 
@@ -74,6 +74,18 @@ Exigence ferme, pour que le logiciel se distribue sans problème. Ni liste, ni t
   - Joueur : ne voit que les fiches que le MJ partage, sans leurs champs MJ ; jamais les fiches « Secret » ; lecture seule, sauf si l'administrateur ouvre l'édition par les joueurs (trois champs texte de son PJ, et toute sa feuille de personnage sauf les notes du MJ).
 - **Plusieurs univers ouverts à la fois** ; chacun choisit le sien dans son navigateur.
 - L'application de bureau reste sans compte.
+
+### Voies, capacités, profils et peuples saisis par le MJ (décisions du 20 octobre 2026)
+
+Reprise du projet 10 de `PROJETS.md` (« capacités des voies utilisables ») **sans aucune donnée des livres dans le dépôt** : le code ne garde qu'un **modèle vide** (la structure). Le MJ remplit ou importe tout le contenu dans son univers. Pas encore commencé.
+
+- **Éditeur dans l'application** (Paramètres → Bestiaire et règles) pour les **voies, capacités, profils et peuples** : créer, modifier, retirer à la main (aujourd'hui, seulement import JSON ou tout retirer).
+- **Officielle / maison** : une simple **étiquette** pour trier et filtrer, rien n'est verrouillé (contrairement au bestiaire).
+- **Bonus permanents** d'une capacité (PV, DEF, initiative, attaque, RD, caractéristique) : ajoutés d'office à la feuille quand le PJ a le rang, affichés **« A + b »** (A : la valeur de base, b : le bonus des capacités, **en vert**).
+- **En combat** : les capacités actives (sort, attaque spéciale, soin, état) **préremplissent** l'action (coût en PM, bonus, dégâts, état) ; le MJ valide toujours.
+- **Utilisations** : sur une capacité, « **x fois par** » combat, jour, heure, etc. (menu).
+- **Joueurs** : sur leur page, **tout l'arbre** de leurs voies en lecture seule, capacités acquises en surbrillance.
+- Choix technique proposé : profils, peuples et voies rangés **un par un** dans l'univers (et non plus en un seul réglage `reference`), pour que la synchronisation fusionne voie par voie ; le modèle passe à 2 (`VersionModele`, PR 7 à 9).
 
 ### Bureau et serveur de versions différentes (décisions du 20 octobre 2026)
 
