@@ -20,7 +20,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   try { F = await api("GET", url); }
   catch (e) { box.innerHTML = `<h3>Feuille de personnage</h3><p class="alerte">${esc(e.message)}</p>`; return; }
   // le MJ lit toute la bibliothèque ; un joueur, les voies de ce PJ, son profil et son peuple
-  api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; }, () => {});
+  let enLecture = false; // la vue de lecture est affichée (et non le formulaire)
+  api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; if (enLecture) lire(); }, () => {});
   const R = () => F.regles || {};
   const pvActuel = () => F.pv_actuel ?? F.pv;
 
@@ -36,8 +37,92 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     }
   }
 
+  // ---------------------------------------------------------------- voies
+  // Une grille comme sur la feuille papier : une colonne par voie (trois par bloc, une seule en
+  // étroit), une ligne par rang. Une voie liée à la bibliothèque (même ref, sinon même nom) en
+  // montre les capacités ; une voie libre, celles saisies sur la feuille. Au survol (ou au toucher),
+  // le texte du rang et ses effets.
+  const voieDeRef = v => REF.voies.find(x => (v.ref && x.ref === v.ref) || cle(x.nom) === cle(v.nom));
+  const capacitesDe = v => voieDeRef(v)?.rangs || v.capacites.map(nom => ({ nom }));
+  const parBloc = () => (box.clientWidth && box.clientWidth < 560 ? 1 : 3);
+  let blocAffiche = 0;
+
+  function grilleVoies() {
+    const k = blocAffiche = parBloc();
+    const caps = F.voies.map(capacitesDe);
+    let html = "";
+    for (let d = 0; d < F.voies.length; d += k) {
+      const idx = [...Array(k).keys()].map(i => d + i); // un bloc incomplet garde ses colonnes vides, comme sur papier
+      const nbRangs = Math.max(R().rang_max || 5, ...idx.filter(i => i < F.voies.length).map(i => {
+        const c = caps[i]; let n = c.length; while (n && !c[n - 1]?.nom) n--; return n;
+      }));
+      const vide = `<div class="fp-vcase vide"></div>`;
+      html += `<div class="fp-vbloc" style="grid-template-columns:1.8em repeat(${idx.length},minmax(0,1fr))">
+        <div class="fp-vcoin"></div>${idx.map(i => i < F.voies.length ? `<div class="fp-vtete">${esc(F.voies[i].nom)}</div>` : `<div class="fp-vtete"></div>`).join("")}
+        <div class="fp-vcoin2"></div>${idx.map(i => i < F.voies.length ? `<div class="fp-vsous">${esc(F.voies[i].origine || "")}${F.voies[i].origine ? " · " : ""}rang ${F.voies[i].rang}</div>` : `<div class="fp-vsous"></div>`).join("")}
+        ${[...Array(nbRangs).keys()].map(r => `<div class="fp-vrang">${r + 1}</div>${idx.map(i => {
+          const c = i < F.voies.length ? caps[i][r] : null;
+          if (!c?.nom) return vide;
+          return `<div class="fp-vcase${r < F.voies[i].rang ? " acquise" : ""}" tabindex="0" data-v="${i}" data-r="${r}">${esc(nomCap(c))}</div>`;
+        }).join("")}`).join("")}
+      </div>`;
+    }
+    return `<div class="fp-voies">${html}</div>`;
+  }
+
+  const CIBLES = { pv: "PV max", pm: "PM max", def: "DEF", init: "Initiative", att: "Attaques", att_c: "Attaque au contact", att_d: "Attaque à distance", att_m: "Attaque magique", rd: "RD" };
+  const GENRES = { sort: "Sort", attaque: "Attaque spéciale", soin: "Soin", etat: "État", autre: "Action" };
+  function utilisations(u) {
+    if (u.par === "main") return `${u.fois} fois, à remettre à zéro à la main`;
+    if (u.par.startsWith("repos:")) { const c = u.par.slice(6); return `${u.fois} fois par ${R().repos?.find(r => r.cle === c)?.libelle || c}`; }
+    return `${u.fois} fois par ${u.par}`;
+  }
+  function detail(c, voie, r) {
+    const lignes = [];
+    for (const b of c.bonus || []) lignes.push(`${CIBLES[b.cible] || b.cible} ${signe(b.valeur)}${b.par_rang ? " × rang" : ""}${b.niveau ? " + niveau" : ""}${b.carac ? ` + mod. ${b.carac}` : ""}`);
+    if (c.action) {
+      const a = c.action;
+      lignes.push([GENRES[a.genre] || a.genre, a.cout_pm && `${a.cout_pm} PM`, a.attaque && `attaque ${(TYPES[a.attaque] || a.attaque).toLowerCase()}${a.bonus ? ` ${signe(a.bonus)}` : ""}`,
+        a.degats && `DM ${a.degats}`, a.soin && `soigne ${a.soin}`, a.etat && `état : ${a.etat}`].filter(Boolean).join(" · "));
+    }
+    if (c.utilisations) lignes.push(utilisations(c.utilisations));
+    if (c.limitee) lignes.push("Action limitée");
+    return `<b>${esc(c.nom)}</b> <span class="hint">${esc(voie.nom)}, rang ${r + 1}${r < voie.rang ? " · acquis" : ""}</span>
+      ${c.texte ? `<div class="bst-texte">${esc(c.texte)}</div>` : ""}
+      ${lignes.length ? `<ul>${lignes.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}`;
+  }
+  // une seule bulle pour la page, placée sous la case (au-dessus si la place manque), dans l'écran
+  function bulle() {
+    let b = document.getElementById("fp-bulle");
+    if (!b) { b = document.createElement("div"); b.id = "fp-bulle"; b.className = "fp-bulle"; b.hidden = true; b.setAttribute("role", "tooltip"); document.body.append(b); }
+    return b;
+  }
+  function armerBulles() {
+    const cacher = () => { bulle().hidden = true; };
+    $$(".fp-vcase[data-v]", box).forEach(el => {
+      const montrer = () => {
+        const v = F.voies[+el.dataset.v], r = +el.dataset.r, b = bulle();
+        b.innerHTML = detail(capacitesDe(v)[r], v, r);
+        b.hidden = false;
+        const c = el.getBoundingClientRect(), l = Math.min(360, innerWidth - 16);
+        b.style.width = l + "px";
+        b.style.left = Math.max(8, Math.min(c.left, innerWidth - l - 8)) + "px";
+        const h = b.offsetHeight;
+        b.style.top = (c.bottom + 6 + h > innerHeight && c.top - 6 - h > 0 ? c.top - 6 - h : c.bottom + 6) + "px";
+      };
+      el.addEventListener("pointerenter", montrer);
+      el.addEventListener("focus", montrer);
+      el.addEventListener("pointerleave", () => { if (document.activeElement !== el) cacher(); });
+      el.addEventListener("blur", cacher);
+    });
+    addEventListener("scroll", cacher, { capture: true, passive: true, once: true });
+  }
+  // en passant de large à étroit (ou l'inverse), la grille change de nombre de colonnes
+  new ResizeObserver(() => { if (enLecture && box.isConnected && blocAffiche && parBloc() !== blocAffiche) lire(); }).observe(box);
+
   // ---------------------------------------------------------------- lecture
   function lire() {
+    enLecture = true;
     const compteur = (k, nom) => (F[k + "_max"] || F[k]) ? `<span class="fp-res" data-res="${k}"><b>${nom}</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="${nom} −1">−</button>` : ""}<span>${F[k]}/${F[k + "_max"]}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="${nom} +1">+</button>` : ""}</span>` : "";
     const identite = [["Sexe", F.sexe], ["Âge", F.age], ["Taille", F.taille_physique], ["Poids", F.poids], ["Divinité", F.divinite], ["Langues", F.langues]].filter(x => x[1]);
     const bourse = ["po", "pa", "pc"].filter(k => F.bourse?.[k]).map(k => `${F.bourse[k]} ${k}`).join(", ");
@@ -54,14 +139,14 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b> ${signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
         ${peutEcrire && R().repos?.length ? `<div class="ligne">${R().repos.map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}</div>` : ""}
       </div>
-      ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3><div class="colonne" style="gap:6px">${F.voies.map(v => `<div><b>${esc(v.nom)}</b> <span class="hint">${esc(v.origine || "")}${v.origine ? " · " : ""}rang ${v.rang}</span>
-          ${v.rang ? `<div class="hint">${v.capacites.slice(0, v.rang).filter(Boolean).map((c, i) => `${i + 1}. ${esc(c)}`).join(" · ")}</div>` : ""}</div>`).join("")}</div>` : ""}
+      ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3>${grilleVoies()}` : ""}
       ${F.capacites ? `<h3 style="margin-top:12px">Capacités</h3><div class="bst-texte">${esc(F.capacites)}</div>` : ""}
       ${F.equipement || bourse || F.armure?.nom || F.bouclier?.nom ? `<h3 style="margin-top:12px">Équipement</h3>
         ${[F.armure?.nom && `${F.armure.nom} (${signe(F.armure.bonus)} DEF)`, F.bouclier?.nom && `${F.bouclier.nom} (${signe(F.bouclier.bonus)} DEF)`].filter(Boolean).map(x => `<div>${esc(x)}</div>`).join("")}
         ${F.equipement ? `<div class="bst-texte">${esc(F.equipement)}</div>` : ""}${bourse ? `<p class="hint">Bourse : ${esc(bourse)}</p>` : ""}` : ""}
       ${identite.length ? `<dl class="proprietes" style="margin-top:12px">${identite.map(([n, v]) => `<div><dt>${n}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
       ${!joueur && F.notes ? `<h3 style="margin-top:12px">Notes du MJ</h3><div class="bst-texte">${esc(F.notes)}</div>` : ""}`;
+    armerBulles();
     if (!peutEcrire) return;
     $("#fp-modifier", box).onclick = editer;
     // PV et ressources : un clic, enregistré aussitôt
@@ -99,6 +184,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
 
   // ---------------------------------------------------------------- édition
   function editer() {
+    enLecture = false;
+    bulle().hidden = true;
     const f = structuredClone(F), rg = R();
     const nombre = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input type="number" data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? 0)}" ${plus}></label>`;
     const texte = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? "")}" ${plus}></label>`;
