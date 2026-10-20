@@ -4,7 +4,7 @@ import { panneauCompte, panneauComptes } from "./comptes.js";
 import { panneauBibliotheque } from "./bibliotheque.js";
 import { schema, chargerSchema, lienFiche, badgeType, actif as fonctionActive } from "../schema.js";
 import { taille, dialogueObsidian } from "../fichier.js";
-import { panneauMaj } from "../majour.js";
+import { panneauMaj, panneauVersionServeur } from "../majour.js";
 
 export async function liens(el) {
   const morts = await api("GET", "/api/liens-morts");
@@ -186,6 +186,7 @@ export async function parametres(el) {
       ${surPlace ? `<section class="panneau" id="acces"></section>` : ""}
       ${serveur ? `<section class="panneau" id="compte"></section>` : ""}
       ${admin ? `<section class="panneau" id="comptes"></section>` : ""}
+      ${admin ? `<section class="panneau" id="version-serveur"></section>` : ""}
       <section class="panneau"${surPlace ? "" : " hidden"}>
         <h3>API</h3>
         <p class="hint">Tout ce que fait l'interface est possible par l'API, pour un programme ou pour Claude. Documentation : <code>docs/API.md</code> du dépôt.</p>
@@ -224,6 +225,7 @@ export async function parametres(el) {
   monter("#biblio", box => panneauBibliotheque(box, { peutReprendre: surPlace || admin }));
   if (serveur) monter("#compte", panneauCompte);
   if (admin) monter("#comptes", box => panneauComptes(box, window.cofAcces.compte.nom));
+  if (admin) monter("#version-serveur", panneauVersionServeur);
 
   // import de fiches
   const fimp = $("#fichier-imp", el);

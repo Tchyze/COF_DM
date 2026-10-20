@@ -57,9 +57,11 @@ type Version struct {
 }
 
 // Lire lit « v1.2.3 », « 1.2.3 » ou « 1.2.3-test.4 ». Une version de développement (« dev »,
-// « 0.0.0-git1a2b3c4 ») ne se lit pas : elle ne se met pas à jour seule.
+// « 0.0.0-git1a2b3c4 ») ne se lit pas : elle ne se met pas à jour seule. Ce qui suit « + » (un
+// serveur construit quelques commits après la version : « 1.2.3+4.1a2b3c4 ») ne compte pas.
 func Lire(s string) (Version, bool) {
 	s = strings.TrimPrefix(strings.TrimSpace(s), "v")
+	s, _, _ = strings.Cut(s, "+")
 	var v Version
 	base, pre, _ := strings.Cut(s, "-")
 	parts := strings.Split(base, ".")

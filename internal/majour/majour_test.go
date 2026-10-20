@@ -29,6 +29,12 @@ func TestVersions(t *testing.T) {
 			t.Fatalf("%s < %s attendu", ordre[i], ordre[i+1])
 		}
 	}
+	// un serveur construit quelques commits après la 1.2.2 : la 1.2.2, pour les comparaisons
+	a, ok := Lire("1.2.2+3.45e384f")
+	b, _ := Lire("1.2.2")
+	if !ok || Comparer(a, b) != 0 || a.String() != "1.2.2" {
+		t.Fatalf("version de serveur : %v %v", a, ok)
+	}
 }
 
 // banc : une fausse API GitHub, avec ses versions et leurs fichiers, signés par une clé d'essai.

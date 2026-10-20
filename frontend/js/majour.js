@@ -1,5 +1,7 @@
 // Mises à jour de l'application de bureau : le panneau de Paramètres (canal, recherche,
 // installation) et le badge du pied du menu quand une version attend. Rien ne s'installe sans clic.
+// Sur un serveur, l'administrateur voit la version du serveur, la dernière publiée, et celle des
+// postes reliés à l'univers (panneauVersionServeur).
 import { $, esc, api, toast, dateHeure } from "./ui.js";
 
 const CANAUX = {
@@ -85,4 +87,32 @@ export function initBadgeMaj() {
   };
   setTimeout(badge, 8000); // l'application cherche cinq secondes après son lancement
   setInterval(badge, 30 * 60 * 1000);
+}
+
+const ECARTS = {
+  serveur_recent: ["⬆", "à mettre à jour : il ne se synchronise plus"],
+  bureau_recent: ["⏳", "plus récent que le serveur : ses changements attendent la mise à jour du serveur"],
+};
+
+/** Le panneau « Version du serveur » de Paramètres (administrateur d'un serveur). */
+export async function panneauVersionServeur(box) {
+  const m = await api("GET", "/api/univers/version");
+  const d = m.disponible;
+  const enAvance = m.copies.filter(c => c.ecart === "bureau_recent");
+  const poste = c => {
+    const [ic, texte] = ECARTS[c.ecart] || ["✓", "à jour"];
+    const version = c.version ? `version ${esc(c.version)}` : "version d'avant la 1.2.3";
+    return `<li><span class="ic">${ic}</span> <b>${esc(c.nom)}</b> <span class="hint">(${esc(c.compte)}, ${version}, vu le ${esc(dateHeure(c.vu))})</span> : ${texte}</li>`;
+  };
+  box.innerHTML = `<h3>Version du serveur</h3>
+    <p class="hint">Version <b>${esc(m.version)}</b> (modèle ${m.modele}, protocole ${m.protocole}).${m.verifie ? ` Dernière recherche : ${esc(dateHeure(m.verifie))}.` : ""}</p>
+    ${m.erreur ? `<p class="alerte">Recherche des versions impossible : ${esc(m.erreur)}</p>` : ""}
+    ${d ? `<div class="maj-dispo">
+        <p><b>Version ${esc(d.version)}</b> publiée${d.date ? ` le ${esc(new Date(d.date).toLocaleDateString("fr-FR"))}` : ""} (<a href="${esc(d.page)}" target="_blank" rel="noopener">notes de version</a>).</p>
+        <p class="hint">Le serveur ne se met pas à jour seul. Dans le dossier du dépôt, sur la machine du serveur :</p>
+        <div class="jeton">${esc(m.commande)}</div>
+      </div>` : m.verifie && !m.erreur ? `<p class="hint">✓ Le serveur est à jour.</p>` : ""}
+    ${enAvance.length ? `<p class="alerte">${enAvance.length > 1 ? `${enAvance.length} postes ont` : "Un poste a"} une version plus récente que le serveur : ${enAvance.length > 1 ? "leurs" : "ses"} changements attendent sa mise à jour.</p>` : ""}
+    <h4>Postes reliés à « ${esc(m.univers || "")} »</h4>
+    ${m.copies.length ? `<ul class="postes">${m.copies.map(poste).join("")}</ul>` : `<p class="vide">Aucune application de bureau ne tient de copie de cet univers.</p>`}`;
 }

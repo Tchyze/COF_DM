@@ -62,6 +62,9 @@ type Options struct {
 	// l'inscrire dans Claude Desktop ou Claude Code (claude.go). Vide : pas d'inscription.
 	Programme string
 	ArgsMCP   []string
+	// VeilleMaj : mode serveur, chercher les versions publiées (au lancement puis toutes les six
+	// heures) pour le signaler à l'administrateur ; le serveur ne s'installe rien (docker compose).
+	VeilleMaj bool
 }
 
 type Serveur struct {

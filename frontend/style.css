@@ -500,7 +500,7 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 /* mode de travail (bureau), en bas à gauche : local, connecté, hors connexion */
 /* le pied du menu reste en bas de la fenêtre, même quand le menu défile */
 .side .bas{flex-wrap:wrap;position:sticky;bottom:-10px;z-index:2;background:var(--side);margin-left:-10px;margin-right:-10px;padding:8px 10px 10px;margin-bottom:-10px;border-top:1px solid var(--line)}
-.etat-lien{flex:1 0 100%;display:flex;align-items:center;gap:9px;text-align:left;background:var(--surface);border-color:var(--line);padding:6px 9px;min-height:0;white-space:normal}
+.etat-lien{flex:1 0 100%;display:flex;align-items:center;gap:9px;text-align:left;background:var(--surface);border-color:var(--line);padding:6px 9px;min-height:0;min-width:0;white-space:normal}
 .etat-lien .u{display:flex;flex-direction:column;min-width:0;line-height:1.25}
 .etat-lien b{font-size:.84rem;font-weight:600}
 .etat-lien small{font-size:.74rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -527,6 +527,9 @@ a.version-app[href]:hover{color:var(--muted)}
 .version-app.test{color:var(--warn);border:1px solid color-mix(in srgb,var(--warn) 50%,transparent);border-radius:4px;padding:0 4px}
 .maj-dispo{border:1px solid var(--line2);border-radius:var(--r);padding:10px 12px;background:var(--surface2);display:flex;flex-direction:column;gap:8px}
 .maj-dispo p{margin:0}
+.maj-dispo .jeton{word-break:normal;overflow-wrap:anywhere}
+.postes{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.postes li{line-height:1.4}
 .maj-notes{white-space:pre-wrap;font:inherit;font-size:.85rem;color:var(--muted);margin:6px 0 0;max-height:220px;overflow:auto}
 .ligne-connexion{gap:10px;align-items:flex-end;flex-wrap:wrap}
 .ligne-connexion .champ{flex:1 1 180px}

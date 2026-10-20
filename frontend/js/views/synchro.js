@@ -2,15 +2,17 @@
 // « Conflits », où le MJ choisit entre sa valeur et celle du serveur.
 import { $, $$, esc, api, toast, dateHeure } from "../ui.js";
 import { champDe, lienFiche } from "../schema.js";
+import { allerAuxMisesAJour } from "../connexion.js";
 
 const ETATS = {
   a_jour: ["✓", "À jour"],
+  version: ["⬆", "Mise à jour de l'application nécessaire"],
   hors_ligne: ["⚠", "Hors ligne"],
   erreur: ["⚠", "Erreur"],
   jamais: ["…", "Pas encore synchronisé"],
 };
 
-const REGLAGES = { calendrier: "Calendrier", regles: "Fichier de règles", reference: "Profils et voies" };
+const REGLAGES = { calendrier: "Calendrier", regles: "Fichier de règles", reference: "Profils et voies", fonctionnalites: "Fonctionnalités" };
 const CHAMPS_FICHE = { nom: "Nom", tags: "Tags", archive: "Archivée", partage: "Partagée avec les joueurs", type: "Type" };
 
 /** Ce que désigne un conflit, en clair. */
@@ -43,7 +45,9 @@ function expliquer(c) {
   switch (c.genre) {
     case "supprime_ici": return ["Vous l'avez supprimée ici, mais elle a été modifiée sur le serveur : elle a été gardée.", "Supprimer quand même", "Garder la fiche"];
     case "supprime_la": return ["Elle a été supprimée sur le serveur, mais vous l'avez modifiée ici : elle a été gardée et renvoyée au serveur.", "Garder la fiche", "Supprimer aussi ici"];
-    case "refus": return [`Le serveur a refusé votre valeur : ${esc(c.raison)}. Celle du serveur est en place.`, "Réessayer la mienne", "Garder celle du serveur"];
+    case "refus":
+      if (c.champ === "*") return [`Le serveur l'a refusée : ${esc(c.raison)}. Elle reste sur cet ordinateur, pas sur le serveur (s'il est plus ancien que cette application, renvoyez-la une fois qu'il sera à jour).`, "La renvoyer au serveur", "La retirer d'ici"];
+      return [`Le serveur a refusé votre valeur : ${esc(c.raison)}.`, "Réessayer la mienne", "Garder celle du serveur"];
   }
   return ["Ce champ a changé ici et sur le serveur pendant que vous étiez hors ligne. La valeur du serveur est en place.", "Garder la mienne", "Garder celle du serveur"];
 }
@@ -66,10 +70,15 @@ export async function mount(el) {
       return d;
     }
     const s = d.synchro || {};
-    const [ic, mot] = ETATS[s.etat] || ETATS.jamais;
+    const [ic, mot] = s.ecart === "bureau_recent" && s.etat === "a_jour" ? ["⇣", "Réception seule"] : ETATS[s.etat] || ETATS.jamais;
+    const b = s.bilan || {};
+    const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? "s" : ""}`;
     box.innerHTML = `<h3>Serveur</h3>
       <p><b>${ic} ${esc(mot)}</b>${s.derniere ? ` — dernier échange le ${esc(dateHeure(s.derniere))}` : ""}</p>
-      ${s.erreur ? `<p class="alerte">${esc(s.erreur)}</p>` : ""}
+      ${s.erreur || s.message ? `<p class="alerte">${esc(s.message || s.erreur)}</p>` : ""}
+      ${b.en_attente ? `<p class="hint">${pluriel(b.en_attente, "fiche ou objet")} changé${b.en_attente > 1 ? "s" : ""} ici attend${b.en_attente > 1 ? "ent" : ""} ${s.ecart === "serveur_recent" ? "la mise à jour de cette application" : "la mise à jour du serveur"} : rien n'est perdu, tout partira ensuite.</p>` : ""}
+      ${b.recus_en_attente ? `<p class="hint">${pluriel(b.recus_en_attente, "changement")} du serveur attend${b.recus_en_attente > 1 ? "ent" : ""} une version plus récente de cette application pour s'appliquer ici.</p>` : ""}
+      ${s.ecart === "serveur_recent" ? `<div class="ligne"><button class="primary" id="sy-maj">⬆ Mettre à jour l'application…</button></div>` : ""}
       <p class="hint">Copie « ${esc(d.nom_copie)} » de <code>${esc(d.url)}</code>, compte <b>${esc(d.compte)}</b>. Elle échange toute seule toutes les 30 secondes ; hors ligne, vos changements attendent le retour de la connexion.</p>
       ${s.bilan && (s.bilan.envoyes || s.bilan.recus || s.bilan.images) ? `<p class="hint">Dernier échange : ${s.bilan.envoyes} champ(s) envoyé(s), ${s.bilan.recus} reçu(s)${s.bilan.images ? `, ${s.bilan.images} image(s)` : ""}.</p>` : ""}
       <div class="ligne"><button class="primary" id="sy-maintenant">⇅ Synchroniser maintenant</button><button class="ghost" id="sy-delier">Ne plus synchroniser</button></div>`;
@@ -82,6 +91,8 @@ export async function mount(el) {
       } catch (err) { toast(err.message, true); }
       await rafraichir();
     };
+    const maj = $("#sy-maj", box);
+    if (maj) maj.onclick = () => allerAuxMisesAJour();
     armerDelier(box);
     return d;
   };
@@ -98,7 +109,7 @@ export async function mount(el) {
     const box = $("#sy-conflits", el);
     const { conflits: l } = await api("GET", "/api/conflits");
     box.innerHTML = `<h3>Conflits${l.length ? ` <span class="n">${l.length}</span>` : ""}</h3>` + (l.length
-      ? `<p class="hint">Rien n'est bloqué : la valeur du serveur est en place partout, la vôtre attend ici. Choisissez.</p>` +
+      ? `<p class="hint">Rien n'est bloqué : le reste se synchronise, et ces valeurs attendent ici votre choix.</p>` +
         l.map(c => {
           const [quoi, garder, laisser] = expliquer(c);
           const fiche = c.nom ? lienFiche({ id: +c.cle, nom: c.nom, type: c.type }) : "";

@@ -296,7 +296,7 @@ func main() {
 		}
 	}
 	if *modeServeur {
-		opt.Dialogue, opt.Config = nil, nil
+		opt.Dialogue, opt.Config, opt.VeilleMaj = nil, nil, true
 		if opt.Comptes, err = comptes.Ouvrir(filepath.Join(dossier, "comptes.json")); err != nil {
 			fatal("Impossible de lire les comptes : %v", err)
 		}
