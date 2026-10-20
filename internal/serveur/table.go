@@ -54,7 +54,7 @@ func (s *Serveur) vieDe(e store.Entite) *viePJ {
 	if err != nil || !existe {
 		return nil
 	}
-	v := &viePJ{Pv: f.Pv, PvMax: f.Pv, Defense: f.Defense, Init: f.Init, Pc: f.Pc, PcMax: f.PcMax, Pr: f.Pr, PrMax: f.PrMax, Pm: f.Pm, PmMax: f.PmMax}
+	v := &viePJ{Pv: f.PvMax(), PvMax: f.PvMax(), Defense: f.Defense, Init: f.Init, Pc: f.Pc, PcMax: f.PcMax, Pr: f.Pr, PrMax: f.PrMax, Pm: f.Pm, PmMax: f.PmMaxTotal()}
 	if f.PvActuel != nil {
 		v.Pv = *f.PvActuel
 	}

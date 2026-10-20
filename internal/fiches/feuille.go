@@ -77,6 +77,44 @@ type Feuille struct {
 	Equipement     string     `json:"equipement"`
 	Bourse         Bourse     `json:"bourse"`
 	Notes          string     `json:"notes"` // notes du MJ : jamais montrées au joueur
+	// Effets : ce que les capacités atteintes ajoutent (« A + b »), calculé à la lecture, jamais
+	// rangé (Stockage).
+	Effets *Effets `json:"effets,omitempty"`
+
+	effets       []EffetVoie    // bonus des capacités atteintes, donnés par PrendreEffets
+	effetsConnus bool           // false : feuille relue sans la bibliothèque (synchronisation, restauration)
+	bonus        map[string]int // ce que les effets ajoutent, par clé de Effets.Base
+}
+
+// EffetVoie : un bonus permanent d'une capacité que le PJ a atteinte, repris de la bibliothèque. Il
+// vaut Valeur (× Rang, le rang atteint dans la voie, si ParRang), + le niveau si Niveau, + le
+// modificateur de Carac.
+type EffetVoie struct {
+	Cible    string
+	Valeur   int
+	ParRang  bool
+	Niveau   bool
+	Carac    string
+	Rang     int
+	Capacite string
+	Voie     string
+	RangCapa int // rang de la capacité dans sa voie
+}
+
+// Effets : pour chaque valeur que les capacités changent (FOR…CHA, def, init, pv, pm, rd, att_C,
+// att_D, att_M), sa valeur sans elles (Base), ce qu'elles ajoutent (Bonus, non nul), et le détail.
+type Effets struct {
+	Base   map[string]int `json:"base"`
+	Bonus  map[string]int `json:"bonus"`
+	Detail []EffetDetail  `json:"detail"`
+}
+
+type EffetDetail struct {
+	Cible    string `json:"cible"`
+	Valeur   int    `json:"valeur"`
+	Capacite string `json:"capacite"`
+	Voie     string `json:"voie"`
+	Rang     int    `json:"rang"`
 }
 
 var reDe = regexp.MustCompile(`^d\d{1,3}$`)
@@ -113,10 +151,26 @@ func FeuilleNeuve(rg *regles.Feuille) *Feuille {
 // NormaliserFeuille valide une feuille et recalcule ses valeurs dérivées. niveau est celui de la
 // fiche du PJ ; rg, les règles de l'univers (nil : aucune borne).
 func NormaliserFeuille(raw []byte, niveau int, rg *regles.Feuille) (*Feuille, error) {
+	return normaliser(raw, niveau, rg, nil, true)
+}
+
+// NormaliserFeuilleAvec : de même, avec les bonus des capacités que le PJ a atteintes.
+func NormaliserFeuilleAvec(raw []byte, niveau int, rg *regles.Feuille, effets []EffetVoie) (*Feuille, error) {
+	return normaliser(raw, niveau, rg, effets, true)
+}
+
+// RelireFeuille : une feuille rangée, relue sans règles ni bibliothèque. Les PV et les PM actuels ne
+// sont pas ramenés sous leur maximum, que les bonus des capacités peuvent dépasser.
+func RelireFeuille(raw []byte, niveau int) (*Feuille, error) {
+	return normaliser(raw, niveau, nil, nil, false)
+}
+
+func normaliser(raw []byte, niveau int, rg *regles.Feuille, effets []EffetVoie, connus bool) (*Feuille, error) {
 	f := FeuilleNeuve(rg)
 	if err := decoder(raw, f); err != nil {
 		return nil, err
 	}
+	f.effets, f.effetsConnus = effets, connus
 	if rg == nil {
 		rg = &regles.Feuille{}
 	}
@@ -211,31 +265,145 @@ func NormaliserFeuille(raw []byte, niveau int, rg *regles.Feuille) (*Feuille, er
 	return f, nil
 }
 
-// BasesAttaque : niveau + modificateur + divers, pour chaque type d'attaque.
-func (f *Feuille) BasesAttaque(niveau int) map[string]int {
-	return map[string]int{
-		"C": niveau + f.Carac.FOR + f.AttDivers.C,
-		"D": niveau + f.Carac.DEX + f.AttDivers.D,
-		"M": niveau + f.Carac.Get(f.CaracMagie) + f.AttDivers.M,
-	}
+// PrendreEffets donne à la feuille les bonus des capacités que le PJ a atteintes ; Deriver les
+// applique ensuite.
+func (f *Feuille) PrendreEffets(effets []EffetVoie) {
+	f.effets, f.effetsConnus = effets, true
 }
 
-// Deriver recalcule modificateurs, initiative, DEF et bonus d'attaque, et borne les ressources.
-func (f *Feuille) Deriver(niveau int, rg *regles.Feuille) {
+// calcul : les valeurs dérivées d'une feuille, avec les bonus donnés (par clé de Effets.Base).
+type calcul struct {
+	valeurs    Valeurs
+	carac      Carac
+	def, init  int
+	pv, pm, rd int
+	attaque    map[string]int
+}
+
+func (f *Feuille) calculer(niveau int, rg *regles.Feuille, bonus map[string]int) calcul {
+	c := calcul{}
 	for _, k := range Caracs {
-		f.Carac.Set(k, Modificateur(f.Valeurs.Get(k)))
+		c.valeurs.Set(k, f.Valeurs.Get(k)+bonus[k])
+		c.carac.Set(k, Modificateur(c.valeurs.Get(k)))
 	}
-	f.Init = f.Valeurs.DEX + f.InitDivers
-	f.Defense = rg.DefenseBase + f.Carac.DEX + f.Armure.Bonus + f.Bouclier.Bonus + f.DefDivers
-	b := f.BasesAttaque(niveau)
+	c.init = c.valeurs.DEX + f.InitDivers + bonus["init"]
+	c.def = rg.DefenseBase + c.carac.DEX + f.Armure.Bonus + f.Bouclier.Bonus + f.DefDivers + bonus["def"]
+	c.pv, c.pm, c.rd = f.Pv+bonus["pv"], f.PmMax+bonus["pm"], f.Rd+bonus["rd"]
+	c.attaque = map[string]int{
+		"C": niveau + c.carac.FOR + f.AttDivers.C + bonus["att_C"],
+		"D": niveau + c.carac.DEX + f.AttDivers.D + bonus["att_D"],
+		"M": niveau + c.carac.Get(f.CaracMagie) + f.AttDivers.M + bonus["att_M"],
+	}
+	return c
+}
+
+// carte : les valeurs que les capacités peuvent changer, par clé.
+func (c calcul) carte() map[string]int {
+	m := map[string]int{"def": c.def, "init": c.init, "pv": c.pv, "pm": c.pm, "rd": c.rd}
+	for _, k := range Caracs {
+		m[k] = c.valeurs.Get(k)
+	}
+	for t, v := range c.attaque {
+		m["att_"+t] = v
+	}
+	return m
+}
+
+// clesCible : les clés de Effets.Base qu'une cible d'effet augmente.
+func clesCible(cible string) []string {
+	switch cible {
+	case "att":
+		return []string{"att_C", "att_D", "att_M"}
+	case "att_c", "att_d", "att_m":
+		return []string{"att_" + strings.ToUpper(cible[4:])}
+	}
+	return []string{cible}
+}
+
+// resoudre : la valeur de chaque effet. Ceux qui changent une caractéristique d'abord, avec les
+// modificateurs sans effet ; les autres avec les caractéristiques changées.
+func (f *Feuille) resoudre(niveau int) (map[string]int, []EffetDetail) {
+	bonus, detail := map[string]int{}, []EffetDetail{}
+	valeur := func(e EffetVoie, carac Carac) int {
+		v := e.Valeur
+		if e.ParRang {
+			v *= e.Rang
+		}
+		if e.Niveau {
+			v += niveau
+		}
+		if e.Carac != "" {
+			v += carac.Get(e.Carac)
+		}
+		return v
+	}
+	var carac Carac
+	for _, k := range Caracs {
+		carac.Set(k, Modificateur(f.Valeurs.Get(k)))
+	}
+	for passe := range 2 {
+		for _, e := range f.effets {
+			if dans(Caracs, e.Cible) != (passe == 0) {
+				continue
+			}
+			v := valeur(e, carac)
+			for _, k := range clesCible(e.Cible) {
+				bonus[k] += v
+			}
+			detail = append(detail, EffetDetail{Cible: e.Cible, Valeur: v, Capacite: e.Capacite, Voie: e.Voie, Rang: e.RangCapa})
+		}
+		for _, k := range Caracs {
+			carac.Set(k, Modificateur(f.Valeurs.Get(k)+bonus[k]))
+		}
+	}
+	return bonus, detail
+}
+
+// Deriver recalcule modificateurs, initiative, DEF et bonus d'attaque, avec les bonus des
+// capacités, et borne les ressources. Les valeurs saisies (caractéristiques, PV max, PM max, RD)
+// ne changent pas : leurs totaux se lisent par PvMax, PmMaxTotal, RdTotal et ValeurTotale.
+func (f *Feuille) Deriver(niveau int, rg *regles.Feuille) {
+	bonus, detail := f.resoudre(niveau)
+	t := f.calculer(niveau, rg, bonus)
+	f.Carac, f.Init, f.Defense = t.carac, t.init, t.def
 	for i := range f.Attaques {
-		f.Attaques[i].Bonus = b[f.Attaques[i].Type] + f.Attaques[i].Mod
+		f.Attaques[i].Bonus = t.attaque[f.Attaques[i].Type] + f.Attaques[i].Mod
 	}
+	f.Effets, f.bonus = nil, map[string]int{}
+	if len(detail) > 0 {
+		base, total := f.calculer(niveau, rg, nil).carte(), t.carte()
+		for k, v := range total {
+			if d := v - base[k]; d != 0 {
+				f.bonus[k] = d
+			}
+		}
+		f.Effets = &Effets{Base: base, Bonus: f.bonus, Detail: detail}
+	}
+	// relue sans la bibliothèque, une feuille garde ses PV et ses PM actuels : ils peuvent dépasser
+	// le maximum saisi, grâce aux capacités
 	if f.PvActuel != nil {
-		v := max(0, min(f.Pv, *f.PvActuel))
+		v := max(0, *f.PvActuel)
+		if f.effetsConnus {
+			v = min(t.pv, v)
+		}
 		f.PvActuel = &v
 	}
-	f.Pc, f.Pr, f.Pm = min(f.Pc, f.PcMax), min(f.Pr, f.PrMax), min(f.Pm, f.PmMax)
+	if f.effetsConnus {
+		f.Pm = min(f.Pm, t.pm)
+	}
+	f.Pc, f.Pr = min(f.Pc, f.PcMax), min(f.Pr, f.PrMax)
+}
+
+// PvMax, PmMaxTotal, RdTotal, ValeurTotale : les valeurs saisies, avec les bonus des capacités.
+func (f *Feuille) PvMax() int                { return f.Pv + f.bonus["pv"] }
+func (f *Feuille) PmMaxTotal() int           { return f.PmMax + f.bonus["pm"] }
+func (f *Feuille) RdTotal() int              { return f.Rd + f.bonus["rd"] }
+func (f *Feuille) ValeurTotale(k string) int { return f.Valeurs.Get(k) + f.bonus[k] }
+
+// Stockage : la feuille telle qu'elle se range, sans ce que la bibliothèque y ajoute.
+func (f Feuille) Stockage() []byte {
+	f.Effets = nil
+	return f.JSON()
 }
 
 // PourJoueur renvoie la feuille telle que le joueur la voit : sans les notes du MJ.
