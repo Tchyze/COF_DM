@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/Tchyze/cof_dm/internal/combat"
 	"github.com/Tchyze/cof_dm/internal/fiches"
 	"github.com/Tchyze/cof_dm/internal/reference"
 	"github.com/Tchyze/cof_dm/internal/store"
@@ -18,6 +19,7 @@ import (
 func (s *Serveur) routesFeuille() {
 	s.mux.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLire)
 	s.mux.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrire)
+	s.mux.HandleFunc("POST /api/feuilles/nouveau-jour", s.nouveauJour)
 }
 
 // niveauDe : le niveau du PJ, lu sur sa fiche (1 s'il n'est pas renseigné).
@@ -51,6 +53,51 @@ func (s *Serveur) feuilleDe(e store.Entite) (f *fiches.Feuille, modifie float64,
 	return f, modifie, true, nil
 }
 
+// nouveauJour : les capacités « par jour » des PJ redeviennent utilisables. {"pj": [ids]} : ces PJ
+// seulement (absent : tous ceux qui ont une feuille).
+func (s *Serveur) nouveauJour(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Pj []int64 `json:"pj"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	ids := in.Pj
+	if len(ids) == 0 {
+		liste, err := s.store.Lister(store.Filtre{Type: "pj"})
+		if err != nil {
+			erreurStore(w, err)
+			return
+		}
+		for _, x := range liste {
+			ids = append(ids, x.ID)
+		}
+	}
+	n := 0
+	for _, id := range ids {
+		e, err := s.store.Lire(id)
+		if err != nil || e.Type != "pj" {
+			continue
+		}
+		raw, _, err := s.store.LireFeuille(id)
+		if err != nil {
+			continue
+		}
+		f, err := fiches.RelireFeuille(raw, niveauDe(e))
+		if err != nil || f.RemettreAZero("jour") == 0 {
+			continue
+		}
+		if _, err := s.store.EcrireFeuille(id, f.Stockage(), 0, auteurDe(r)); err != nil {
+			erreurStore(w, err)
+			return
+		}
+		s.joueurs.fiche(id)
+		n++
+	}
+	repondre(w, 200, map[string]int{"feuilles": n})
+}
+
 // effetsDe : les bonus permanents des capacités atteintes dans les voies d'une feuille qui sont
 // liées à la bibliothèque (même ref, sinon même nom). Une voie libre n'en donne aucun.
 func (s *Serveur) effetsDe(voies []fiches.Voie) []fiches.EffetVoie {
@@ -70,6 +117,37 @@ func (s *Serveur) effetsDe(voies []fiches.Voie) []fiches.EffetVoie {
 				out = append(out, fiches.EffetVoie{Cible: b.Cible, Valeur: b.Valeur, ParRang: b.ParRang, Niveau: b.Niveau, Carac: b.Carac,
 					Rang: v.Rang, Capacite: c.Nom, Voie: lib.Nom, RangCapa: r + 1})
 			}
+		}
+	}
+	return out
+}
+
+// capacitesActives : les capacités de la bibliothèque atteintes par le PJ qui ont une action en
+// combat ou des utilisations comptées, avec ce qui en a déjà servi (sur la feuille).
+func (s *Serveur) capacitesActives(f *fiches.Feuille) []combat.CapaciteActive {
+	if len(f.Voies) == 0 {
+		return nil
+	}
+	ref := s.lireReference()
+	var out []combat.CapaciteActive
+	for _, v := range f.Voies {
+		lib := voieLiee(ref, v)
+		if lib == nil {
+			continue
+		}
+		for r := 0; r < v.Rang && r < len(lib.Rangs); r++ {
+			c := lib.Rangs[r]
+			if c.Nom == "" || (c.Action == nil && c.Utilisations == nil) {
+				continue
+			}
+			a := combat.CapaciteActive{Cle: fiches.CleCapacite(lib.Nom, r+1), Nom: c.Nom, Voie: lib.Nom, Rang: r + 1, Texte: c.Texte, Limitee: c.Limitee, Action: c.Action}
+			if u := c.Utilisations; u != nil {
+				a.Fois, a.Par = u.Fois, u.Par
+				if u.Par != "combat" {
+					a.Deja = f.Utilisations[a.Cle].N
+				}
+			}
+			out = append(out, a)
 		}
 	}
 	return out
@@ -98,6 +176,15 @@ func (s *Serveur) repondreFeuille(w http.ResponseWriter, e store.Entite, f fiche
 	_ = json.Unmarshal(f.JSON(), &m)
 	m["entite"], m["niveau"], m["modifie"], m["existe"] = e.ID, niveauDe(e), modifie, existe
 	m["regles"] = orVide(s.lireRegles().Personnage)
+	// les capacités atteintes dont les utilisations se comptent, avec ce qui en a servi
+	comptees := []combat.CapaciteActive{}
+	for _, a := range s.capacitesActives(&f) {
+		if a.Fois > 0 {
+			a.Action, a.Texte = nil, ""
+			comptees = append(comptees, a)
+		}
+	}
+	m["comptees"] = comptees
 	repondre(w, 200, m)
 }
 

@@ -171,9 +171,11 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         <div class="carac">${CARACS.map(k => `<span><small>${k}</small>${AB(k, F.valeurs[k])} (${signe(F.carac[k])})</span>`).join("")}</div>
         ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b> ${E().bonus["att_" + a.type] ? `${signe(a.bonus - E().bonus["att_" + a.type])}${plus("att_" + a.type)}` : signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
         ${peutEcrire && doublons().length ? `<p class="hint fp-doublon">⚠ À vérifier : ${doublons().map(esc).join(", ")} s'ajoute${doublons().length > 1 ? "nt" : ""} aux bonus des capacités. Un bonus saisi à la main pour la même capacité compterait deux fois.</p>` : ""}
-        ${peutEcrire && R().repos?.length ? `<div class="ligne">${R().repos.map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}</div>` : ""}
+        ${peutEcrire && (R().repos?.length || comptees().length) ? `<div class="ligne">${(R().repos || []).map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}
+          ${comptees().some(x => x.par === "jour") ? `<button class="petit" id="fp-jour" title="Les capacités « par jour » redeviennent utilisables">☀ Nouveau jour</button>` : ""}</div>` : ""}
       </div>
       ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3>${grilleLecture()}` : ""}
+      ${utilisationsHTML()}
       ${F.capacites ? `<h3 style="margin-top:12px">Capacités</h3><div class="bst-texte">${esc(F.capacites)}</div>` : ""}
       ${F.equipement || bourse || F.armure?.nom || F.bouclier?.nom ? `<h3 style="margin-top:12px">Équipement</h3>
         ${[F.armure?.nom && `${F.armure.nom} (${signe(F.armure.bonus)} DEF)`, F.bouclier?.nom && `${F.bouclier.nom} (${signe(F.bouclier.bonus)} DEF)`].filter(Boolean).map(x => `<div>${esc(x)}</div>`).join("")}
@@ -192,6 +194,45 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
       if (await enregistrer(f)) lire();
     });
     $$("[data-repos]", box).forEach(b => b.onclick = () => reposer(R().repos[+b.dataset.repos]));
+    const jour = $("#fp-jour", box);
+    if (jour) jour.onclick = async () => {
+      const f = structuredClone(F);
+      if (!remettre(f, ["jour"])) { toast("Aucune capacité « par jour » n'avait servi."); return; }
+      if (await enregistrer(f, "Nouveau jour : capacités « par jour » rendues.")) lire();
+    };
+    // une capacité utilisée hors combat, ou remise à zéro
+    $$("[data-util]", box).forEach(b => b.onclick = async () => {
+      const x = comptees().find(c => c.cle === b.dataset.cle), f = structuredClone(F);
+      f.utilisations = { ...(f.utilisations || {}) };
+      const n = (f.utilisations[x.cle]?.n || 0) + (b.dataset.util === "plus" ? 1 : -Infinity);
+      if (n > 0) f.utilisations[x.cle] = { par: x.par, n: Math.min(n, x.fois) }; else delete f.utilisations[x.cle];
+      if (await enregistrer(f, b.dataset.util === "plus" ? `« ${x.nom} » utilisée.` : `« ${x.nom} » remise à zéro.`)) lire();
+    });
+  }
+
+  // capacités dont les utilisations se comptent (calculées par le serveur), et leur remise à zéro
+  const comptees = () => F.comptees || [];
+  function libPar(p) {
+    if (p === "combat") return "par combat";
+    if (p === "jour") return "par jour";
+    if (p === "main") return "à remettre à zéro à la main";
+    const c = p.slice(6), r = R().repos?.find(x => x.cle === c);
+    return `par ${(r?.libelle || c).toLowerCase()}`;
+  }
+  function remettre(f, pars) {
+    let n = 0;
+    for (const [k, u] of Object.entries(f.utilisations || {})) if (pars.includes(u.par)) { delete f.utilisations[k]; n++; }
+    return n;
+  }
+  function utilisationsHTML() {
+    const l = comptees();
+    if (!l.length) return "";
+    return `<h3 style="margin-top:12px">Utilisations</h3><ul class="fp-utils">${l.map(x => {
+      const n = x.par === "combat" ? null : (F.utilisations?.[x.cle]?.n || 0);
+      return `<li><b>${esc(x.nom)}</b> <span class="hint">${esc(x.voie)}, rang ${x.rang}</span> ·
+        ${n === null ? `${x.fois} ${libPar(x.par)} <span class="hint">(comptées dans le combat)</span>` : `<span class="${n >= x.fois ? "fp-epuise" : ""}">${n}/${x.fois}</span> ${esc(libPar(x.par))}`}
+        ${peutEcrire && n !== null ? `${n < x.fois ? `<button class="ghost petit" data-util="plus" data-cle="${esc(x.cle)}" title="Utilisée hors combat">＋1</button>` : ""}${n ? `<button class="ghost petit" data-util="zero" data-cle="${esc(x.cle)}" title="Remettre à zéro">↺</button>` : ""}` : ""}</li>`;
+    }).join("")}</ul>`;
   }
 
   // un repos, tel que les règles de l'univers le décrivent : ce qu'il coûte, ce qu'il rend
@@ -213,6 +254,9 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
       detail = ` : ${termes.map(x => x[0]).join(" ")} = ${gain} PV (${avant} → ${f.pv_actuel})`;
     }
     if (r.pm_max) f.pm = pmMax();
+    // il rend les capacités « par » ce repos, et celles « par jour » s'il vaut un nouveau jour
+    const rendues = remettre(f, [`repos:${r.cle}`, ...(r.nouveau_jour ? ["jour"] : [])]);
+    if (rendues) detail += ` ; ${rendues} capacité${rendues > 1 ? "s" : ""} de nouveau utilisable${rendues > 1 ? "s" : ""}`;
     if (await enregistrer(f, `${r.libelle}${detail}`)) lire();
   }
 

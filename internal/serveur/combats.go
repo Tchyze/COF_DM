@@ -65,7 +65,7 @@ type salle struct {
 	etat    *combat.Etat
 	hist    [][]byte
 	ecrans  map[*ecran]bool
-	reporte map[int64][3]int // dernières valeurs (PV, PC, PM) reportées sur les feuilles des PJ
+	reporte map[int64]string // dernières valeurs (PV, PC, PM, utilisations) reportées sur les feuilles des PJ
 }
 
 // ecran : un appareil qui suit le combat.
@@ -99,7 +99,7 @@ func (h *salles) salle(id int64) (*salle, error) {
 	if err != nil {
 		return nil, err
 	}
-	sa := &salle{etat: st, ecrans: map[*ecran]bool{}, reporte: map[int64][3]int{}}
+	sa := &salle{etat: st, ecrans: map[*ecran]bool{}, reporte: map[int64]string{}}
 	h.ouvertes[id] = sa
 	return sa, nil
 }
@@ -213,15 +213,22 @@ func (h *salles) agir(id int64, a combat.Action, auteur string) (sa *salle, err 
 	return sa, nil
 }
 
-// reporterSurFeuilles recopie les PV, les points de chance et les points de mana des PJ du combat
-// sur leur feuille de personnage (annulation comprise). deja : dernières valeurs écrites, pour ne
-// réécrire que les feuilles qui changent.
-func (s *Serveur) reporterSurFeuilles(st *combat.Etat, deja map[int64][3]int) {
+// reporterSurFeuilles recopie les PV, les points de chance, les points de mana et les utilisations
+// des capacités (hors « par combat ») des PJ du combat sur leur feuille de personnage (annulation
+// comprise). deja : dernières valeurs écrites, pour ne réécrire que les feuilles qui changent.
+func (s *Serveur) reporterSurFeuilles(st *combat.Etat, deja map[int64]string) {
 	for _, c := range st.Cbts {
 		if c.Ref == nil || c.Ref.Kind != "pj" || c.Ref.ID == 0 {
 			continue
 		}
-		valeurs := [3]int{c.Pv, c.Pc, c.Pm}
+		usages := map[string]fiches.Utilisation{}
+		for _, a := range c.Actives {
+			if a.Fois > 0 && a.Par != "combat" {
+				usages[a.Cle] = fiches.Utilisation{Par: a.Par, N: a.Deja + c.Usages[a.Cle]} // N = 0 : rendue par « Annuler »
+			}
+		}
+		u, _ := json.Marshal(usages)
+		valeurs := fmt.Sprintf("%d %d %d %s", c.Pv, c.Pc, c.Pm, u)
 		if v, ok := deja[c.Ref.ID]; ok && v == valeurs {
 			continue
 		}
@@ -237,12 +244,32 @@ func (s *Serveur) reporterSurFeuilles(st *combat.Etat, deja map[int64][3]int) {
 		pv, avecPv := m["pv_actuel"].(float64)
 		pc, _ := m["pc"].(float64)
 		pm, _ := m["pm"].(float64)
-		if avecPv && int(pv) == c.Pv && int(pc) == c.Pc && (c.PmMax == 0 || int(pm) == c.Pm) {
+		ancien, _ := m["utilisations"].(map[string]any)
+		if ancien == nil {
+			ancien = map[string]any{}
+		}
+		changeUsages := false
+		for k, x := range usages {
+			a, _ := ancien[k].(map[string]any)
+			switch {
+			case x.N == 0 && a != nil:
+				delete(ancien, k)
+				changeUsages = true
+			case x.N > 0 && (a == nil || a["n"] != float64(x.N) || a["par"] != x.Par):
+				ancien[k], changeUsages = map[string]any{"par": x.Par, "n": x.N}, true
+			}
+		}
+		if avecPv && int(pv) == c.Pv && int(pc) == c.Pc && (c.PmMax == 0 || int(pm) == c.Pm) && !changeUsages {
 			continue // la feuille est déjà à jour
 		}
 		m["pv_actuel"], m["pc"] = c.Pv, c.Pc
 		if c.PmMax > 0 { // un PJ sans mana garde sa feuille telle quelle
 			m["pm"] = c.Pm
+		}
+		if len(ancien) > 0 {
+			m["utilisations"] = ancien
+		} else {
+			delete(m, "utilisations")
 		}
 		data, _ := json.Marshal(m)
 		if _, err := s.store.EcrireFeuille(c.Ref.ID, data, 0, ""); err != nil {
@@ -295,7 +322,7 @@ func (s *Serveur) ficheCombat(kind string, id int64) (*combat.FicheCombat, error
 		// avec les bonus des capacités atteintes
 		f := combat.FicheCombat{ID: id, Nom: e.Nom, Init: fe.Init, Defense: fe.Defense, Pv: fe.PvMax(), PvActuel: fe.PvActuel,
 			Rd: fe.RdTotal(), Crit: fe.Crit, Pc: fe.Pc, Pm: fe.Pm, PmMax: fe.PmMaxTotal(), Attaques: fe.Attaques, Capacites: fe.Capacites,
-			Voies: capacitesAcquises(fe.Voies), Carac: fe.Carac}
+			Voies: capacitesAcquises(fe.Voies), Carac: fe.Carac, Actives: s.capacitesActives(fe)}
 		f.Valeurs = &struct {
 			SAG int `json:"SAG"`
 		}{fe.ValeurTotale("SAG")}

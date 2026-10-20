@@ -567,6 +567,9 @@ a.version-app[href]:hover{color:var(--muted)}
 .fp-voies{display:flex;flex-direction:column;gap:10px}
 .fp-bonus{color:var(--ok);font-weight:600;cursor:help}
 .fp-doublon{color:var(--warn)}
+.fp-utils{margin:4px 0 0;padding-left:1.2em;display:flex;flex-direction:column;gap:2px}
+.fp-utils button{min-height:0;padding:0 7px;margin-left:4px}
+.fp-epuise{color:var(--mort);font-weight:600}
 .fp-vbloc{display:grid;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:var(--sunk)}
 .fp-vcoin,.fp-vcoin2,.fp-vrang{background:var(--accent);color:var(--accent-ink)}
 .fp-vrang{display:flex;align-items:center;justify-content:center;font-family:var(--f-display);font-weight:600;font-size:.9rem;border-top:1px dotted color-mix(in srgb,var(--accent-ink) 35%,transparent)}

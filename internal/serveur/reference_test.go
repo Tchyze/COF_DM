@@ -260,3 +260,75 @@ func TestReferenceEffetsFeuille(t *testing.T) {
 		t.Fatalf("fiche de combat : %+v %v", fc, err)
 	}
 }
+
+// En combat, un PJ arrive avec ses capacités de la bibliothèque : une attaque de capacité compte
+// une utilisation ; une capacité sans jet se valide (PM, soin, dégâts, état) ; les utilisations
+// « par jour » vont sur la feuille et repartent avec un nouveau jour.
+func TestCapacitesEnCombat(t *testing.T) {
+	b := nouveau(t)
+	if c, v := b.local("POST", "/api/reference/voies", map[string]any{"nom": "Voie du gué", "rangs": []any{
+		map[string]any{"nom": "Trait d'eau", "action": map[string]any{"genre": "sort", "cout_pm": 1, "attaque": "M", "degats": "1d6"}, "utilisations": map[string]any{"fois": 2, "par": "combat"}},
+		map[string]any{"nom": "Halte", "action": map[string]any{"genre": "soin", "soin": "3"}, "utilisations": map[string]any{"fois": 1, "par": "jour"}},
+		map[string]any{"nom": "Brume", "action": map[string]any{"genre": "etat", "cout_pm": 2, "etat": "Embrumé"}}}}); c != 201 {
+		t.Fatalf("voie : %d %v", c, v)
+	}
+	pj := b.fiche("pj", "Aldric", map[string]any{"statut": "actif"})
+	feuille := fmt.Sprintf("/api/entites/%v/feuille", pj)
+	b.local("PUT", feuille, map[string]any{"pv": 10, "pv_actuel": 5, "pm": 5, "pm_max": 5, "voies": []any{map[string]any{"nom": "Voie du gué", "rang": 3, "capacites": []any{"Trait d'eau", "Halte", "Brume"}}}})
+	c, v := b.local("POST", "/api/combats", map[string]any{"nom": "Au gué", "pj": []any{pj}})
+	if c != 201 {
+		t.Fatalf("combat : %d %v", c, v)
+	}
+	u := fmt.Sprintf("/api/combats/%v/actions", v["combat"].(map[string]any)["id"])
+	_, v = b.local("POST", u, map[string]any{"type": "ajouter", "fiche": map[string]any{"nom": "Gobelin", "pv": 30, "defense": 5}, "camp": "ennemi"})
+	l := cbts(v)
+	aldric, gob := l["Aldric"]["id"], l["Gobelin"]["id"]
+	if a := l["Aldric"]["actives"].([]any); len(a) != 3 || a[0].(map[string]any)["cle"] != "voie du gue#1" {
+		t.Fatalf("capacités actives : %v", a)
+	}
+	attaque := map[string]any{"type": "attaque", "att": aldric, "cible": gob, "attaque": -1, "mode": "manuel", "nat": 15, "dm": "1", "act": "G", "cout_pm": 1, "capacite": "voie du gue#1"}
+	for i := range 2 {
+		if c, v := b.local("POST", u, attaque); c != 200 {
+			t.Fatalf("attaque de capacité n° %d : %d %v", i+1, c, v)
+		}
+	}
+	if c, v := b.local("POST", u, attaque); c != 422 || !strings.Contains(fmt.Sprint(v["detail"]), "plus d'utilisation") {
+		t.Fatalf("troisième attaque : %d %v", c, v)
+	}
+	// soin sur soi : 3 PV, une fois par jour, compté sur la feuille
+	c, v = b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": aldric, "capacite": "voie du gue#2", "soin": "3"})
+	if pv := cbts(v)["Aldric"]["pv"]; c != 200 || pv != float64(8) {
+		t.Fatalf("soin : %d %v %v", c, pv, v)
+	}
+	_, f := b.local("GET", feuille, nil)
+	if us := f["utilisations"].(map[string]any)["voie du gue#2"].(map[string]any); us["n"] != float64(1) || us["par"] != "jour" || f["pv_actuel"] != float64(8) {
+		t.Fatalf("utilisation reportée : %v, PV %v", f["utilisations"], f["pv_actuel"])
+	}
+	if c, _ := b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": aldric, "capacite": "voie du gue#2", "soin": "3"}); c != 422 {
+		t.Fatalf("second soin du jour : %d", c)
+	}
+	// annuler rend l'utilisation, sur la feuille aussi
+	b.local("POST", u, map[string]any{"type": "annuler"})
+	if _, f = b.local("GET", feuille, nil); f["utilisations"] != nil {
+		t.Fatalf("après annulation : %v", f["utilisations"])
+	}
+	b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": aldric, "capacite": "voie du gue#2", "soin": "3"})
+	// état, PM dépensés ; PM manquants et formule refusée : rien n'est dépensé
+	_, v = b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": gob, "capacite": "voie du gue#3", "cout_pm": 2, "etat": "Embrumé", "duree": 2})
+	if l := cbts(v); l["Gobelin"]["etats"].(map[string]any)["Embrumé"] == nil || l["Aldric"]["pm"] != float64(1) {
+		t.Fatalf("état : %v, PM %v", l["Gobelin"]["etats"], l["Aldric"]["pm"])
+	}
+	if c, _ := b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": gob, "capacite": "voie du gue#3", "cout_pm": 2, "etat": "Embrumé"}); c != 422 {
+		t.Fatalf("PM manquants : %d", c)
+	}
+	if c, _ := b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": gob, "capacite": "voie du gue#3", "dm": "beaucoup"}); c != 422 {
+		t.Fatalf("formule refusée : %d", c)
+	}
+	// un nouveau jour : « Halte » redevient utilisable
+	if c, v := b.local("POST", "/api/feuilles/nouveau-jour", map[string]any{}); c != 200 || v["feuilles"] != float64(1) {
+		t.Fatalf("nouveau jour : %d %v", c, v)
+	}
+	if _, f = b.local("GET", feuille, nil); f["utilisations"] != nil {
+		t.Fatalf("après un nouveau jour : %v", f["utilisations"])
+	}
+}

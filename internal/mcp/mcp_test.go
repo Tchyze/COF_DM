@@ -293,6 +293,10 @@ func TestParcours(t *testing.T) {
 		t.Fatalf("filtre par étiquette : %v", v)
 	}
 
+	if j := b.json("nouveau_jour", nil); j["feuilles"] != float64(0) {
+		t.Fatalf("nouveau_jour : %v", j)
+	}
+
 	// lectures sans argument : aucune ne doit échouer sur un univers presque vide
 	for _, n := range []string{"statistiques", "chronologie", "partie_en_cours", "bestiaire", "combats", "liens_morts"} {
 		b.outil(n, nil, false)
