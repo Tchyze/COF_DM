@@ -2,7 +2,7 @@
 
 Fichier de passation : ce qui a été fait, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail sur un autre poste, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 20 octobre 2026 (bureau et serveur de versions différentes : PR 7 à 9, en essai ; décisions sur les voies saisies par le MJ) ; avant, 19 octobre 2026 (version 1.2.2 publiée ; Claude depuis Paramètres : PR 6 du dépôt public ; fonctionnalités optionnelles : PR 5 ; aides de jeu, projet 9, lot 1 : PR 4 ; port du serveur MCP : PR 3) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
+Dernière mise à jour : 20 octobre 2026 (voies saisies par le MJ : décisions complétées, lot 1 en PR 10, en essai ; bureau et serveur de versions différentes : PR 7 à 9, en essai) ; avant, 19 octobre 2026 (version 1.2.2 publiée ; Claude depuis Paramètres : PR 6 du dépôt public ; fonctionnalités optionnelles : PR 5 ; aides de jeu, projet 9, lot 1 : PR 4 ; port du serveur MCP : PR 3) ; avant, 16 octobre 2026, avec les points 11 et 12 de l'audit (PR 30 et 31) la revue des écrans des PR 5 à 16 (PR 32) les points mineurs de l'audit (PR 33) le dépôt d'un univers sur le serveur (PR 35) le choix d'univers par onglet (PR 36) la synchronisation hors ligne (PR 37 à 41), l'export vers Obsidian (PR 42) le serveur MCP (PR 43), le lanceur de dés (PR 44), les sorts et PM en combat (PR 45), la préparation de séance (PR 46) et l'après-séance (PR 47), puis le bureau en simple éditeur avec son mode de travail (local ou serveur, 18 octobre 2026) : le P1 de `PROJETS.md` est fait, hors restes à vérifier. La fusion de tracker_COF est terminée ; `main` est la seule branche, dans les deux dépôts.
 
 ## Dépôt public (18 octobre 2026)
 
@@ -31,6 +31,7 @@ Les numéros ci-dessous sont ceux de `Tchyze/COF_DM` (repartis de #1) ; ceux des
 | 7 | **Versions, lot 1** : numéros distincts de la version de l'application, `VersionProtocole` et `VersionModele` (modèle 1 = 1.2.2), gardés par une empreinte du modèle (`TestVersionModele`). Un univers ou un export d'un modèle plus récent est refusé à l'ouverture, sans y toucher (avant : `reparer()` rangeait les champs inconnus dans les notes et faisait redescendre la version des données). `/api/sante` et `/api/mes-univers` publient version et numéros ; le bureau annonce les siens à chaque requête, et le serveur les note par copie. Pas de copie tirée d'un serveur plus récent ; pas d'envoi d'univers à un serveur d'un autre modèle. |
 | 8 | **Versions, lot 2** (empilée sur la 7) : serveur plus récent, rien ne s'échange (état `version`, mettre le bureau à jour) ; serveur plus ancien, **réception seule**, et les changements du bureau partent après la mise à jour du serveur. Le serveur répond `426` à un bureau plus ancien et `409` à un bureau plus récent qui enverrait des changements. Deux pertes de données corrigées : un objet refusé que le serveur n'a pas n'est plus supprimé de la copie (un seul conflit, champ `*`, à renvoyer ou retirer) ; un changement reçu que la copie ne sait pas appliquer attend dans `sync_recus` au lieu d'être sauté. |
 | 9 | **Versions, lot 3** (empilée sur la 8) : zone en bas à gauche (« Mise à jour nécessaire », « Serveur à mettre à jour »), page Synchronisation, Paramètres → Version du serveur pour l'administrateur (dernière version publiée, commande de mise à jour, postes reliés et leur version ; `GET /api/univers/version`). Image Docker : version tirée de git (`1.2.2+3.45e384f`). Vu dans Chrome à 1300 et 390 px, sans erreur de console, avec un serveur et deux bureaux de modèles différents (binaires de test au modèle 2). |
+| 10 | **Voies, lot 1** (empilée sur la 9) : profils, peuples et voies rangés un par un (documents `profils`, `peuples`, `voies` ; `internal/store/reference.go`), `VersionModele` à 2. Reprise de l'ancien réglage `reference` à l'ouverture, à la restauration d'un ancien export et à la réception d'un serveur d'avant le modèle 2, sous un identifiant tiré de la `ref` ou du nom dans une plage réservée (copie 8191, plus attribuée) : bureau et serveur reprennent chacun de leur côté sans doublon. Modèle complet posé (étiquette, bonus, action, utilisations, modificateurs d'un peuple, 5 à 20 rangs), sans effet encore. Format `cof-dm-reference` v2 (l'ancien se lit encore) : `GET /api/reference/export`, import `?etiquette=`. Joueurs : `GET /api/reference?pj=` (voies de leur feuille, profil, peuple). Paramètres : étiquette à l'import, export. Un bureau sans numéros (1.2.2) est désormais plus ancien que le serveur. Vu dans Chrome à 1300 et 390 px. Préversion de test lancée sur la branche. |
 
 ## Pour reprendre sur un autre poste
 
@@ -77,15 +78,26 @@ Exigence ferme, pour que le logiciel se distribue sans problème. Ni liste, ni t
 
 ### Voies, capacités, profils et peuples saisis par le MJ (décisions du 20 octobre 2026)
 
-Reprise du projet 10 de `PROJETS.md` (« capacités des voies utilisables ») **sans aucune donnée des livres dans le dépôt** : le code ne garde qu'un **modèle vide** (la structure). Le MJ remplit ou importe tout le contenu dans son univers. Pas encore commencé.
+Reprise du projet 10 de `PROJETS.md` (« capacités des voies utilisables ») **sans aucune donnée des livres dans le dépôt** : le code ne garde qu'un **modèle vide** (la structure). Le MJ remplit ou importe tout le contenu dans son univers. Lot 1 en PR 10 (en essai).
 
 - **Éditeur dans l'application** (Paramètres → Bestiaire et règles) pour les **voies, capacités, profils et peuples** : créer, modifier, retirer à la main (aujourd'hui, seulement import JSON ou tout retirer).
 - **Officielle / maison** : une simple **étiquette** pour trier et filtrer, rien n'est verrouillé (contrairement au bestiaire).
 - **Bonus permanents** d'une capacité (PV, DEF, initiative, attaque, RD, caractéristique) : ajoutés d'office à la feuille quand le PJ a le rang, affichés **« A + b »** (A : la valeur de base, b : le bonus des capacités, **en vert**).
 - **En combat** : les capacités actives (sort, attaque spéciale, soin, état) **préremplissent** l'action (coût en PM, bonus, dégâts, état) ; le MJ valide toujours.
-- **Utilisations** : sur une capacité, « **x fois par** » combat, jour, heure, etc. (menu).
+- **Utilisations** : sur une capacité, « **x fois par** » combat, jour, repos (un choix par repos des règles de la feuille) ou à remettre à la main (menu). Pas de « par heure » : le jeu n'a pas d'heure. Les compteurs sont rangés sur la feuille ; « par combat » se remet à zéro à la fin du combat, « par jour » par un bouton « Nouveau jour » (feuille et écran du MJ), et les règles peuvent dire qu'un repos vaut un nouveau jour.
 - **Joueurs** : sur leur page, **tout l'arbre** de leurs voies en lecture seule, capacités acquises en surbrillance.
-- Choix technique proposé : profils, peuples et voies rangés **un par un** dans l'univers (et non plus en un seul réglage `reference`), pour que la synchronisation fusionne voie par voie ; le modèle passe à 2 (`VersionModele`, PR 7 à 9).
+- **Rangement** : profils, peuples et voies **un par un** dans l'univers (et non plus en un seul réglage `reference`), pour que la synchronisation fusionne voie par voie ; le modèle passe à 2 (`VersionModele`, PR 7 à 9). Fait (PR 10).
+- **Divers déjà saisis** : jamais modifiés d'office. En enregistrant un effet, l'éditeur dit combien de feuilles ont ce rang avec des « divers » non nuls (lien vers chacune) ; la feuille porte le même avertissement.
+- **Bonus** : PV max, PM max, DEF, initiative, attaque (C, D, M ou toutes), RD, valeur d'une caractéristique. Une valeur fixe, avec en option « × rang atteint dans la voie », « + niveau » et « + modificateur de caractéristique » ; au survol d'un bonus vert, son détail (quelle capacité, quel rang). Les bonus sous condition restent du texte.
+- **Feuille liée** : une voie de la feuille qui a sa `ref` affiche les capacités de la bibliothèque ; seules les voies libres gardent leur copie (et n'ont pas d'effet).
+- **Rangs** : selon `rang_max` des règles, 5 sans règles (fait : 5 à 20 rangs).
+- **Peuples** : modificateurs structurés pour l'affichage et la création d'un PJ, jamais ajoutés d'office à la feuille (fait).
+- **Import / export** : nouveau format `cof-dm-reference` v2 (l'ancien se lit encore), export à part, étiquette du fichier ou choisie à l'import (fait).
+- **Joueurs** : ils ne lisent de la bibliothèque que les voies de leur PJ, son profil et son peuple (fait). Feuille déverrouillée : le joueur monte de rang dans ses voies ou écrit une voie libre ; ajouter une voie de la bibliothèque reste au MJ.
+- **Voie retirée** de la bibliothèque : les feuilles qui s'en servent en gardent une copie, devenue voie libre ; un message dit combien avant de retirer.
+- **Combat** : seuls les PJ ont des capacités ; PNJ et monstres gardent leur texte.
+- **Claude (MCP)** : outils pour lire, créer et modifier voies, profils et peuples ; aucun pour les retirer.
+- **Découpage** : 1. rangement un par un, modèle 2, étiquette, reprise (PR 10) ; 2. l'éditeur dans Paramètres ; 3. les effets sur la feuille (« A + b ») ; 4. les capacités en combat, avec leurs utilisations ; 5. l'arbre des voies sur la page des joueurs.
 
 ### Bureau et serveur de versions différentes (décisions du 20 octobre 2026)
 
@@ -268,7 +280,7 @@ Reprise du projet 10 de `PROJETS.md` (« capacités des voies utilisables ») **
 
 ### Prochain chantier
 
-Le P1 de `PROJETS.md` est fait (PR 43 à 47), sauf le projet 6 (restes à vérifier, ci-dessous). Ensuite : le P2, à commencer par les aides de jeu poussées aux joueurs (projet 9). Les cartes (projets 7 et 8) sont reportées bien plus tard (décision du 18 octobre 2026 : le MJ utilise un logiciel à part). Les restes à vérifier (6) au fil de l'eau.
+**Voies saisies par le MJ** (projet 10, décisions ci-dessus) : lot 1 en PR 10, empilée sur les PR 7 à 9, en attente de l'essai du MJ ; ensuite le lot 2 (éditeur). Le P1 de `PROJETS.md` est fait (PR 43 à 47), sauf le projet 6 (restes à vérifier, ci-dessous). Le projet 9 (aides de jeu) a son lot 1 (PR 4). Les cartes (projets 7 et 8) sont reportées bien plus tard (décision du 18 octobre 2026 : le MJ utilise un logiciel à part). Les restes à vérifier (6) au fil de l'eau.
 
 ### Audit
 
