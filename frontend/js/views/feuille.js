@@ -3,11 +3,11 @@
 // d'attaque) ; les bornes, les valeurs de départ et les repos viennent des règles de l'univers,
 // jointes à la feuille (f.regles).
 import { $, $$, esc, api, toast } from "../ui.js";
+import { lignesEffets, libellePar, cle, voieLiee } from "../capacites.js";
 
 export const CARACS = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"];
 const TYPES = { C: "Contact", D: "Distance", M: "Magique" };
 const signe = n => (n >= 0 ? "+" : "−") + Math.abs(n);
-const cle = s => (s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[\s'’,-]+/g, " ").trim();
 const nomCap = c => c.nom ? c.nom + (c.limitee ? " (L)" : "") + (c.sort ? "*" : "") : "";
 
 /**
@@ -26,7 +26,6 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   // bonus des capacités atteintes, calculés par le serveur : « A + b », b en vert, détail au survol
   const E = () => F.effets || { base: {}, bonus: {}, detail: [] };
   const CLES = { att: ["att_C", "att_D", "att_M"], att_c: ["att_C"], att_d: ["att_D"], att_m: ["att_M"] };
-  const NOMS_CIBLE = { def: "DEF", init: "Init", pv: "PV max", pm: "PM max", rd: "RD", att: "attaques", att_c: "contact", att_d: "distance", att_m: "magique" };
   function plus(k) {
     const b = E().bonus[k];
     if (!b) return "";
@@ -70,7 +69,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   // étroit), une ligne par rang. Une voie liée à la bibliothèque (même ref, sinon même nom) en
   // montre les capacités ; une voie libre, celles saisies sur la feuille. Au survol (ou au toucher),
   // le texte du rang et ses effets.
-  const voieDeRef = v => REF.voies.find(x => (v.ref && x.ref === v.ref) || cle(x.nom) === cle(v.nom));
+  const voieDeRef = v => voieLiee(REF, v);
   const capacitesDe = v => voieDeRef(v)?.rangs || v.capacites.map(nom => ({ nom }));
   const parBloc = () => (box.clientWidth && box.clientWidth < 560 ? 1 : 3);
   let blocAffiche = 0;
@@ -102,23 +101,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   });
   let redessiner = null; // ce qu'il faut repeindre quand la grille change de nombre de colonnes
 
-  const CIBLES = { pv: "PV max", pm: "PM max", def: "DEF", init: "Initiative", att: "Attaques", att_c: "Attaque au contact", att_d: "Attaque à distance", att_m: "Attaque magique", rd: "RD" };
-  const GENRES = { sort: "Sort", attaque: "Attaque spéciale", soin: "Soin", etat: "État", autre: "Action" };
-  function utilisations(u) {
-    if (u.par === "main") return `${u.fois} fois, à remettre à zéro à la main`;
-    if (u.par.startsWith("repos:")) { const c = u.par.slice(6); return `${u.fois} fois par ${R().repos?.find(r => r.cle === c)?.libelle || c}`; }
-    return `${u.fois} fois par ${u.par}`;
-  }
   function detail(c, voie, r) {
-    const lignes = [];
-    for (const b of c.bonus || []) lignes.push(`${CIBLES[b.cible] || b.cible} ${signe(b.valeur)}${b.par_rang ? " × rang" : ""}${b.niveau ? " + niveau" : ""}${b.carac ? ` + mod. ${b.carac}` : ""}`);
-    if (c.action) {
-      const a = c.action;
-      lignes.push([GENRES[a.genre] || a.genre, a.cout_pm && `${a.cout_pm} PM`, a.attaque && `attaque ${(TYPES[a.attaque] || a.attaque).toLowerCase()}${a.bonus ? ` ${signe(a.bonus)}` : ""}`,
-        a.degats && `DM ${a.degats}`, a.soin && `soigne ${a.soin}`, a.etat && `état : ${a.etat}`].filter(Boolean).join(" · "));
-    }
-    if (c.utilisations) lignes.push(utilisations(c.utilisations));
-    if (c.limitee) lignes.push("Action limitée");
+    const lignes = lignesEffets(c, R().repos);
     return `<b>${esc(c.nom)}</b> <span class="hint">${esc(voie.nom)}, rang ${r + 1}${r < voie.rang ? " · acquis" : ""}</span>
       ${c.texte ? `<div class="bst-texte">${esc(c.texte)}</div>` : ""}
       ${lignes.length ? `<ul>${lignes.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}`;
@@ -212,13 +196,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
 
   // capacités dont les utilisations se comptent (calculées par le serveur), et leur remise à zéro
   const comptees = () => F.comptees || [];
-  function libPar(p) {
-    if (p === "combat") return "par combat";
-    if (p === "jour") return "par jour";
-    if (p === "main") return "à remettre à zéro à la main";
-    const c = p.slice(6), r = R().repos?.find(x => x.cle === c);
-    return `par ${(r?.libelle || c).toLowerCase()}`;
-  }
+  const libPar = p => libellePar(p, R().repos);
   function remettre(f, pars) {
     let n = 0;
     for (const [k, u] of Object.entries(f.utilisations || {})) if (pars.includes(u.par)) { delete f.utilisations[k]; n++; }
@@ -292,11 +270,11 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         <div><button type="button" class="petit" id="fp-atk">＋ Attaque</button></div>
         <p class="hint">Le bonus d'attaque est calculé : niveau + modificateur + divers + bonus propre à l'arme.</p>
         <h3>Voies</h3>
-        <p class="hint">Une voie de la bibliothèque montre ses capacités : un clic sur une case fixe le rang. Une voie libre se remplit rang par rang.</p>
+        <p class="hint">Une voie de la bibliothèque montre ses capacités : un clic sur une case fixe le rang. Une voie libre se remplit rang par rang.${joueur ? " Ajouter une voie de la bibliothèque reste au MJ." : ""}</p>
         <div id="fp-voies"></div>
         <div class="ligne"><button type="button" class="petit" id="fp-voie">＋ Voie</button>
-          ${REF.voies.length ? `<select id="fp-voie-ref" aria-label="Voie de la bibliothèque"><option value="">＋ Voie de la bibliothèque…</option>${REF.voies.map((v, i) => `<option value="${i}">${esc(v.nom)}</option>`).join("")}</select>` : ""}
-          ${profil ? `<button type="button" class="petit" id="fp-profil">Appliquer le profil « ${esc(profil.nom)} »</button>` : ""}</div>
+          ${REF.voies.length && !joueur ? `<select id="fp-voie-ref" aria-label="Voie de la bibliothèque"><option value="">＋ Voie de la bibliothèque…</option>${REF.voies.map((v, i) => `<option value="${i}">${esc(v.nom)}</option>`).join("")}</select>` : ""}
+          ${profil && !joueur ? `<button type="button" class="petit" id="fp-profil">Appliquer le profil « ${esc(profil.nom)} »</button>` : ""}</div>
         <label class="champ"><span>Capacités <small>hors voies</small></span><textarea data-p="capacites" rows="3">${esc(f.capacites)}</textarea></label>
         <label class="champ"><span>Équipement</span><textarea data-p="equipement" rows="4">${esc(f.equipement)}</textarea></label>
         <div class="bst-grille">${nombre("Pièces d'or", "bourse.po", 'min="0"')}${nombre("Pièces d'argent", "bourse.pa", 'min="0"')}${nombre("Pièces de cuivre", "bourse.pc", 'min="0"')}</div>

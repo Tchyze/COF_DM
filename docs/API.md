@@ -349,7 +349,7 @@ Champs calculés à chaque enregistrement et à chaque lecture : `carac` (modifi
 
 Partie `"personnage"` du fichier de règles, toutes clés facultatives : `niveau_max`, `valeur_min`, `valeur_max`, `des_de_vie`, `de_de_vie`, `caracs_magie`, `carac_magie`, `defense_base`, `pc_max`, `pr_max`, `rang_max`, `origines_voie`, et `repos` : les boutons de repos de la feuille, `[{"cle", "libelle", "aide", "cout_pr", "gain_pr", "pv": ["dv", "con", "niveau"], "pv_max", "pm_max", "nouveau_jour"}]` (`pv` : les PV rendus, somme d'un dé de vie lancé, du modificateur de CON et du niveau). La réponse de `GET …/feuille` joint ces règles dans `"regles"`. `niveau_max` borne aussi le champ niveau de la fiche du PJ (`422` au-delà).
 
-En mode serveur : le MJ écrit, l'auditeur lit. Un joueur ne lit que la feuille de son propre PJ (rattaché à son compte, fiche partagée), sans `notes` ; il l'écrit quand l'édition par les joueurs est ouverte, et les notes du MJ restent en place. L'export de l'univers contient les feuilles (`"feuilles"`).
+En mode serveur : le MJ écrit, l'auditeur lit. Un joueur ne lit que la feuille de son propre PJ (rattaché à son compte, fiche partagée), sans `notes` ; il l'écrit quand l'édition par les joueurs est ouverte, et les notes du MJ restent en place. Il monte de rang dans ses voies et écrit des voies libres ; une voie de la bibliothèque qui n'était pas sur la feuille (même tapée à la main) est refusée (`403`) : seul le MJ l'ajoute. Même règle sur la page des joueurs à la maison. L'export de l'univers contient les feuilles (`"feuilles"`).
 
 ## Écran du MJ
 

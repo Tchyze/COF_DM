@@ -4,6 +4,7 @@
 // ouverte et chacun y choisit son PJ ; sur un serveur, on y entre par son compte, avec son PJ.
 import { $, $$, esc, api, toast, lien } from "./ui.js";
 import { panneauFeuille, CARACS } from "./views/feuille.js";
+import { lignesEffets, libellePar, voieLiee } from "./capacites.js";
 import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
 import { ligneJet, DES_RAPIDES } from "./des.js";
 import { rendu } from "./md.js";
@@ -11,7 +12,7 @@ import { rendu } from "./md.js";
 const CLE = "cof-joueur-pj";
 const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0, fonctions: {} };
 // les onglets et la fonctionnalité de l'univers dont chacun dépend (Paramètres → Fonctionnalités)
-const ONGLETS = [["fiche", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["des", "des"], ["hauts-faits", "combat"]];
+const ONGLETS = [["fiche", "feuilles"], ["voies", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["des", "des"], ["hauts-faits", "combat"]];
 const fonction = cle => etat.fonctions[cle] !== false;
 const onglets = () => ONGLETS.filter(([, f]) => fonction(f)).map(([v]) => v);
 const vue = $("#vue");
@@ -63,6 +64,44 @@ async function vueFiche() {
 // La feuille a changé ailleurs (combat, MJ) : on la relit, sauf pendant une saisie.
 function rafraichirFiche() {
   if (etat.vue === "fiche" && etat.pj && !$("#fp-form", vue)) vueFiche();
+  if (etat.vue === "voies" && etat.pj) vueVoies();
+}
+
+/* ---------------------------------------------------------- mes voies */
+// Tout l'arbre des voies du PJ, en lecture seule : chaque rang avec son texte et ses effets, ceux
+// qu'il a atteints en surbrillance. Lisible au téléphone, sans survol.
+async function vueVoies() {
+  const p = etat.pj;
+  let F, REF;
+  try {
+    [F, REF] = await Promise.all([api("GET", `/api/entites/${p.id}/feuille`), api("GET", `/api/reference?pj=${p.id}`)]);
+  } catch (e) { vue.className = ""; vue.innerHTML = `<p class="alerte">${esc(e.message)}</p>`; return; }
+  if (etat.vue !== "voies") return;
+  const repos = F.regles?.repos || [];
+  const compte = (voie, rang) => (F.comptees || []).find(x => x.voie === voie && x.rang === rang);
+  const bloc = v => {
+    const lib = voieLiee(REF, v);
+    const rangs = lib ? lib.rangs : v.capacites.map(nom => ({ nom }));
+    const nommes = rangs.reduce((m, c, i) => (c?.nom ? i + 1 : m), 0);
+    return `<section class="panneau pj-voie">
+      <h2>${esc(v.nom)} <span class="hint">${esc(v.origine || "")}${v.origine ? " · " : ""}rang ${v.rang}${lib ? "" : " · voie libre"}</span></h2>
+      ${lib?.description ? `<p class="hint">${esc(lib.description)}</p>` : ""}
+      <ol class="pj-rangs">${rangs.slice(0, Math.max(nommes, v.rang)).map((c, i) => {
+        const acquis = i < v.rang, u = lib && compte(lib.nom, i + 1);
+        const faites = u && u.par !== "combat" ? F.utilisations?.[u.cle]?.n || 0 : null;
+        return `<li class="${acquis ? "acquis" : ""}"><span class="n">${i + 1}</span><div>
+          <b>${esc(c?.nom || "—")}</b>${c?.limitee ? " (L)" : ""}${c?.sort ? "*" : ""}${acquis ? ` <span class="badge">acquis</span>` : ""}
+          ${c?.texte ? `<div class="bst-texte">${esc(c.texte)}</div>` : ""}
+          ${lignesEffets(c || {}, repos).length ? `<ul class="hint">${lignesEffets(c, repos).map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}
+          ${acquis && faites !== null ? `<div class="hint">Utilisée ${faites}/${u.fois} ${esc(libellePar(u.par, repos))}</div>` : ""}
+        </div></li>`;
+      }).join("")}</ol></section>`;
+  };
+  vue.className = "";
+  vue.innerHTML = `<div class="pj-fiche">
+      <div class="pj-tete"><h1>${esc(p.nom)}</h1><span class="hint">Mes voies : les rangs atteints sont en surbrillance.</span></div>
+      ${F.voies.length ? F.voies.map(bloc).join("") : `<p class="empty">Aucune voie sur la feuille pour l'instant.</p>`}
+    </div>`;
 }
 
 /* ---------------------------------------------------------- combat */
@@ -339,6 +378,7 @@ async function route() {
   else if (etat.vue === "documents") vueDocuments();
   else if (etat.vue === "des") await vueDes();
   else if (etat.vue === "hauts-faits") await vueHautsFaits();
+  else if (etat.vue === "voies") await vueVoies();
   else await vueFiche();
 }
 

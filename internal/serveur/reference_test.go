@@ -332,3 +332,37 @@ func TestCapacitesEnCombat(t *testing.T) {
 		t.Fatalf("après un nouveau jour : %v", f["utilisations"])
 	}
 }
+
+// Feuille déverrouillée : le joueur monte de rang dans ses voies et écrit une voie libre ; ajouter
+// une voie de la bibliothèque (même en tapant son nom) reste au MJ.
+func TestVoiesAjouteesParLeJoueur(t *testing.T) {
+	b, _ := bancReseau(t)
+	b.local("POST", "/api/reference/import", bibliothequeEssai)
+	pj := b.fiche("pj", "Aldric", map[string]any{"statut": "actif"})
+	url := fmt.Sprintf("/api/entites/%v/feuille", pj)
+	cinq := []any{"I", "II", "III", "IV", "V"} // comme l'écran envoie une voie liée : tous ses rangs
+	gue := map[string]any{"nom": "Voie du gué", "ref": "essai-gue", "rang": 1, "capacites": cinq}
+	b.local("PUT", url, map[string]any{"pv": 10, "voies": []any{gue}})
+	b.local("POST", "/api/acces/joueurs", map[string]any{"active": true})
+	b.local("PUT", "/api/joueurs/edition", map[string]any{"active": true})
+	ecrire := func(voies ...any) (int, string) {
+		return b.joueurLibre("PUT", url, map[string]any{"pv": 10, "voies": voies}, true)
+	}
+	gue["rang"] = 2
+	libre := map[string]any{"nom": "Voie des haies", "rang": 1, "capacites": []any{"Saut"}}
+	if c, corps := ecrire(gue, libre); c != 200 {
+		t.Fatalf("rang monté et voie libre : %d %s", c, corps)
+	}
+	lanterne := map[string]any{"nom": "voie de la LANTERNE", "rang": 0, "capacites": cinq}
+	if c, corps := ecrire(gue, libre, lanterne); c != 403 || !strings.Contains(corps, "Voie de la lanterne") {
+		t.Fatalf("voie de la bibliothèque ajoutée par le joueur : %d %s", c, corps)
+	}
+	// le MJ, lui, l'ajoute
+	if c, _ := b.local("PUT", url, map[string]any{"pv": 10, "voies": []any{gue, libre, lanterne}}); c != 200 {
+		t.Fatalf("voie ajoutée par le MJ : %d", c)
+	}
+	lanterne["rang"] = 1
+	if c, corps := ecrire(gue, libre, lanterne); c != 200 {
+		t.Fatalf("rang monté dans la voie ajoutée par le MJ : %d %s", c, corps)
+	}
+}
