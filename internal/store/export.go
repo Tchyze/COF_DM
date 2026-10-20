@@ -40,7 +40,9 @@ type Export struct {
 	Version int    `json:"version"`
 	// Donnees : version du modèle des fiches (absente d'un export plus ancien, remis en forme à la
 	// restauration).
-	Donnees    string            `json:"donnees,omitempty"`
+	Donnees string `json:"donnees,omitempty"`
+	// Modele : VersionModele de l'application qui a exporté (absent avant la 1.2.3).
+	Modele     int               `json:"modele,omitempty"`
 	Date       string            `json:"date"`
 	Calendrier modele.Calendrier `json:"calendrier"`
 	Entites    []Entite          `json:"entites"`
@@ -86,7 +88,7 @@ type RelationBrute struct {
 const formatExport = "cof-dm"
 
 func (s *Store) Exporter() (Export, error) {
-	x := Export{Format: formatExport, Version: 1, Donnees: versionDonnees, Date: time.Now().Format(time.RFC3339), Calendrier: s.Calendrier()}
+	x := Export{Format: formatExport, Version: 1, Donnees: versionDonnees, Modele: VersionModele, Date: time.Now().Format(time.RFC3339), Calendrier: s.Calendrier()}
 	var err error
 	if x.Entites, err = s.Toutes(); err != nil {
 		return x, err
@@ -160,11 +162,11 @@ func (s *Store) restaurer(x Export, auteur string) error {
 	if x.Format != formatExport {
 		return invalide("Ce fichier n'est pas un export COF DM.")
 	}
-	version, _ := strconv.Atoi(x.Donnees)
-	courante, _ := strconv.Atoi(versionDonnees)
-	if version > courante {
-		return invalide("Cet export vient d'une version plus récente de COF DM : mettez l'application à jour avant de le restaurer.")
+	if err := verifierExport(x); err != nil {
+		return err
 	}
+	version, _ := strconv.ParseInt(x.Donnees, 10, 64)
+	courante := donneesCourantes()
 	if err := x.Calendrier.Verifier(); err != nil {
 		return invalide("Calendrier de l'export invalide : %v", err)
 	}

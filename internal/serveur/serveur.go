@@ -212,9 +212,7 @@ func local(r *http.Request) bool {
 
 func (s *Serveur) routes() {
 	m := s.mux
-	m.HandleFunc("GET /api/sante", func(w http.ResponseWriter, r *http.Request) {
-		repondre(w, 200, map[string]any{"ok": true, "version": s.opt.Version})
-	})
+	m.HandleFunc("GET /api/sante", s.sante)
 	m.HandleFunc("GET /api/schema", s.schema)
 	m.HandleFunc("GET /api/stats", s.stats)
 

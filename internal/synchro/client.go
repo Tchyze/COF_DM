@@ -132,16 +132,29 @@ func LibelleJeton(poste string) string {
 // MesUnivers : les univers du serveur où le compte du jeton a un rôle. Sert aussi à vérifier que le
 // serveur répond et reconnaît encore ce poste.
 func (c *Client) MesUnivers() ([]Univers, error) {
+	l, _, err := c.mesUnivers()
+	return l, err
+}
+
+// mesUnivers : les univers du compte, et les numéros du serveur s'il les y publie (nil : un serveur
+// d'avant la 1.2.3).
+func (c *Client) mesUnivers() ([]Univers, *Versions, error) {
 	var m struct {
-		Univers []Univers `json:"univers"`
+		Univers   []Univers `json:"univers"`
+		Version   *string   `json:"version"`
+		Protocole int       `json:"protocole"`
+		Modele    int       `json:"modele"`
 	}
 	if err := c.appel("GET", "/api/mes-univers", nil, &m); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if m.Univers == nil {
 		m.Univers = []Univers{}
 	}
-	return m.Univers, nil
+	if m.Version == nil {
+		return m.Univers, nil, nil
+	}
+	return m.Univers, &Versions{Version: *m.Version, Protocole: m.Protocole, Modele: m.Modele}, nil
 }
 
 // Rendre retire du serveur le jeton de ce poste, qui se déconnecte. Un jeton que le serveur ne
@@ -172,6 +185,10 @@ func (c *Client) requete(methode, chemin string, corps io.Reader) (*http.Request
 	}
 	r.Header.Set("X-COF-DM", "1")
 	r.Header.Set("X-COF-Auteur", "synchronisation")
+	ici := Ici()
+	r.Header.Set(EnteteVersion, ici.Version)
+	r.Header.Set(EnteteProtocole, strconv.Itoa(ici.Protocole))
+	r.Header.Set(EnteteModele, strconv.Itoa(ici.Modele))
 	return r, nil
 }
 

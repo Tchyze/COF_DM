@@ -219,7 +219,9 @@ func (a *Application) mesUnivers(w http.ResponseWriter, r *http.Request) {
 		if o, code, _ := a.choisir(r); code == 0 && c.Role(o.st.ID()) != "" {
 			courant = o.st.ID()
 		}
-		repondre(w, 200, map[string]any{"univers": liste, "courant": courant})
+		// la version et les numéros du serveur : le bureau les lit ici sans viser d'univers
+		repondre(w, 200, map[string]any{"univers": liste, "courant": courant, "version": a.opt.Version,
+			"protocole": store.VersionProtocole, "modele": store.VersionModele})
 	case r.Method == http.MethodPost && r.URL.Path == "/api/mes-univers/courant":
 		var in struct {
 			ID string `json:"id"`

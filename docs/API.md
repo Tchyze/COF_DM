@@ -51,7 +51,7 @@ L'**édition serveur** (image Docker, compilée avec l'étiquette `serveur`) tou
 
 | Requête | Effet |
 |---|---|
-| `GET /api/mes-univers` | `{"univers": [{"id", "nom", "role"}], "courant"}` : les univers où le compte a un rôle. |
+| `GET /api/mes-univers` | `{"univers": [{"id", "nom", "role"}], "courant", "version", "protocole", "modele"}` : les univers où le compte a un rôle, et la version et les numéros du serveur (voir « Synchronisation », Versions). |
 | `POST /api/mes-univers/courant` `{"id"}` | Choisit l'univers de ce navigateur (cookie `cof_dm_univers`), celui que prend un nouvel onglet. L'interface garde ensuite l'univers de chaque onglet et l'envoie dans l'en-tête : deux onglets peuvent tenir deux univers. `404` : univers inconnu ou fermé à ce compte. |
 
 Pour l'administrateur, les routes `/api/univers` changent de sens : `nouveau` ne prend qu'un `nom` (créé dans le dossier du serveur, ouvert à côté des autres), `ouvrir` ne prend qu'un fichier de ce dossier et y fait passer le navigateur, `copie` et `restaurer` portent sur l'univers visé. La copie d'un univers porte son identifiant : elle ne s'ouvre pas à côté de l'original.
@@ -89,7 +89,7 @@ Un compte `joueur` n'atteint que les routes ci-dessous, en lecture ; tout le res
 | `GET /api/entites/{id}/feuille`, `PUT` | La feuille de son propre PJ seulement (voir « Feuille de personnage »). |
 | `GET /api/reference` | Les profils, peuples et voies de l'univers, pour tenir sa feuille. |
 | `GET /api/joueur/…` | La page des joueurs, restreinte à son PJ (voir « Page des joueurs »), documents compris. |
-| `GET /api/stats`, `GET /api/calendrier`, `GET /api/parametres`, `GET /api/sante` | Comptes des fiches partagées, calendrier, nom de l'univers, version. |
+| `GET /api/stats`, `GET /api/calendrier`, `GET /api/parametres`, `GET /api/sante` | Comptes des fiches partagées, calendrier, nom de l'univers, version (et numéros : voir « Synchronisation », Versions). |
 
 **Édition par les joueurs.** Fermée par défaut. L'administrateur l'ouvre pour l'univers avec `PUT /api/joueurs/edition` `{"active": true}` et rattache chaque compte à son PJ avec `PATCH /api/comptes/{nom}` `{"pj": <id>}` (`0` : aucun). Un joueur peut alors `PATCH /api/entites/{id}` `{"data": {…}, "modifie"?}` sur la fiche de son PJ, si elle est partagée, pour les seuls champs que le schéma marque `"joueur": true` (apparence, historique, objectifs). Tout autre champ, le nom, les tags ou une autre fiche répondent `403` ou `422`. La fiche lue par ce joueur annonce ces champs dans `"modifiable"`, et `GET /api/acces` donne `"edition_joueurs"`.
 
@@ -419,7 +419,9 @@ L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}
 | `POST /api/sync/copie` `{"nom": "Portable de Marion"}` | Inscrit une copie et renvoie le fichier `.cofdm` qu'elle gardera, avec les en-têtes `X-COF-Replique` (son numéro) et `X-COF-Univers` (l'univers). |
 | `POST /api/sync` `{"replique", "curseur", "changements"}` | Un échange : la copie envoie les champs qu'elle a changés depuis son dernier envoi, et `curseur`, le dernier numéro d'ordre du serveur qu'elle a reçu. Réponse : `{"curseur", "changements", "conflits", "images_attendues"}`. `409` : copie inconnue de ce serveur. |
 | `PUT /api/sync/images/{fichier}` | Le contenu (corps brut) d'une image que le serveur attend. `415` si le contenu ne correspond pas à son format ; `404` pour une image inconnue. |
-| `GET /api/sync/copies` | Les copies inscrites : `{"copies": [{"numero", "nom", "compte", "cree", "vu"}]}`. |
+| `GET /api/sync/copies` | Les copies inscrites : `{"copies": [{"numero", "nom", "compte", "cree", "vu", "version", "protocole", "modele"}]}`. `version`, `protocole`, `modele` : ceux de l'application qui tenait la copie à son dernier passage (`version` vide : application d'avant la 1.2.3). |
+
+**Versions.** `GET /api/sante` et `GET /api/mes-univers` donnent, avec `version`, deux numéros distincts de la version de l'application : `protocole` (la forme de l'échange) et `modele` (ce que contient un univers et que l'échange transporte : types, champs, relations, fonctionnalités, réglages synchronisés…). Deux applications aux mêmes numéros se synchronisent sans rien perdre, quelles que soient leurs versions. Un serveur qui ne les publie pas (le bureau lit alors sa version dans `GET /api/sante`) a le protocole 1 et le modèle 1 depuis la 1.2.2, 0 avant. Le bureau annonce les siens dans chaque requête (`X-COF-Version`, `X-COF-Protocole`, `X-COF-Modele`). Il ne tire pas de copie d'un serveur plus récent (`409` : mettre l'application à jour) et n'envoie un univers qu'à un serveur au même modèle (`409`). Un univers (ou un export) ouvert par une version plus récente ne s'ouvre pas dans une plus ancienne (`422`), qui n'y touche pas.
 
 **Côté application de bureau** (ordinateur du MJ seulement, jamais sur un serveur). L'application travaille en **mode local** (client seul) ou en **mode serveur** (reliée à un serveur). La connexion se fait avec le nom d'utilisateur et le mot de passe du compte, échangés aussitôt contre un jeton d'API propre au poste (nommé « Synchronisation — <nom du poste> » dans « Mon compte ») : le mot de passe n'est jamais gardé. Un poste n'a qu'un jeton : à la connexion, ceux qu'il aurait laissés à ce nom (serveur injoignable quand il l'a quitté) sont retirés. La connexion (adresse, compte, jeton) et les liens des copies sont rangés dans les réglages de l'ordinateur, pas dans l'univers. En mode serveur, une copie de ce serveur échange en arrière-plan toutes les 30 secondes ; sinon, l'application vérifie que le serveur répond. Une copie d'un autre serveur, ou ouverte en mode local, est **en pause** : ses changements attendent qu'on se reconnecte à son serveur.
 

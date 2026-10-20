@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/Tchyze/cof_dm/internal/store"
+	"github.com/Tchyze/cof_dm/internal/synchro"
 )
 
 // Synchronisation hors ligne, côté serveur (voir internal/store/protocole.go). Réservée au mode
@@ -61,6 +62,8 @@ func (s *Serveur) syncCopie(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
+	v := synchro.DeLaRequete(r)
+	s.store.CopieConnue(n, r.Header.Get(synchro.EnteteVersion), v.Protocole, v.Modele)
 	f, err := os.Open(fichier)
 	if err != nil {
 		erreurStore(w, err)
@@ -93,7 +96,8 @@ func (s *Serveur) syncEchanger(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 422, "Échange illisible.")
 		return
 	}
-	if in.Replique <= 0 || !s.store.CopieConnue(in.Replique) {
+	v := synchro.DeLaRequete(r)
+	if in.Replique <= 0 || !s.store.CopieConnue(in.Replique, r.Header.Get(synchro.EnteteVersion), v.Protocole, v.Modele) {
 		erreur(w, 409, "Cette copie n'est pas inscrite auprès de ce serveur : reliez-la de nouveau.")
 		return
 	}

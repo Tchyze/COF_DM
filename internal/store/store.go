@@ -180,6 +180,10 @@ func Ouvrir(chemin string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("mise à jour du schéma : %w", err)
 	}
+	if err := verifierVersions(db); err != nil {
+		db.Close()
+		return nil, err
+	}
 	s := &Store{db: db, cal: modele.CalendrierParDefaut(), chemin: chemin}
 	if v, ok := s.Meta("calendrier"); ok {
 		var c modele.Calendrier

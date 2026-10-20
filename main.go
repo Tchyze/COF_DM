@@ -35,6 +35,7 @@ import (
 	"github.com/Tchyze/cof_dm/internal/majour"
 	"github.com/Tchyze/cof_dm/internal/reglages"
 	"github.com/Tchyze/cof_dm/internal/serveur"
+	"github.com/Tchyze/cof_dm/internal/synchro"
 )
 
 var version = "dev"
@@ -275,6 +276,7 @@ func main() {
 	}
 
 	sub, _ := fs.Sub(frontend, "frontend")
+	synchro.VersionApplication = version
 	opt := serveur.Options{Version: version, DossierDon: dossier, Reglages: reg, Frontend: sub, Adresse: fmt.Sprintf("%s:%d", hote, port),
 		Port: port, Reseau: hote != "127.0.0.1", ReseauForce: *reseau && hote != "127.0.0.1", ReseauVoulu: cfg.Reseau}
 	if dialogueDisponible() {

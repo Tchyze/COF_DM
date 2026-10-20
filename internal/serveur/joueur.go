@@ -35,9 +35,7 @@ func partagee(e store.Entite) bool {
 
 func (s *Serveur) routesJoueur() {
 	m := http.NewServeMux()
-	m.HandleFunc("GET /api/sante", func(w http.ResponseWriter, r *http.Request) {
-		repondre(w, 200, map[string]any{"ok": true, "version": s.opt.Version})
-	})
+	m.HandleFunc("GET /api/sante", s.sante)
 	m.HandleFunc("GET /api/schema", s.schemaJoueur)
 	m.HandleFunc("GET /api/calendrier", s.lireCalendrier)
 	m.HandleFunc("GET /api/reference", s.referenceLire) // profils et voies : utiles au joueur qui tient sa feuille
