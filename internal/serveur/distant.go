@@ -45,7 +45,10 @@ const (
 	etatHorsLigne       = "hors_ligne"
 	etatErreur          = "erreur"
 	etatJamais          = "jamais"
-	etatRefuse          = "refuse"   // le serveur ne reconnaît plus ce poste (jeton retiré)
+	etatVersion         = "version" // le serveur est plus récent : l'échange attend la mise à jour du bureau
+	etatRefuse          = "refuse"  // le serveur ne reconnaît plus ce poste (jeton retiré)
+	ecartServeurRecent  = "serveur_recent"
+	ecartBureauRecent   = "bureau_recent"
 	etatConnecte        = "connecte" // le serveur répond
 	etatInconnu         = "inconnu"  // pas encore essayé
 	motifAvantEnvoi     = "avant-envoi"
@@ -82,6 +85,11 @@ type etatSync struct {
 	Derniere float64       `json:"derniere,omitempty"` // dernier échange réussi
 	Erreur   string        `json:"erreur,omitempty"`
 	Bilan    synchro.Bilan `json:"bilan"`
+	// Ecart : le serveur et ce bureau n'ont pas le même modèle (serveur_recent : l'échange attend
+	// la mise à jour du bureau ; bureau_recent : réception seule, en attendant celle du serveur).
+	Ecart          string `json:"ecart,omitempty"`
+	VersionServeur string `json:"version_serveur,omitempty"`
+	Message        string `json:"message,omitempty"`
 }
 
 // etatServeur : le serveur répond-il ?
@@ -317,12 +325,39 @@ func (a *Application) echanger() (etatSync, error) {
 		return etatSync{}, store.ErrValidation{Msg: "Cette copie est en pause : connectez l'application à " + l.URL + " pour la synchroniser."}
 	}
 	e := a.etatDe(st.ID())
-	bilan, err := synchro.Nouveau(c.URL, c.Jeton, st.ID()).Echanger(st)
+	e.Ecart, e.VersionServeur, e.Message = "", "", ""
+	cl := synchro.Nouveau(c.URL, c.Jeton, st.ID())
+	// les numéros du serveur d'abord : plus récent, rien ne s'échange ; plus ancien, ce bureau ne fait
+	// que recevoir
+	srv, err := cl.Versions()
+	var bilan synchro.Bilan
+	if err == nil {
+		e.VersionServeur = srv.Affichee()
+		switch synchro.Comparer(synchro.Ici(), srv) {
+		case synchro.ServeurRecent:
+			e.Ecart, e.Message = ecartServeurRecent, msgServeurRecent(srv)
+			err = synchro.ErrServeur{Code: http.StatusUpgradeRequired, Msg: e.Message}
+		case synchro.BureauRecent:
+			e.Ecart, e.Message = ecartBureauRecent, msgBureauRecent(srv)+" "+msgReceptionSeule
+		}
+	}
+	if err == nil {
+		bilan, err = cl.Echanger(st, e.Ecart != ecartBureauRecent)
+	}
 	a.noterServeur(err)
 	var se synchro.ErrServeur
 	switch {
 	case err == nil:
-		e = etatSync{Etat: etatAJour, Derniere: float64(time.Now().UnixNano()) / 1e9, Bilan: bilan}
+		e = etatSync{Etat: etatAJour, Derniere: float64(time.Now().UnixNano()) / 1e9, Bilan: bilan,
+			Ecart: e.Ecart, VersionServeur: e.VersionServeur, Message: e.Message}
+	case errors.As(err, &se) && se.Code == http.StatusUpgradeRequired:
+		// rien n'est parti : ce qui attend ici partira après la mise à jour
+		e.Etat, e.Erreur, e.Ecart = etatVersion, se.Msg, ecartServeurRecent
+		if e.Message == "" {
+			e.Message = se.Msg
+		}
+		e.Bilan = synchro.Bilan{RecusEnAttente: st.RecusEnAttente()}
+		e.Bilan.EnAttente, _ = st.AEnvoyer()
 	case errors.Is(err, synchro.ErrInjoignable):
 		e.Etat, e.Erreur = etatHorsLigne, msgHorsLigne
 	case errors.As(err, &se) && se.Code == http.StatusUnauthorized:

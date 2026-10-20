@@ -309,26 +309,37 @@ type Bilan struct {
 	Recus    int `json:"recus"`
 	Conflits int `json:"conflits"`
 	Images   int `json:"images"`
+	// EnAttente : les objets changés sur cette copie qui attendent la mise à jour du serveur (échange
+	// en réception seule) ; RecusEnAttente : les objets reçus que cette copie n'a pas pu appliquer.
+	EnAttente      int `json:"en_attente"`
+	RecusEnAttente int `json:"recus_en_attente"`
 }
 
 // Echanger : un échange complet pour la copie st (voir le protocole), puis les images : celles que le
-// serveur attend partent, celles qui manquent ici arrivent.
-func (c *Client) Echanger(st *store.Store) (Bilan, error) {
+// serveur attend partent, celles qui manquent ici arrivent. envoyer false : réception seule (le
+// serveur est plus ancien que ce bureau) ; les changements de la copie attendent, rien n'est perdu.
+func (c *Client) Echanger(st *store.Store, envoyer bool) (Bilan, error) {
 	var b Bilan
 	curseur, chs, err := st.Preparer()
 	if err != nil {
 		return b, err
 	}
-	var rep store.Reponse
-	if err := c.appel("POST", "/api/sync", map[string]any{"replique": st.Replique(), "curseur": curseur, "changements": chs}, &rep); err != nil {
-		return b, err
-	}
 	envoye, _ := st.Meta(store.MetaSyncEnvoye)
 	avant, _ := strconv.ParseInt(envoye, 10, 64)
-	if err := st.Integrer(rep, store.EnvoyeJusqua(chs, avant)); err != nil {
+	partent, jusqua := chs, store.EnvoyeJusqua(chs, avant)
+	if !envoyer {
+		partent, jusqua = []store.Changement{}, avant
+		b.EnAttente = store.ObjetsChanges(chs)
+	}
+	var rep store.Reponse
+	if err := c.appel("POST", "/api/sync", map[string]any{"replique": st.Replique(), "curseur": curseur, "changements": partent}, &rep); err != nil {
 		return b, err
 	}
-	for _, ch := range chs {
+	if err := st.Integrer(rep, jusqua); err != nil {
+		return b, err
+	}
+	b.RecusEnAttente = st.RecusEnAttente()
+	for _, ch := range partent {
 		if ch.Objet != store.ObjJournal {
 			b.Envoyes++
 		}

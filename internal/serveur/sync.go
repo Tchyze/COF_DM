@@ -49,6 +49,11 @@ func (s *Serveur) syncCopie(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
+	v := synchro.DeLaRequete(r)
+	if synchro.Comparer(v, synchro.Ici()) == synchro.ServeurRecent {
+		erreur(w, http.StatusUpgradeRequired, msgBureauEnRetard(v))
+		return
+	}
 	dir, err := os.MkdirTemp("", "cofdm-copie-")
 	if err != nil {
 		erreurStore(w, err)
@@ -62,7 +67,6 @@ func (s *Serveur) syncCopie(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
-	v := synchro.DeLaRequete(r)
 	s.store.CopieConnue(n, r.Header.Get(synchro.EnteteVersion), v.Protocole, v.Modele)
 	f, err := os.Open(fichier)
 	if err != nil {
@@ -101,12 +105,35 @@ func (s *Serveur) syncEchanger(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 409, "Cette copie n'est pas inscrite auprès de ce serveur : reliez-la de nouveau.")
 		return
 	}
+	// un bureau d'un autre modèle : plus ancien, il ne saurait pas lire ce qu'il recevrait ; plus
+	// récent, il ne fait que recevoir (ses changements attendent la mise à jour de ce serveur)
+	switch synchro.Comparer(v, synchro.Ici()) {
+	case synchro.ServeurRecent:
+		erreur(w, http.StatusUpgradeRequired, msgBureauEnRetard(v))
+		return
+	case synchro.BureauRecent:
+		if len(in.Changements) > 0 {
+			erreur(w, 409, "Ce serveur (version "+synchro.Ici().Affichee()+") est plus ancien que cette application : ses changements attendent la mise à jour du serveur.")
+			return
+		}
+	}
 	rep, err := s.store.Recevoir(in.Curseur, in.Changements)
 	if err != nil {
 		erreurStore(w, err)
 		return
 	}
 	repondre(w, 200, rep)
+}
+
+// msgBureauEnRetard : la réponse du serveur à un bureau plus ancien que lui (un bureau d'avant les
+// numéros l'affiche tel quel).
+func msgBureauEnRetard(v synchro.Versions) string {
+	bureau := "Cette application"
+	if v.Version != "" {
+		bureau = "Cette application (" + v.Affichee() + ")"
+	}
+	return bureau + " est plus ancienne que le serveur (" + synchro.Ici().Affichee() +
+		") : mettez-la à jour (Paramètres → Mises à jour) pour reprendre la synchronisation. Vos changements attendent sur cet ordinateur."
 }
 
 // syncImage : le contenu d'une image que le serveur attend (corps brut).

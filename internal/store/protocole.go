@@ -133,7 +133,25 @@ func (s *Store) Recevoir(curseur int64, chs []Changement) (Reponse, error) {
 	if err != nil {
 		return Reponse{}, err
 	}
+	// un champ refusé que le serveur n'a pas reste sur la copie (rien ne lui est renvoyé) : il peut
+	// venir d'un modèle plus récent et serait perdu ; un objet refusé que le serveur n'a pas du tout
+	// n'est signalé qu'une fois, par son champ « * »
+	present := map[string]bool{}
+	for _, c := range etat {
+		if !c.Supprime() {
+			present[c.objet()] = true
+		}
+	}
+	signale := map[string]bool{}
 	for _, r := range refus {
+		if !present[r.objet()] {
+			if !signale[r.objet()] {
+				signale[r.objet()] = true
+				rep.Conflits = append(rep.Conflits, Conflit{Genre: ConflitRefus, Objet: r.Objet, Cle: r.Cle, Champ: ChampExiste,
+					Local: jsonVrai, Serveur: jsonNull, Raison: r.Raison})
+			}
+			continue
+		}
 		rep.Conflits = append(rep.Conflits, Conflit{Genre: ConflitRefus, Objet: r.Objet, Cle: r.Cle, Champ: r.Champ, Local: r.Valeur,
 			Serveur: valeurEtat(etat, r.adresse()), Raison: r.Raison})
 	}
@@ -164,7 +182,7 @@ func (s *Store) Recevoir(curseur int64, chs []Changement) (Reponse, error) {
 		}
 	}
 	for _, r := range refus {
-		if !retenu[r.objet()] {
+		if _, connu := etat[r.adresse()]; connu && !retenu[r.objet()] {
 			ajouter(Changement{Objet: r.Objet, Cle: r.Cle, Champ: r.Champ, Valeur: valeurEtat(etat, r.adresse())})
 		}
 	}
@@ -249,6 +267,14 @@ CREATE TABLE IF NOT EXISTS sync_conflits (
 	serveur TEXT NOT NULL DEFAULT 'null',
 	raison TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS sync_recus (
+	objet TEXT NOT NULL,
+	cle TEXT NOT NULL,
+	champ TEXT NOT NULL,
+	valeur TEXT NOT NULL,
+	raison TEXT NOT NULL DEFAULT '',
+	PRIMARY KEY (objet, cle, champ)
+);
 `
 
 // Clés des réglages d'une copie synchronisée.
@@ -328,13 +354,40 @@ func (s *Store) Integrer(rep Reponse, envoye int64) error {
 			return err
 		}
 	}
-	// les objets supprimés ici et gardés par le serveur reviennent en entier : ils sont recréés
-	_, appliques, err := appliquer(tx, rep.Changements, nil)
+	// les objets supprimés ici et gardés par le serveur reviennent en entier : ils sont recréés.
+	// Ce que cette copie n'a pas pu appliquer (un modèle plus récent que le sien) attend dans
+	// sync_recus et repasse à chaque échange, avant ce qui arrive : un changement plus récent du
+	// même champ le remplace.
+	attente, err := recusEnAttente(tx)
+	if err != nil {
+		return err
+	}
+	arrive := map[string]bool{}
+	for _, c := range rep.Changements {
+		arrive[c.adresse()] = true
+	}
+	var tous []Changement
+	for _, c := range attente {
+		if !arrive[c.adresse()] {
+			tous = append(tous, c)
+		}
+	}
+	tous = append(tous, rep.Changements...)
+	refus, appliques, err := appliquer(tx, tous, nil)
 	if err != nil {
 		return err
 	}
 	if err := retenir(tx, appliques); err != nil {
 		return err
+	}
+	if _, err := tx.Exec(`DELETE FROM sync_recus`); err != nil {
+		return err
+	}
+	for _, r := range refus {
+		if _, err := tx.Exec(`INSERT OR REPLACE INTO sync_recus (objet, cle, champ, valeur, raison) VALUES (?,?,?,?,?)`,
+			r.Objet, r.Cle, r.Champ, string(r.Valeur), r.Raison); err != nil {
+			return err
+		}
 	}
 	for _, c := range rep.Conflits {
 		if c.Genre == ConflitSupprimeLa {
@@ -350,6 +403,53 @@ func (s *Store) Integrer(rep Reponse, envoye int64) error {
 		}
 	}
 	return tx.Commit()
+}
+
+func recusEnAttente(q execer) ([]Changement, error) {
+	rows, err := q.Query(`SELECT objet, cle, champ, valeur FROM sync_recus ORDER BY rowid`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Changement
+	for rows.Next() {
+		var c Changement
+		var v string
+		if err := rows.Scan(&c.Objet, &c.Cle, &c.Champ, &v); err != nil {
+			return nil, err
+		}
+		c.Valeur = json.RawMessage(v)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// RecusEnAttente : le nombre d'objets reçus du serveur que cette copie n'a pas pu appliquer ; ils
+// le seront à un échange suivant, une fois l'application mise à jour.
+func (s *Store) RecusEnAttente() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var n int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM (SELECT DISTINCT objet, cle FROM sync_recus)`).Scan(&n)
+	return n
+}
+
+// AEnvoyer : le nombre d'objets (fiches, relations, images…) que cette copie a changés et pas
+// encore envoyés au serveur.
+func (s *Store) AEnvoyer() (int, error) {
+	_, chs, err := s.Preparer()
+	return ObjetsChanges(chs), err
+}
+
+// ObjetsChanges : le nombre d'objets que touchent ces changements, hors journal.
+func ObjetsChanges(chs []Changement) int {
+	vus := map[string]bool{}
+	for _, c := range chs {
+		if c.Objet != ObjJournal {
+			vus[c.objet()] = true
+		}
+	}
+	return len(vus)
 }
 
 // EnvoyeJusqua : le numéro d'ordre local qu'atteint un envoi (le dernier changement préparé).
@@ -422,7 +522,35 @@ func (s *Store) ResoudreConflit(id int64, garderLocal bool, auteur string) error
 	}
 	var ch []Changement
 	switch {
-	case c.Genre == ConflitChamp && garderLocal, c.Genre == ConflitRefus && garderLocal:
+	case c.Genre == ConflitRefus && garderLocal:
+		// renvoyé au prochain échange : l'état relevé du champ (ou de tout l'objet, pour un objet que
+		// le serveur n'a pas) est oublié
+		q, args := `DELETE FROM sync_etat WHERE objet=? AND cle=? AND champ=?`, []any{c.Objet, c.Cle, c.Champ}
+		if c.Champ == ChampExiste {
+			q, args = `DELETE FROM sync_etat WHERE objet=? AND cle=?`, args[:2]
+		}
+		if _, err := tx.Exec(q, args...); err != nil {
+			return err
+		}
+		if c.Champ != ChampExiste {
+			ch = []Changement{{Objet: c.Objet, Cle: c.Cle, Champ: c.Champ, Valeur: json.RawMessage(local)}}
+		}
+	case c.Genre == ConflitRefus:
+		// la valeur du serveur (absente : le champ ou l'objet est retiré ici), sans repartir
+		var serveur string
+		_ = tx.QueryRow(`SELECT serveur FROM sync_conflits WHERE id=?`, id).Scan(&serveur)
+		v := []Changement{{Objet: c.Objet, Cle: c.Cle, Champ: c.Champ, Valeur: json.RawMessage(serveur)}}
+		refus, appliques, err := appliquer(tx, v, nil)
+		if err != nil {
+			return err
+		}
+		if len(refus) > 0 {
+			return invalide("Valeur refusée : %s", refus[0].Raison)
+		}
+		if err := retenir(tx, appliques); err != nil {
+			return err
+		}
+	case c.Genre == ConflitChamp && garderLocal:
 		ch = []Changement{{Objet: c.Objet, Cle: c.Cle, Champ: c.Champ, Valeur: json.RawMessage(local)}}
 	case c.Genre == ConflitSupprimeIci && garderLocal, c.Genre == ConflitSupprimeLa && !garderLocal:
 		ch = []Changement{{Objet: c.Objet, Cle: c.Cle, Champ: ChampExiste, Valeur: jsonNull}}

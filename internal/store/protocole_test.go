@@ -3,8 +3,11 @@ package store
 import (
 	"encoding/json"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/Tchyze/cof_dm/internal/modele"
 )
 
 // liaison : un serveur et une copie inscrite auprès de lui, qui échangent par le protocole.
@@ -200,10 +203,118 @@ func TestProtocoleRefus(t *testing.T) {
 	if len(rep.Conflits) != 1 || rep.Conflits[0].Genre != ConflitRefus || rep.Conflits[0].Raison == "" {
 		t.Fatalf("refus : %v", rep.Conflits)
 	}
-	if e := lireFiche(t, l.copie, gue.ID); e.Data["pirate"] != nil {
-		t.Fatalf("la copie garde la valeur refusée : %#v", e.Data)
+	// le serveur n'a pas ce champ : rien n'est renvoyé, la copie le garde (il pourrait venir d'un
+	// modèle plus récent) et le conflit attend le choix du MJ
+	if e := lireFiche(t, l.copie, gue.ID); e.Data["pirate"] != "oui" {
+		t.Fatalf("la copie doit garder la valeur refusée : %#v", e.Data)
+	}
+	if e := lireFiche(t, l.serveur, gue.ID); e.Data["pirate"] != nil {
+		t.Fatalf("valeur refusée sur le serveur : %#v", e.Data)
 	}
 	l.stable()
+	// garder la valeur du serveur la retire ici, sans rien renvoyer
+	cs, _ := l.copie.Conflits()
+	if err := l.copie.ResoudreConflit(cs[0].ID, false, "mj"); err != nil {
+		t.Fatal(err)
+	}
+	if e := lireFiche(t, l.copie, gue.ID); e.Data["pirate"] != nil {
+		t.Fatalf("valeur du serveur choisie : %#v", e.Data)
+	}
+	l.stable()
+}
+
+// Un objet que le serveur refuse et n'a pas (un type de fiche qu'il ne connaît pas) reste sur la
+// copie, signalé une seule fois ; « garder local » le renvoie en entier, « garder serveur » le retire.
+func TestProtocoleObjetRefuse(t *testing.T) {
+	l := nouvelleLiaison(t, nil)
+	id := int64(1)<<40 + 5
+	if _, err := l.copie.db.Exec(`INSERT INTO entites (id, type, nom, cle_nom, data, cree, modifie) VALUES (?, 'parchemin', 'Lettre', 'lettre', '{"texte":"Rendez-vous au gué."}', 1, 1)`, id); err != nil {
+		t.Fatal(err)
+	}
+	rep := l.echanger()
+	if len(rep.Conflits) != 1 || rep.Conflits[0].Champ != ChampExiste || !strings.Contains(rep.Conflits[0].Raison, "parchemin") {
+		t.Fatalf("un seul conflit pour l'objet : %v", rep.Conflits)
+	}
+	if e := lireFiche(t, l.copie, id); e.Nom != "Lettre" || e.Data["texte"] == nil {
+		t.Fatalf("la copie doit garder la fiche : %#v", e)
+	}
+	l.stable()
+	cs, _ := l.copie.Conflits()
+	if len(cs) != 1 {
+		t.Fatalf("conflits rangés : %v", cs)
+	}
+	// garder local : toute la fiche repart (et se fait refuser de nouveau, ce serveur ne la connaît pas)
+	if err := l.copie.ResoudreConflit(cs[0].ID, true, "mj"); err != nil {
+		t.Fatal(err)
+	}
+	_, chs, _ := l.copie.Preparer()
+	n := 0
+	for _, c := range chs {
+		if c.Objet == ObjFiche && c.Cle == strconv.FormatInt(id, 10) {
+			n++
+		}
+	}
+	if n < 3 {
+		t.Fatalf("la fiche doit repartir en entier : %v", chs)
+	}
+	if rep := l.echanger(); len(rep.Conflits) != 1 {
+		t.Fatalf("renvoi : %v", rep.Conflits)
+	}
+	// garder serveur : la fiche est retirée de la copie
+	cs, _ = l.copie.Conflits()
+	if err := l.copie.ResoudreConflit(cs[0].ID, false, "mj"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := l.copie.Lire(id); err == nil {
+		t.Fatal("la fiche doit être retirée de la copie")
+	}
+	l.stable()
+}
+
+// Un changement du serveur que la copie ne sait pas appliquer (modèle plus récent) attend, et passe
+// à un échange suivant, une fois la copie à jour ; le curseur avance pour le reste.
+func TestProtocoleRecusEnAttente(t *testing.T) {
+	l := nouvelleLiaison(t, nil)
+	if _, err := l.serveur.db.Exec(`INSERT OR REPLACE INTO meta (cle, valeur) VALUES (?, '{"rubrique":true}')`, MetaFonctions); err != nil {
+		t.Fatal(err)
+	}
+	creer(t, l.serveur, "lieu", "La Tour", nil)
+	rep := l.echanger()
+	if len(rep.Conflits) != 0 || l.copie.RecusEnAttente() != 1 {
+		t.Fatalf("en attente : %d, %v", l.copie.RecusEnAttente(), rep.Conflits)
+	}
+	if v, _ := l.copie.Meta(MetaFonctions); strings.Contains(v, "rubrique") {
+		t.Fatalf("réglage inconnu appliqué : %s", v)
+	}
+	if st, _, _ := l.copie.Compter(); st["lieu"] != 1 {
+		t.Fatalf("le reste passe : %v", st)
+	}
+	l.stable()
+	if l.copie.RecusEnAttente() != 1 {
+		t.Fatal("le changement doit attendre encore")
+	}
+	// la copie « mise à jour » connaît la fonctionnalité : le changement passe au prochain échange
+	avant := modele.Fonctionnalites
+	modele.Fonctionnalites = append(append([]modele.Fonctionnalite{}, avant...), modele.Fonctionnalite{Cle: "rubrique"})
+	defer func() { modele.Fonctionnalites = avant }()
+	l.echanger()
+	if v, _ := l.copie.Meta(MetaFonctions); !strings.Contains(v, "rubrique") || l.copie.RecusEnAttente() != 0 {
+		t.Fatalf("après la mise à jour : %s, %d en attente", v, l.copie.RecusEnAttente())
+	}
+	l.stable()
+	// un changement plus récent du serveur remplace celui qui attendait
+	modele.Fonctionnalites = avant
+	if _, err := l.serveur.db.Exec(`UPDATE meta SET valeur='{"rubrique":false}' WHERE cle=?`, MetaFonctions); err != nil {
+		t.Fatal(err)
+	}
+	l.echanger()
+	if _, err := l.serveur.db.Exec(`UPDATE meta SET valeur='{"aides":true}' WHERE cle=?`, MetaFonctions); err != nil {
+		t.Fatal(err)
+	}
+	l.echanger()
+	if l.copie.RecusEnAttente() != 0 || !l.copie.Active("aides") {
+		t.Fatalf("remplacé : %d en attente", l.copie.RecusEnAttente())
+	}
 }
 
 // Les images voyagent : la fiche de l'image d'abord, son contenu à part.
