@@ -3,6 +3,7 @@ package serveur
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -121,4 +122,96 @@ func TestReferenceJoueurs(t *testing.T) {
 			t.Fatalf("sans PJ : %d %v", c, v)
 		}
 	})
+}
+
+// L'éditeur : créer, refuser un doublon, renommer (suivi par les feuilles et les profils),
+// prévenir des « divers » qui compteraient deux fois, retirer (les feuilles gardent leur copie).
+func TestReferenceEditeur(t *testing.T) {
+	b := nouveau(t)
+	if c, v := b.local("POST", "/api/reference/monstres", map[string]any{"nom": "X"}); c != 404 {
+		t.Fatalf("collection inconnue : %d %v", c, v)
+	}
+	c, v := b.local("POST", "/api/reference/voies", map[string]any{"nom": "Voie du gué", "rangs": []any{
+		map[string]any{"nom": "Pas sûr", "bonus": []any{map[string]any{"cible": "def", "valeur": 1}}},
+		map[string]any{"nom": "Trait d'eau", "action": map[string]any{"genre": "sort", "cout_pm": 1}}}})
+	if c != 201 {
+		t.Fatalf("création : %d %v", c, v)
+	}
+	voie := v["element"].(map[string]any)
+	id := voie["id"]
+	if voie["etiquette"] != "maison" || len(voie["rangs"].([]any)) != 5 {
+		t.Fatalf("voie créée : %v", voie)
+	}
+	if c, v := b.local("POST", "/api/reference/voies", map[string]any{"nom": "voie du GUÉ"}); c != 422 || !strings.Contains(v["detail"].(string), "existe déjà") {
+		t.Fatalf("doublon : %d %v", c, v)
+	}
+	if c, v := b.local("POST", "/api/reference/voies", map[string]any{"nom": " "}); c != 422 || v["detail"] != "Nom manquant." {
+		t.Fatalf("sans nom : %d %v", c, v)
+	}
+	b.local("POST", "/api/reference/profils", map[string]any{"nom": "Passeur", "voies": []any{"Voie du gué"}})
+	pj := b.fiche("pj", "Aldric", map[string]any{"profil": "Passeur"})
+	if c, v := b.local("PUT", fmt.Sprintf("/api/entites/%v/feuille", pj), map[string]any{"pv": 10, "def_divers": 2,
+		"voies": []any{map[string]any{"nom": "Voie du gué", "rang": 1, "capacites": []any{"Pas sûr"}}}}); c != 200 {
+		t.Fatalf("feuille : %d %v", c, v)
+	}
+	url := fmt.Sprintf("/api/reference/voies/%v", id)
+	if c, v := b.local("GET", url, nil); c != 200 || len(v["utilisee_par"].([]any)) != 1 {
+		t.Fatalf("lecture : %d %v", c, v)
+	}
+	voie["nom"] = "Voie du grand gué"
+	c, v = b.local("PUT", url, voie)
+	if c != 200 {
+		t.Fatalf("modification : %d %v", c, v)
+	}
+	if a := v["avertissements"].([]any); len(a) != 1 || a[0].(map[string]any)["champ"] != "DEF, divers" {
+		t.Fatalf("avertissements : %v", a)
+	}
+	_, f := b.local("GET", fmt.Sprintf("/api/entites/%v/feuille", pj), nil)
+	if f["voies"].([]any)[0].(map[string]any)["nom"] != "Voie du grand gué" {
+		t.Fatalf("feuille après renommage : %v", f["voies"])
+	}
+	_, ref := b.local("GET", "/api/reference", nil)
+	if p := ref["profils"].([]any)[0].(map[string]any); p["voies"].([]any)[0] != "Voie du grand gué" {
+		t.Fatalf("profil après renommage : %v", p)
+	}
+	_, v = b.local("GET", fmt.Sprintf("/api/reference/profils/%v", ref["profils"].([]any)[0].(map[string]any)["id"]), nil)
+	if len(v["utilisee_par"].([]any)) != 1 {
+		t.Fatalf("profil utilisé par : %v", v)
+	}
+	if c, _ := b.local("DELETE", url, nil); c != 200 {
+		t.Fatalf("retrait : %d", c)
+	}
+	if c, _ := b.local("GET", url, nil); c != 404 {
+		t.Fatalf("voie retirée encore lue : %d", c)
+	}
+	_, f = b.local("GET", fmt.Sprintf("/api/entites/%v/feuille", pj), nil)
+	if v := f["voies"].([]any)[0].(map[string]any); v["nom"] != "Voie du grand gué" || v["capacites"].([]any)[0] != "Pas sûr" {
+		t.Fatalf("la feuille garde sa copie : %v", v)
+	}
+}
+
+// L'éditeur suit les rôles : le MJ écrit, l'auditeur lit, le joueur n'y a pas accès.
+func TestReferenceEditeurRoles(t *testing.T) {
+	b, reg := bancServeur(t)
+	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	mj, audit, joueuse := b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse")
+	c, v, _ := b.proxy("POST", "/api/reference/peuples", map[string]any{"nom": "Gens du gué"}, mj)
+	if c != 201 {
+		t.Fatalf("création par le MJ : %d %v", c, v)
+	}
+	url := fmt.Sprintf("/api/reference/peuples/%v", v["element"].(map[string]any)["id"])
+	for nom, qui := range map[string]func(*http.Request){"audit": audit, "joueuse": joueuse} {
+		for _, x := range [][2]string{{"POST", "/api/reference/peuples"}, {"PUT", url}, {"DELETE", url}} {
+			if c, _, _ := b.proxy(x[0], x[1], map[string]any{"nom": "Autre"}, qui); c != 403 {
+				t.Fatalf("%s %s par %s : %d", x[0], x[1], nom, c)
+			}
+		}
+	}
+	if c, _, _ := b.proxy("GET", url, nil, audit); c != 200 {
+		t.Fatalf("lecture par l'auditeur : %d", c)
+	}
+	if c, _, _ := b.proxy("GET", url, nil, joueuse); c != 403 {
+		t.Fatalf("lecture par le joueur : %d", c)
+	}
 }

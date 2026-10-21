@@ -271,6 +271,28 @@ func TestParcours(t *testing.T) {
 		t.Fatalf("journal : %v", journal)
 	}
 
+	// bibliothèque : créer une voie, la lire, la modifier ; un doublon et un genre inconnu refusés
+	cree := b.json("ecrire_element_bibliotheque", map[string]any{"genre": "voies", "element": map[string]any{"nom": "Voie du gué",
+		"rangs": []any{map[string]any{"nom": "Pas sûr", "bonus": []any{map[string]any{"cible": "def", "valeur": 1}}}}}})
+	voie := cree["element"].(map[string]any)
+	if voie["etiquette"] != "maison" {
+		t.Fatalf("voie créée : %v", voie)
+	}
+	b.outil("ecrire_element_bibliotheque", map[string]any{"genre": "voies", "element": map[string]any{"nom": "Voie du gué"}}, true)
+	b.outil("ecrire_element_bibliotheque", map[string]any{"genre": "monstres", "element": map[string]any{"nom": "X"}}, true)
+	voie["etiquette"] = "officielle"
+	b.json("ecrire_element_bibliotheque", map[string]any{"genre": "voies", "id": voie["id"], "element": voie})
+	if lu := b.json("element_bibliotheque", map[string]any{"genre": "voies", "id": voie["id"]}); lu["element"].(map[string]any)["etiquette"] != "officielle" {
+		t.Fatalf("element_bibliotheque : %v", lu)
+	}
+	resume := b.json("voies_profils_peuples", map[string]any{"q": "pas sur", "etiquette": "officielle"})
+	if v := resume["voies"].([]any); len(v) != 1 || v[0].(map[string]any)["capacites"].([]any)[0] != "Pas sûr" {
+		t.Fatalf("voies_profils_peuples : %v", resume)
+	}
+	if v := b.json("voies_profils_peuples", map[string]any{"etiquette": "maison"})["voies"].([]any); len(v) != 0 {
+		t.Fatalf("filtre par étiquette : %v", v)
+	}
+
 	// lectures sans argument : aucune ne doit échouer sur un univers presque vide
 	for _, n := range []string{"statistiques", "chronologie", "partie_en_cours", "bestiaire", "combats", "liens_morts"} {
 		b.outil(n, nil, false)

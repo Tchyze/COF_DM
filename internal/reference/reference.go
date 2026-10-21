@@ -430,7 +430,7 @@ func NormaliserDoc(coll string, data []byte) ([]byte, error) {
 		return nil, fmt.Errorf("élément illisible")
 	}
 	if err := x.Normaliser(); err != nil {
-		return nil, numero("élément", 0, err)
+		return nil, err
 	}
 	switch e := x.(type) {
 	case *Profil:

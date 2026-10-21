@@ -314,6 +314,52 @@ func outils() []outil {
 			},
 		},
 		{
+			Nom: "voies_profils_peuples", Titre: "Voies, profils et peuples", Lecture: true,
+			Description: "La bibliothèque de l'univers en résumé : voies (id, nom, étiquette, type, capacités rang par rang), profils et peuples (id, nom, étiquette, voies). Lire un élément en entier avec « element_bibliotheque ».",
+			Proprietes: map[string]any{
+				"genre":     choix("Une seule partie (sinon les trois)", "voies", "profils", "peuples"),
+				"q":         texte("Texte cherché dans le nom (et le nom des capacités d'une voie)"),
+				"etiquette": choix("Seulement les éléments de cette étiquette", "officielle", "maison"),
+			},
+			Faire: voiesProfilsPeuples,
+		},
+		{
+			Nom: "element_bibliotheque", Titre: "Lire une voie, un profil ou un peuple", Lecture: true,
+			Description: "Un élément de la bibliothèque en entier (une voie avec ses rangs : texte, bonus, action en combat, utilisations), et les PJ qui s'en servent.",
+			Proprietes: map[string]any{
+				"genre": choix("Partie de la bibliothèque", "voies", "profils", "peuples"),
+				"id":    entier("Identifiant de l'élément"),
+			},
+			Requis: []string{"genre", "id"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("id")
+				if err != nil {
+					return nil, err
+				}
+				genre, err := genreBibliotheque(a)
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("GET", fmt.Sprintf("/api/reference/%s/%d", genre, id), nil, nil)
+			},
+		},
+		{
+			Nom: "ecrire_element_bibliotheque", Titre: "Créer ou modifier une voie, un profil ou un peuple",
+			Description: "Sans « id », crée l'élément ; avec, le remplace en entier (lire d'abord l'élément avec « element_bibliotheque » et renvoyer tous ses champs). " +
+				"Voie : nom, etiquette (officielle ou maison), type (profil, peuple, prestige, autre), description, rangs : [{nom, texte, limitee, sort, " +
+				"bonus: [{cible (pv, pm, def, init, att, att_c, att_d, att_m, rd, ou FOR…CHA), valeur, par_rang, niveau, carac}], " +
+				"action: {genre (sort, attaque, soin, etat, autre), cout_pm, attaque (C, D, M), bonus, degats, soin, etat}, utilisations: {fois, par (combat, jour, repos:<clé>, main)}}]. " +
+				"Profil : nom, etiquette, famille, dv, carac_magie, armes, armures, equipement, description, voies (noms). Peuple : nom, etiquette, caracs (texte), modificateurs ({\"DEX\": 2}), description, voies. " +
+				"Renommer une voie la renomme aussi sur les feuilles et dans les profils et les peuples. N'utiliser que ce que le MJ fournit : aucun texte des livres.",
+			Proprietes: map[string]any{
+				"genre":   choix("Partie de la bibliothèque", "voies", "profils", "peuples"),
+				"id":      entier("Identifiant de l'élément à remplacer (absent : création)"),
+				"element": objet("L'élément en entier"),
+			},
+			Requis: []string{"genre", "element"},
+			Faire:  ecrireElementBibliotheque,
+		},
+		{
 			Nom: "difficulte_rencontre", Fonction: "rencontres", Titre: "Difficulté d'une rencontre", Lecture: true,
 			Description: "Les créatures d'une rencontre et sa difficulté face aux PJ de sa campagne (selon le fichier de règles de l'univers).",
 			Proprietes: map[string]any{
@@ -600,6 +646,82 @@ func outils() []outil {
 			Faire:  modifierFeuille,
 		},
 	}
+}
+
+// voiesProfilsPeuples : la bibliothèque en résumé, filtrée ici.
+func voiesProfilsPeuples(c *Client, a arguments) (any, error) {
+	b, err := c.appel("GET", "/api/reference", nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	var x struct{ Voies, Profils, Peuples []map[string]any }
+	if err := json.Unmarshal(b, &x); err != nil {
+		return nil, errors.New("bibliothèque illisible")
+	}
+	ref := map[string][]map[string]any{"voies": x.Voies, "profils": x.Profils, "peuples": x.Peuples}
+	q, etiquette, genre := sansAccents(a.texte("q")), a.texte("etiquette"), a.texte("genre")
+	out := map[string]any{}
+	for _, g := range []string{"voies", "profils", "peuples"} {
+		if genre != "" && genre != g {
+			continue
+		}
+		liste := []map[string]any{}
+		for _, el := range ref[g] {
+			nom, _ := el["nom"].(string)
+			cherche := nom
+			r := map[string]any{"id": el["id"], "nom": nom, "etiquette": el["etiquette"]}
+			if g == "voies" {
+				noms := []string{}
+				rangs, _ := el["rangs"].([]any)
+				for _, x := range rangs {
+					n, _ := x.(map[string]any)["nom"].(string)
+					noms = append(noms, n)
+					cherche += " " + n
+				}
+				r["type"], r["capacites"] = el["type"], noms
+			} else {
+				r["voies"] = el["voies"]
+				if g == "peuples" && el["modificateurs"] != nil {
+					r["modificateurs"] = el["modificateurs"]
+				}
+			}
+			if (q != "" && !strings.Contains(sansAccents(cherche), q)) || (etiquette != "" && el["etiquette"] != etiquette) {
+				continue
+			}
+			liste = append(liste, r)
+		}
+		out[g] = liste
+	}
+	return out, nil
+}
+
+// ecrireElementBibliotheque : création (sans id) ou remplacement d'un élément.
+func ecrireElementBibliotheque(c *Client, a arguments) (any, error) {
+	genre, err := genreBibliotheque(a)
+	if err != nil {
+		return nil, err
+	}
+	el, ok := a["element"].(map[string]any)
+	if !ok {
+		return nil, errors.New("« element » : un objet attendu")
+	}
+	if !a.a("id") {
+		return c.appel("POST", "/api/reference/"+genre, nil, el)
+	}
+	id, err := a.id("id")
+	if err != nil {
+		return nil, err
+	}
+	return c.appel("PUT", fmt.Sprintf("/api/reference/%s/%d", genre, id), nil, el)
+}
+
+// genreBibliotheque : voies, profils ou peuples.
+func genreBibliotheque(a arguments) (string, error) {
+	switch g := a.texte("genre"); g {
+	case "voies", "profils", "peuples":
+		return g, nil
+	}
+	return "", errors.New("« genre » : voies, profils ou peuples")
 }
 
 // bestiaire : les monstres en résumé, filtrés ici (l'API les rend tous, en entier).

@@ -44,6 +44,7 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
       : "aucun. Sans lui, peuples, profils, tailles et catégories se saisissent librement, le créateur de monstre et la difficulté des rencontres ne sont pas proposés, et le combat est minimal."}</p>
     ${aDesRegles ? parties : ""}
     <p class="hint">Ce fichier ne crée aucune fiche : la liste <a href="#/t/regle">Règles</a> du menu contient des fiches d'aide-mémoire, qui s'importent par « Importer des fiches », sur cette page. Les monstres s'importent depuis le <a href="#/bestiaire">bestiaire</a>.</p>
+    <div class="ligne"><a href="#/voies"><button>✎ ${lecture ? "Consulter" : "Modifier"} les voies, profils et peuples</button></a></div>
     ${lecture ? "" : `
     <div class="ligne">
       <button id="bib-regles">⬆ Importer un fichier de règles (JSON)…</button><input type="file" id="bib-regles-f" accept="application/json,.json" hidden>

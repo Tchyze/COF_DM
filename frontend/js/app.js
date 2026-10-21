@@ -1,7 +1,7 @@
 // Routeur et cadre de l'application.
 // Routes : #/  #/t/<type>  #/f/<id>  #/f/<id>/modifier  #/nouveau/<type>?nom=…  #/nouveau?nom=…
 //          #/bestiaire[/<id>|/nouveau]  #/createur
-//          #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres
+//          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres
 import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers } from "./ui.js";
 import { chargerSchema, schema, typeDe, vignette, badgeType, actif as fonctionActive } from "./schema.js";
 import * as tableau from "./views/tableau.js";
@@ -13,6 +13,7 @@ import * as chronologie from "./views/chronologie.js";
 import * as outils from "./views/outils.js";
 import * as secrets from "./views/secrets.js";
 import * as bestiaire from "./views/bestiaire.js";
+import * as voies from "./views/voies.js";
 import * as combat from "./views/combat.js";
 import * as createur from "./views/createur.js";
 import * as synchro from "./views/synchro.js";
@@ -85,6 +86,7 @@ async function route() {
     else if (nom === "apres" && +a) { actif = "seance"; nettoyage = await apres.mount(el, +a); }
     else if (nom === "graphe") { actif = "graphe"; nettoyage = await graphe.mount(el, +a || 0); }
     else if (nom === "bestiaire") { actif = "bestiaire"; nettoyage = await bestiaire.mount(el, a); }
+    else if (nom === "voies") { actif = "voies"; nettoyage = await voies.mount(el, a); }
     else if (nom === "createur") { actif = "bestiaire"; nettoyage = await createur.mount(el); }
     else if (nom === "combat") { actif = "combat"; nettoyage = await combat.mount(el, a); }
     else if (nom === "secrets") { actif = "secrets"; nettoyage = await secrets.mount(el, params); }
@@ -111,11 +113,13 @@ async function dessinerNav() {
     (joueur || !fonctionActive("ecran_mj") ? "" : lien("table", "#/table", "🧭", "Écran du MJ")) +
     GROUPES.map(([g, cles]) => {
       const connus = cles.filter(typeDe); // le schéma d'un joueur n'a pas tous les types
-      if (!connus.length) return "";
+      // les voies, profils et peuples de l'univers vont avec les règles (pas pour les joueurs)
+      const voies = g === "Règles" && !joueur ? lien("voies", "#/voies", "📖", "Voies et profils") : "";
+      if (!connus.length && !voies) return "";
       return `<h4>${g}</h4>` + connus.map(c => {
         const t = typeDe(c);
         return lien(c, `#/t/${c}`, t.icone, t.pluriel, compte[c]);
-      }).join("") + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : "");
+      }).join("") + voies + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : "");
     }).join("") +
     (joueur ? "" : `<h4>${fonctionActive("combat") ? "Combat" : "Bestiaire"}</h4>` + (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire")) +
     `<h4>Outils</h4>` +
