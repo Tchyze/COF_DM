@@ -57,7 +57,7 @@ export async function mount(el, type, params) {
       <a class="carte${x.archive ? " archivee" : ""}" href="#/f/${x.id}" data-type="${x.type}">
         ${vignette(x, 54)}
         <span class="corps">
-          <span class="nom">${esc(x.nom)}${x.partage && window.cofAcces?.serveur && !window.cofAcces.joueur ? ` <span title="Visible des joueurs">👁</span>` : ""}</span>
+          <span class="nom">${esc(x.nom)}${x.partage && window.cofAcces?.serveur ? ` <span title="Visible des joueurs">👁</span>` : ""}</span>
           <span class="ligne" style="gap:5px">${t.carte.map(k => { const v = valeurCarte(type, t.champs.find(c => c.cle === k), x.carte?.[k], refs); return v ? `<span class="badge">${v}</span>` : ""; }).join("")}</span>
           ${x.extrait ? `<span class="ext">${esc(x.extrait.replace(/\[\[([^\]|]*?)(?:\\?\|([^\]]*))?\]\]/g, (_, c, tt) => tt || c)).replace(/«/g, "<mark>").replace(/»/g, "</mark>")}</span>` : ""}
           ${x.tags?.length ? `<span class="ligne" style="gap:4px">${x.tags.map(g => `<span class="badge tag">#${esc(g)}</span>`).join("")}</span>` : ""}

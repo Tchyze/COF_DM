@@ -24,9 +24,12 @@ import "strconv"
 //
 // Modèle 3 : la feuille compte les utilisations des capacités (« utilisations ») ; un repos des
 // règles peut valoir un nouveau jour (« nouveau_jour »).
+//
+// Modèle 4 : l'édition par les joueurs (réglage « edition_joueurs ») se synchronise, pour que le MJ
+// la règle depuis un bureau relié au serveur.
 const (
 	VersionProtocole = 1
-	VersionModele    = 3
+	VersionModele    = 4
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

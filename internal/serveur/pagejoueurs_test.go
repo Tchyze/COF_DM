@@ -76,8 +76,18 @@ func TestPageJoueursLibre(t *testing.T) {
 			t.Fatalf("%s %s par un joueur : %d", x[0], x[1], c)
 		}
 	}
+	// à la maison, les champs de la fiche du PJ ne se modifient pas depuis la page
+	if c, _ := b.joueurLibre("PATCH", fmt.Sprintf("/api/joueur/pj/%v", s.aldric), map[string]any{"data": map[string]any{"historique": "x"}}, true); c != 401 {
+		t.Fatalf("fiche du PJ modifiée sur la page libre : %d", c)
+	}
+	// la date en jeu vient de la campagne du PJ (sans rien d'autre de la campagne)
+	b.local("PATCH", fmt.Sprintf("/api/entites/%v", s.camp), map[string]any{"data": map[string]any{"date_actuelle": map[string]any{"an": 1216, "mois": 2, "jour": 3},
+		"arc": "SECRET-ARC"}})
 	// la liste des PJ : ni mort, ni feuille d'une autre fiche
 	_, corps := b.joueurLibre("GET", "/api/joueur/pj", nil, false)
+	if !strings.Contains(corps, `"date":"3 Brumaire 1216`) || strings.Contains(corps, "SECRET-ARC") {
+		t.Fatalf("date en jeu des PJ : %s", corps)
+	}
 	var pjs []map[string]any
 	json.Unmarshal([]byte(corps), &pjs)
 	if len(pjs) != 3 || pjs[1]["nom"] != "Aldric" || pjs[1]["feuille"] != true || pjs[2]["nom"] != "Mira" || pjs[2]["feuille"] != false {

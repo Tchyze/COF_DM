@@ -493,8 +493,6 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .lecture-avis{margin:10px 0 0;font-size:.8rem;color:var(--warn);text-align:center}
 .lecture-seule a[href^="#/nouveau"],.lecture-seule a[href$="/modifier"]{display:none}
 .lecture-seule #rel-ajout,.lecture-seule #depot,.lecture-seule #archiver,.lecture-seule #supprimer{display:none}
-/* vue des joueurs : la fiche seule, sans les outils du MJ */
-.joueur #p-special,.joueur #p-secrets,.joueur #organigramme,.joueur .fiche-tete .actions,.joueur .meta-fiche,.joueur .vue-joueur .panneau:nth-child(n+4){display:none}
 .lecture-seule [data-suppr]{display:none}
 #choix-univers{width:100%;margin:0 0 8px}
 /* mode de travail (bureau), en bas à gauche : local, connecté, hors connexion */

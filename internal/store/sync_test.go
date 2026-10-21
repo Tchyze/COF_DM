@@ -220,6 +220,9 @@ func TestSynchronisationObjets(t *testing.T) {
 	if err := p.copie.DefinirCalendrier(cal); err != nil {
 		t.Fatal(err)
 	}
+	if err := p.copie.SetMeta(MetaEditionJoueurs, "1"); err != nil { // le MJ ouvre l'édition sur son bureau
+		t.Fatal(err)
+	}
 
 	// le contenu des images voyage à part : ici, donné directement
 	if _, err := p.copie.Relever(); err != nil {
@@ -242,6 +245,17 @@ func TestSynchronisationObjets(t *testing.T) {
 	}
 	if p.serveur.Calendrier().Ere != "de la Couronne" {
 		t.Fatal("calendrier non reçu")
+	}
+	if v, _ := p.serveur.Meta(MetaEditionJoueurs); v != "1" {
+		t.Fatalf("édition par les joueurs non reçue : %q", v)
+	}
+	// refermée sur le serveur, elle se referme sur la copie
+	if err := p.serveur.SetMeta(MetaEditionJoueurs, ""); err != nil {
+		t.Fatal(err)
+	}
+	p.synchroniser()
+	if v, _ := p.copie.Meta(MetaEditionJoueurs); v != "" {
+		t.Fatalf("édition par les joueurs refermée : %q sur la copie", v)
 	}
 	if _, err := p.copie.LireDoc("combats", fini.ID); err != nil {
 		t.Fatalf("combat terminé non reçu : %v", err)

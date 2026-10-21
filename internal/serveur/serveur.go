@@ -413,8 +413,7 @@ type ficheComplete struct {
 	Mentions   map[string]store.CibleMention `json:"mentions"`
 	RefsNoms   map[string]store.Resume       `json:"refs"` // fiches citées par les champs Ref / Refs
 	Medias     []store.Media                 `json:"medias"`
-	Dates      map[string]string             `json:"dates"`                // champs date en jeu, mis en texte
-	Modifiable []string                      `json:"modifiable,omitempty"` // vue des joueurs : champs que ce joueur peut modifier
+	Dates      map[string]string             `json:"dates"` // champs date en jeu, mis en texte
 }
 
 func (s *Serveur) complete(id int64) (ficheComplete, error) {

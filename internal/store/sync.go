@@ -55,8 +55,12 @@ const (
 )
 
 // reglagesSync : les réglages de l'univers qui se synchronisent (dont les fonctionnalités
-// activées) ; les autres (édition par les joueurs, page des joueurs…) tiennent à chaque côté.
-var reglagesSync = []string{"calendrier", MetaRegles, MetaReference, MetaFonctions}
+// activées et l'édition par les joueurs) ; les autres (page des joueurs ouverte au réseau…) tiennent
+// à chaque côté.
+var reglagesSync = []string{"calendrier", MetaRegles, MetaReference, MetaFonctions, MetaEditionJoueurs}
+
+// MetaEditionJoueurs : « 1 » quand les joueurs modifient la feuille de leur PJ (réglage du MJ).
+const MetaEditionJoueurs = "edition_joueurs"
 
 // Changement : la valeur d'un champ, telle qu'un relevé l'a vue à son numéro d'ordre.
 type Changement struct {
@@ -650,6 +654,12 @@ func appliquerReglage(tx execer, o *objetRecu) error {
 			return err
 		}
 		texte = canonique(choix)
+	case o.cle == MetaEditionJoueurs:
+		var n int
+		if err := valeurRecue(c, &n); err != nil || n != 1 {
+			return invalide("édition par les joueurs : 1, ou rien")
+		}
+		texte = "1"
 	default:
 		return invalide("réglage %q : il ne se synchronise pas", o.cle)
 	}

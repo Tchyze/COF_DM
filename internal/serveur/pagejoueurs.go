@@ -11,6 +11,7 @@ import (
 
 	"github.com/Tchyze/cof_dm/internal/combat"
 	"github.com/Tchyze/cof_dm/internal/comptes"
+	"github.com/Tchyze/cof_dm/internal/modele"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
 
@@ -311,14 +312,59 @@ func (s *Serveur) joueurEtat(w http.ResponseWriter, r *http.Request) {
 
 // pjJoueur : un PJ dans la liste de la page.
 type pjJoueur struct {
-	ID      int64  `json:"id"`
-	Nom     string `json:"nom"`
-	Joueur  string `json:"joueur,omitempty"`
-	Peuple  string `json:"peuple,omitempty"`
-	Profil  string `json:"profil,omitempty"`
-	Niveau  int    `json:"niveau"`
-	Statut  string `json:"statut,omitempty"`
-	Feuille bool   `json:"feuille"` // sa feuille de personnage existe
+	ID      int64        `json:"id"`
+	Nom     string       `json:"nom"`
+	Joueur  string       `json:"joueur,omitempty"`
+	Peuple  string       `json:"peuple,omitempty"`
+	Profil  string       `json:"profil,omitempty"`
+	Niveau  int          `json:"niveau"`
+	Statut  string       `json:"statut,omitempty"`
+	Feuille bool         `json:"feuille"`        // sa feuille de personnage existe
+	Date    string       `json:"date,omitempty"` // date en jeu de sa campagne, en toutes lettres
+	Recit   []champRecit `json:"recit"`          // les champs de sa fiche ouverts au joueur
+	Modifie float64      `json:"modifie"`        // de la fiche : contrôle d'une modification concurrente
+}
+
+// champRecit : un champ de la fiche que le joueur tient lui-même (Champ.Joueur : apparence…).
+type champRecit struct {
+	Cle   string `json:"cle"`
+	Nom   string `json:"nom"`
+	Texte string `json:"texte"`
+}
+
+// pjPourJoueur : le PJ tel que la page le montre. Rien d'autre de la fiche : ni ses champs réservés
+// au MJ, ni ce qui la relie au reste du monde.
+func (s *Serveur) pjPourJoueur(e store.Entite) pjJoueur {
+	texte := func(k string) string { v, _ := e.Data[k].(string); return v }
+	_, _, existe, _ := s.feuilleDe(e)
+	p := pjJoueur{ID: e.ID, Nom: e.Nom, Joueur: texte("joueur"), Peuple: texte("peuple"), Profil: texte("profil"),
+		Niveau: niveauDe(e), Statut: texte("statut"), Feuille: existe, Date: s.dateDuPJ(e), Recit: []champRecit{}, Modifie: e.Modifie}
+	if t, ok := modele.TypeDe(e.Type); ok {
+		for _, c := range t.Champs {
+			if c.Joueur && champJoueur(c) {
+				p.Recit = append(p.Recit, champRecit{Cle: c.Cle, Nom: c.Nom, Texte: texte(c.Cle)})
+			}
+		}
+	}
+	return p
+}
+
+// dateDuPJ : la date en jeu de la campagne du PJ ("" sans campagne ou sans date). Seule la date sort
+// de la fiche de la campagne, même quand elle n'est pas partagée.
+func (s *Serveur) dateDuPJ(e store.Entite) string {
+	ids := idsDe(e.Data["campagne"])
+	if len(ids) == 0 {
+		return ""
+	}
+	c, err := s.store.Lire(ids[0])
+	if err != nil || c.Archive || c.Type != "campagne" {
+		return ""
+	}
+	m, ok := c.Data["date_actuelle"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	return s.store.Calendrier().Texte(modele.DateJeu{An: int(num(m["an"])), Mois: int(num(m["mois"])), Jour: int(num(m["jour"]))})
 }
 
 // joueurPJ : les PJ parmi lesquels choisir le sien (ni morts, ni partis, ni archivés). Sur un
@@ -336,10 +382,7 @@ func (s *Serveur) joueurPJ(w http.ResponseWriter, r *http.Request) {
 		if err != nil || e.Archive || absent(e.Data["statut"]) || (restreint && (e.ID != pj || !partagee(e))) {
 			continue
 		}
-		texte := func(k string) string { v, _ := e.Data[k].(string); return v }
-		_, _, existe, _ := s.feuilleDe(e)
-		out = append(out, pjJoueur{ID: e.ID, Nom: e.Nom, Joueur: texte("joueur"), Peuple: texte("peuple"), Profil: texte("profil"),
-			Niveau: niveauDe(e), Statut: texte("statut"), Feuille: existe})
+		out = append(out, s.pjPourJoueur(e))
 	}
 	sort.SliceStable(out, func(i, j int) bool { return store.Plier(out[i].Nom) < store.Plier(out[j].Nom) })
 	repondre(w, 200, out)

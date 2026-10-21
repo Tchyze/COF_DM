@@ -50,10 +50,6 @@ async function route() {
     return;
   }
   // lecture seule (auditeur) : ni création, ni modification
-  if (window.cofAcces?.joueur && ["table", "graphe", "secrets", "chronologie", "liens", "journal", "bestiaire", "createur", "combat", "preparer", "apres"].includes(nom)) {
-    location.replace("#/");
-    return;
-  }
   if (window.cofAcces?.lecture_seule && (nom === "nouveau" || nom === "apres" || b === "modifier")) {
     toast("Votre compte lit cet univers sans pouvoir le modifier.", true);
     location.replace(nom === "f" ? "#/f/" + a : "#/");
@@ -107,28 +103,26 @@ async function dessinerNav() {
   try { compte = (await api("GET", "/api/stats")).compte; } catch { /* hors ligne */ }
   const lien = (cle, href, icone, nom, n) =>
     `<a href="${href}" data-cle="${cle}"${typeDe(cle) ? ` data-type="${cle}"` : ""}><span class="ic">${icone}</span>${esc(nom)}${n ? `<span class="n">${n}</span>` : ""}</a>`;
-  const joueur = !!window.cofAcces?.joueur; // vue des joueurs : les fiches partagées, sans les outils du MJ
   $("#nav").innerHTML =
     lien("accueil", "#/", "🏠", "Tableau de bord") +
-    (joueur || !fonctionActive("ecran_mj") ? "" : lien("table", "#/table", "🧭", "Écran du MJ")) +
+    (!fonctionActive("ecran_mj") ? "" : lien("table", "#/table", "🧭", "Écran du MJ")) +
     GROUPES.map(([g, cles]) => {
-      const connus = cles.filter(typeDe); // le schéma d'un joueur n'a pas tous les types
-      // les voies, profils et peuples de l'univers vont avec les règles (pas pour les joueurs)
-      const voies = g === "Règles" && !joueur ? lien("voies", "#/voies", "📖", "Voies et profils") : "";
+      const connus = cles.filter(typeDe); // types des fonctionnalités coupées : hors du schéma
+      // les voies, profils et peuples de l'univers vont avec les règles
+      const voies = g === "Règles" ? lien("voies", "#/voies", "📖", "Voies et profils") : "";
       if (!connus.length && !voies) return "";
       return `<h4>${g}</h4>` + connus.map(c => {
         const t = typeDe(c);
         return lien(c, `#/t/${c}`, t.icone, t.pluriel, compte[c]);
       }).join("") + voies + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : "");
     }).join("") +
-    (joueur ? "" : `<h4>${fonctionActive("combat") ? "Combat" : "Bestiaire"}</h4>` + (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire")) +
+    `<h4>${fonctionActive("combat") ? "Combat" : "Bestiaire"}</h4>` + (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire") +
     `<h4>Outils</h4>` +
-    (joueur ? "" : (fonctionActive("graphe") ? lien("graphe", "#/graphe", "🕸", "Graphe") : "") +
-      (fonctionActive("chronologie") ? lien("chronologie", "#/chronologie", "📅", "Chronologie") : "") +
-      lien("liens", "#/liens", "⛓", "Liens morts") +
-      lien("journal", "#/journal", "📒", "Journal")) +
-    lien("parametres", "#/parametres", "⚙", "Paramètres") +
-    (joueur && fonctionActive("page_joueurs") ? `<h4>Jouer</h4><a href="/joueur.html"><span class="ic">🎲</span>Ma page de joueur</a>` : "");
+    (fonctionActive("graphe") ? lien("graphe", "#/graphe", "🕸", "Graphe") : "") +
+    (fonctionActive("chronologie") ? lien("chronologie", "#/chronologie", "📅", "Chronologie") : "") +
+    lien("liens", "#/liens", "⛓", "Liens morts") +
+    lien("journal", "#/journal", "📒", "Journal") +
+    lien("parametres", "#/parametres", "⚙", "Paramètres");
   const { parts } = lireHash();
   const actif = !parts[0] ? "accueil" : parts[0] === "t" ? parts[1] : parts[0] === "f" ? fiche.typeCourant() : parts[0];
   $$("#nav a").forEach(x => x.classList.toggle("on", x.dataset.cle === actif));
@@ -284,7 +278,13 @@ async function choixUnivers() {
   sel.hidden = false;
   // le choix vaut pour cet onglet ; il devient aussi celui des prochains onglets (cookie)
   sel.onchange = async () => {
-    try { await api("POST", "/api/mes-univers/courant", { id: sel.value }); choisirUniversOnglet(sel.value); location.hash = "#/"; location.reload(); }
+    try {
+      await api("POST", "/api/mes-univers/courant", { id: sel.value });
+      choisirUniversOnglet(sel.value);
+      // là où il est joueur, le compte n'a que sa page de joueur
+      if (m.univers.find(u => u.id === sel.value)?.role === "joueur") location.href = "/joueur.html";
+      else { location.hash = "#/"; location.reload(); }
+    }
     catch (e) { toast(e.message, true); sel.value = m.courant; }
   };
 }
@@ -324,6 +324,8 @@ function ecranCompte(acces) {
   // sur l'ordinateur du MJ, rien n'est demandé ; ailleurs, le mot de passe MJ
   const acces = await api("GET", "/api/acces").catch(() => ({ mj: false, mdp_defini: true }));
   if (!acces.mj) { ecranConnexion(acces); return; }
+  // un compte joueur n'a que sa page de joueur, dans l'univers de cet onglet
+  if (acces.joueur) { location.replace("/joueur.html"); return; }
   window.cofAcces = acces;
   window.addEventListener("cof-session", async () => {
     const a = await fetch("/api/acces", { headers: enTetesUnivers() }).then(r => r.json()).catch(() => null);
@@ -331,13 +333,12 @@ function ecranCompte(acces) {
   });
   if (!acces.local) {
     $("#deconnexion").hidden = false;
-    $("#deconnexion").onclick = async () => { await api("POST", "/api/acces/deconnexion").catch(() => {}); location.reload(); };
+    $("#deconnexion").onclick = async () => { await api("POST", "/api/acces/deconnexion").catch(() => {}); choisirUniversOnglet(""); location.reload(); };
   }
   if (acces.serveur) {
     $("#deconnexion").title = `Fermer la session de ${acces.compte.nom}`;
     $("#app").classList.toggle("lecture-seule", !!acces.lecture_seule);
-    $("#app").classList.toggle("joueur", !!acces.joueur);
-    if (acces.lecture_seule) $(".side .bas").insertAdjacentHTML("beforebegin", `<p class="lecture-avis">👁 ${acces.joueur ? "Vue des joueurs" : "Lecture seule"}</p>`);
+    if (acces.lecture_seule) $(".side .bas").insertAdjacentHTML("beforebegin", `<p class="lecture-avis">👁 Lecture seule</p>`);
   }
   if (acces.serveur) choixUnivers();
   // le menu Fichier : sur l'ordinateur du MJ, ou pour l'administrateur d'un serveur
@@ -348,7 +349,7 @@ function ecranCompte(acces) {
   try { await chargerSchema(); }
   catch (e) { $("#vue").innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
   await dessinerNav();
-  if (!acces.joueur && fonctionActive("des")) initDes({ lecture: !!acces.lecture_seule }); // un joueur lance depuis sa page
+  if (fonctionActive("des")) initDes({ lecture: !!acces.lecture_seule });
   route();
 })();
 export { schema };

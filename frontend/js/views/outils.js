@@ -1,6 +1,6 @@
 // Pages d'outils : liens morts, journal, paramètres (calendrier, API, données).
 import { $, $$, esc, api, toast, armer, dateHeure, lien, enTetesUnivers } from "../ui.js";
-import { panneauCompte, panneauComptes } from "./comptes.js";
+import { panneauCompte, panneauComptes, aideEditionJoueurs } from "./comptes.js";
 import { panneauBibliotheque } from "./bibliotheque.js";
 import { schema, chargerSchema, lienFiche, badgeType, actif as fonctionActive } from "../schema.js";
 import { taille, dialogueObsidian } from "../fichier.js";
@@ -64,7 +64,7 @@ async function panneauAcces(box) {
     <label class="t-coche"><input type="checkbox" id="acc-joueurs" ${a.page_joueurs ? "checked" : ""} ${a.relie && !a.page_joueurs ? "disabled" : ""}>
       <span>Ouvrir la page des joueurs au réseau local<small>${a.reseau ? "Prend effet aussitôt." : "Sans effet tant que l'application n'écoute pas sur le réseau."}</small></span></label>
     <label class="t-coche"><input type="checkbox" id="acc-edition" ${a.edition_joueurs ? "checked" : ""}>
-      <span>Déverrouiller les feuilles<small>Les joueurs modifient alors leur feuille, sauf vos notes. Réglage de cet univers.</small></span></label>
+      <span>Déverrouiller les feuilles<small>${esc(aideEditionJoueurs(a))}</small></span></label>
     ${a.page_joueurs && a.reseau && a.adresses.length ? `<div class="acces-adresses">${a.adresses.map(u => `<figure><img src="/api/acces/qr?url=${encodeURIComponent(u + "/joueur.html")}" alt="QR code de la page des joueurs" loading="lazy"><code>${esc(u)}/joueur.html</code></figure>`).join("")}</div>` : ""}
     <p class="hint"><a href="${lien("/joueur.html")}" target="_blank" rel="noopener">Voir la page des joueurs</a> depuis cet ordinateur.</p>`}`;
   const maj = () => panneauAcces(box);
@@ -74,7 +74,7 @@ async function panneauAcces(box) {
     maj();
   };
   if ($("#acc-edition", box)) $("#acc-edition", box).onchange = async e => {
-    try { await api("PUT", "/api/joueurs/edition", { active: e.target.checked }); toast(e.target.checked ? "Feuilles déverrouillées." : "Feuilles verrouillées."); }
+    try { await api("PUT", "/api/joueurs/edition", { active: e.target.checked }); window.cofAcces.edition_joueurs = e.target.checked; toast(e.target.checked ? "Feuilles déverrouillées." : "Feuilles verrouillées."); }
     catch (err) { toast(err.message, true); }
     maj();
   };
@@ -158,11 +158,6 @@ async function panneauClaude(box) {
 }
 
 export async function parametres(el) {
-  if (window.cofAcces?.joueur) { // un joueur ne règle que son compte
-    el.innerHTML = `<div class="entete"><h1>Paramètres</h1></div><div class="grille-param"><section class="panneau" id="compte"></section></div>`;
-    panneauCompte($("#compte", el)).catch(e => { $("#compte", el).innerHTML = `<div class="erreur">${esc(e.message)}</div>`; });
-    return;
-  }
   const p = await api("GET", "/api/parametres");
   const surPlace = window.cofAcces?.local !== false; // sur l'ordinateur du MJ (pas une tablette connectée)
   const serveur = !!window.cofAcces?.serveur; // mode serveur : chacun a son compte
