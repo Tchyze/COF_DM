@@ -341,6 +341,12 @@
 .page-joueurs #bandeau.moi{background:var(--mort);color:var(--bg);border-color:var(--mort)}
 .page-joueurs main{flex:1;padding:16px;padding-bottom:calc(32px + env(safe-area-inset-bottom,0px));max-width:1100px;width:100%;margin:0 auto}
 .pj-fiche{display:flex;flex-direction:column;gap:14px}
+.pj-voie h2{font-size:1.25rem;margin:0 0 6px}
+.pj-rangs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pj-rangs > li{display:flex;gap:10px;padding:8px 10px;border:1px solid var(--line2);border-radius:var(--r);color:var(--muted)}
+.pj-rangs > li .n{font-family:var(--f-display);font-weight:700;min-width:1.2em;text-align:center}
+.pj-rangs > li.acquis{color:var(--ink);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.pj-rangs ul{margin:4px 0 0;padding-left:1.2em}
 .pj-tete{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
 .pj-tete h1{font-size:1.7rem}
 .combat .pj-choix{max-width:900px;width:100%;margin:0 auto}

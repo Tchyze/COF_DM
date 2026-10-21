@@ -153,6 +153,25 @@ func (s *Serveur) capacitesActives(f *fiches.Feuille) []combat.CapaciteActive {
 	return out
 }
 
+// voieAjoutee : le nom d'une voie de la bibliothèque que la nouvelle feuille a et que l'ancienne
+// n'avait pas (vide : aucune). Un joueur monte de rang dans ses voies ou en écrit une libre ; ajouter
+// une voie de la bibliothèque reste au MJ.
+func (s *Serveur) voieAjoutee(avant, apres []fiches.Voie) string {
+	ref := s.lireReference()
+	deja := map[string]bool{}
+	for _, v := range avant {
+		if lib := voieLiee(ref, v); lib != nil {
+			deja[reference.Ident(lib.Ref, lib.Nom)] = true
+		}
+	}
+	for _, v := range apres {
+		if lib := voieLiee(ref, v); lib != nil && !deja[reference.Ident(lib.Ref, lib.Nom)] {
+			return lib.Nom
+		}
+	}
+	return ""
+}
+
 // voieLiee : la voie de la bibliothèque que désigne une voie de feuille (nil : voie libre).
 func voieLiee(ref *reference.Reference, v fiches.Voie) *reference.Voie {
 	for i, x := range ref.Voies {
@@ -254,8 +273,15 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 	}
 	if garderNotes {
 		f.Notes = ""
-		if ancienne, _, existe, err := s.feuilleDe(e); err == nil && existe {
+		ancienne, _, existe, err := s.feuilleDe(e)
+		if err == nil && existe {
 			f.Notes = ancienne.Notes
+		}
+		if err == nil {
+			if nom := s.voieAjoutee(ancienne.Voies, f.Voies); nom != "" {
+				erreur(w, 403, "Seul le MJ ajoute une voie de la bibliothèque à une feuille : « "+nom+" ».")
+				return
+			}
 		}
 	}
 	modifie, err := s.store.EcrireFeuille(e.ID, f.Stockage(), attendu.Modifie, auteurDe(r))
