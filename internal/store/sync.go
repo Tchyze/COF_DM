@@ -75,6 +75,8 @@ func (c Changement) Supprime() bool { return len(c.Valeur) == 0 || string(c.Vale
 
 var jsonNull = json.RawMessage("null")
 
+var jsonVrai = json.RawMessage("true")
+
 // canonique : la forme JSON stable d'une valeur (clés triées), pour comparer deux relevés.
 func canonique(v any) string {
 	b, err := json.Marshal(v)

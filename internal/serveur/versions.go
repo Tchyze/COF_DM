@@ -28,6 +28,9 @@ func msgBureauRecent(srv synchro.Versions) string {
 		") : demandez à son administrateur de le mettre à jour."
 }
 
+// msgReceptionSeule : ce que fait un bureau plus récent que son serveur.
+const msgReceptionSeule = "En attendant, les changements du serveur arrivent ; ceux de cet ordinateur attendent sa mise à jour, sans rien perdre."
+
 // verifierServeur : avant de tirer une copie (envoi false) ou d'envoyer un univers (envoi true), le
 // serveur et ce bureau doivent pouvoir échanger. Une copie se tire d'un serveur plus ancien (le
 // bureau en reçoit les changements) ; un univers ne s'envoie qu'à un serveur au même modèle, sans
