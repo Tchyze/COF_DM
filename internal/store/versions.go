@@ -21,9 +21,12 @@ import "strconv"
 // Modèle 2 : les profils, peuples et voies sont rangés un par un (collections « profils »,
 // « peuples », « voies ») et non plus dans le réglage « reference » ; ils portent une étiquette
 // (officielle ou maison), et les capacités leurs bonus, leur action en combat et leurs utilisations.
+//
+// Modèle 3 : la feuille compte les utilisations des capacités (« utilisations ») ; un repos des
+// règles peut valoir un nouveau jour (« nouveau_jour »).
 const (
 	VersionProtocole = 1
-	VersionModele    = 2
+	VersionModele    = 3
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

@@ -122,8 +122,19 @@ export async function mount(el, arg) {
   }
 
   function peindrePJ() {
-    maj($("#t-pj", el), `<h3>Joueurs</h3>
+    const jour = !lecture && fonctionActive("feuilles") && d.pj.length;
+    maj($("#t-pj", el), `<h3>Joueurs${jour ? ` <span class="sp"></span><button type="button" class="petit ghost" id="t-jour" title="Les capacités « par jour » des PJ de la table redeviennent utilisables">☀ Nouveau jour</button>` : ""}</h3>
       <div class="t-defile t-pjs">${d.pj.length ? d.pj.map(cartePJ).join("") : `<p class="vide">Aucun PJ${d.campagne ? " dans cette campagne" : ""}. <a href="#/nouveau/pj${d.campagne ? "?campagne=" + d.campagne.id : ""}">Créer un PJ</a></p>`}</div>`);
+    const b = $("#t-jour", el);
+    if (b && !b.dataset.arme) {
+      b.dataset.arme = "1";
+      armer(b, "Confirmer le nouveau jour", async () => {
+        try {
+          const r = await api("POST", "/api/feuilles/nouveau-jour", { pj: d.pj.map(p => p.fiche.id) });
+          toast(r.feuilles ? `Nouveau jour : capacités « par jour » rendues sur ${r.feuilles} feuille${r.feuilles > 1 ? "s" : ""}.` : "Nouveau jour : aucune capacité « par jour » n'avait servi.");
+        } catch (e) { toast(e.message, true); }
+      });
+    }
   }
 
   // ---------------------------------------------------------------- scène

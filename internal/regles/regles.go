@@ -148,6 +148,9 @@ type Repos struct {
 	Pv      []string `json:"pv,omitempty"`      // PV rendus : somme de « dv » (un dé de vie lancé), « con » (mod. CON), « niveau »
 	PvMax   bool     `json:"pv_max,omitempty"`  // PV remis au maximum
 	PmMax   bool     `json:"pm_max,omitempty"`  // PM remis au maximum
+	// NouveauJour : ce repos vaut un nouveau jour (les capacités « par jour » redeviennent
+	// utilisables) ; il remet toujours à zéro celles « par » ce repos.
+	NouveauJour bool `json:"nouveau_jour,omitempty"`
 }
 
 // Vide : un univers sans fichier de règles.

@@ -636,6 +636,14 @@ func outils() []outil {
 			},
 		},
 		{
+			Nom: "nouveau_jour", Fonction: "feuilles", Titre: "Nouveau jour",
+			Description: "Un nouveau jour commence : les capacités « par jour » des PJ redeviennent utilisables (leurs compteurs sur la feuille sont remis à zéro). Sans « pj », tous les PJ.",
+			Proprietes:  map[string]any{"pj": entiers("Identifiants des PJ (absent : tous)")},
+			Faire: func(c *Client, a arguments) (any, error) {
+				return c.appel("POST", "/api/feuilles/nouveau-jour", nil, a.copier("pj"))
+			},
+		},
+		{
 			Nom: "modifier_feuille", Fonction: "feuilles", Titre: "Modifier une feuille de personnage",
 			Description: "Modifie la feuille de personnage d'un PJ : seuls les champs donnés changent (pv_actuel, pc, pr, pm, equipement, bourse, attaques, voies…). Une liste (attaques, voies) se donne en entier. Le niveau se change sur la fiche du PJ, pas ici. Les valeurs dérivées (modificateurs, DEF, initiative) sont recalculées.",
 			Proprietes: map[string]any{

@@ -19,7 +19,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Tchyze/cof_dm/internal/des"
 	"github.com/Tchyze/cof_dm/internal/fiches"
+	"github.com/Tchyze/cof_dm/internal/reference"
 	"github.com/Tchyze/cof_dm/internal/regles"
 )
 
@@ -78,6 +80,8 @@ type Combattant struct {
 	PmMax       int              `json:"pmMax,omitempty"`   // 0 : le combattant n'en a pas
 	Voies       []string         `json:"voies,omitempty"`   // capacités acquises dans ses voies (PJ)
 	Utilise     []string         `json:"utilise,omitempty"` // capacités à usage limité déjà utilisées ce combat
+	Actives     []CapaciteActive `json:"actives,omitempty"` // capacités de la bibliothèque qui agissent en combat (PJ)
+	Usages      map[string]int   `json:"usages,omitempty"`  // utilisations de ces capacités dans ce combat, par clé
 	Etats       map[string]Duree `json:"etats"`
 	Act         map[string]bool  `json:"act"`
 	Cible       *string          `json:"cible"`
@@ -163,6 +167,78 @@ type FicheCombat struct {
 	Valeurs     *struct {
 		SAG int `json:"SAG"`
 	} `json:"valeurs"`
+	Actives []CapaciteActive `json:"actives"`
+}
+
+// CapaciteActive : une capacité de la bibliothèque, atteinte par un PJ, qui a une action en combat
+// ou des utilisations comptées. Fois : 0 sans limite ; Par : combat, jour, repos:<clé> ou main ;
+// Deja : utilisations déjà faites avant ce combat (période autre que le combat, lue sur la feuille).
+type CapaciteActive struct {
+	Cle     string            `json:"cle"`
+	Nom     string            `json:"nom"`
+	Voie    string            `json:"voie"`
+	Rang    int               `json:"rang"`
+	Texte   string            `json:"texte,omitempty"`
+	Limitee bool              `json:"limitee,omitempty"`
+	Action  *reference.Action `json:"action,omitempty"`
+	Fois    int               `json:"fois,omitempty"`
+	Par     string            `json:"par,omitempty"`
+	Deja    int               `json:"deja,omitempty"`
+}
+
+// Restantes : les utilisations qui restent à c pour cette capacité (-1 : sans limite).
+func (c *Combattant) Restantes(cap CapaciteActive) int {
+	if cap.Fois <= 0 {
+		return -1
+	}
+	n := c.Usages[cap.Cle]
+	if cap.Par != "combat" {
+		n += cap.Deja
+	}
+	return max(0, cap.Fois-n)
+}
+
+func (c *Combattant) active(cle string) (CapaciteActive, bool) {
+	for _, x := range c.Actives {
+		if x.Cle == cle {
+			return x, true
+		}
+	}
+	return CapaciteActive{}, false
+}
+
+// utiliser compte une utilisation de la capacité cle par c (refusée quand il n'en reste plus).
+func (st *Etat) utiliser(c *Combattant, cle string) (CapaciteActive, error) {
+	cap, ok := c.active(cle)
+	if !ok {
+		return cap, ErrAction(c.Nom + " n'a pas cette capacité.")
+	}
+	if c.Restantes(cap) == 0 {
+		return cap, ErrAction(fmt.Sprintf("%s n'a plus d'utilisation de « %s »%s.", c.Nom, cap.Nom, periode(cap.Par)))
+	}
+	if c.Usages == nil {
+		c.Usages = map[string]int{}
+	}
+	c.Usages[cle]++
+	reste := ""
+	if r := c.Restantes(cap); r >= 0 {
+		reste = fmt.Sprintf(" (reste %d%s)", r, periode(cap.Par))
+	}
+	st.log(fmt.Sprintf("%s utilise « %s »%s.", gras(c.Nom), cap.Nom, reste), "")
+	return cap, nil
+}
+
+// periode : « par combat », « par jour »…, pour le journal.
+func periode(par string) string {
+	switch {
+	case par == "combat" || par == "jour":
+		return " par " + par
+	case strings.HasPrefix(par, "repos:"):
+		return " avant le repos"
+	case par == "main":
+		return " avant remise à zéro"
+	}
+	return ""
 }
 
 func uid() string {
@@ -198,6 +274,7 @@ func DepuisFiche(f FicheCombat, camp, nom, kind string) *Combattant {
 	return &Combattant{
 		ID: uid(), Nom: nom, Camp: camp, Ref: ref, Init: f.Init, Defense: f.Defense, PvMax: pvMax, Pv: pv,
 		Rd: f.Rd, Crit: crit, Pc: f.Pc, Pm: max(0, min(pmMax, f.Pm)), PmMax: pmMax, Voies: append([]string(nil), f.Voies...),
+		Actives:  append([]CapaciteActive(nil), f.Actives...),
 		Attaques: atks, Capacites: f.Capacites, Sag: sagDe(f),
 		Carac: f.Carac, Superieures: append([]string{}, f.Superieures...),
 		Etats: map[string]Duree{}, Act: nouvellesActions(),
@@ -555,6 +632,11 @@ func (st *Etat) attaquer(p Action) error {
 	if err != nil {
 		return err
 	}
+	if p.Capacite != "" {
+		if _, err := st.utiliser(a, p.Capacite); err != nil {
+			return err
+		}
+	}
 	if p.CoutPm > 0 { // dépensés même si le sort rate ; « Annuler » rend tout
 		a.Pm -= p.CoutPm
 		st.log(fmt.Sprintf("%s dépense %d PM (reste %d).", gras(a.Nom), p.CoutPm, a.Pm), "")
@@ -836,8 +918,10 @@ type Action struct {
 	Qte        int                        `json:"qte"`
 	Camp       string                     `json:"camp"`
 	Fiche      *FicheCombat               `json:"fiche"`
-	Act        string                     `json:"act"`     // attaque : "A", "L", "LS" (suite de la capacité) ou "G" (gratuite)
-	CoutPm     int                        `json:"cout_pm"` // attaque : points de mana dépensés (sort)
+	Act        string                     `json:"act"`      // attaque : "A", "L", "LS" (suite de la capacité) ou "G" (gratuite)
+	CoutPm     int                        `json:"cout_pm"`  // attaque : points de mana dépensés (sort)
+	Capacite   string                     `json:"capacite"` // attaque, capacite : la capacité utilisée (sa clé)
+	Soin       string                     `json:"soin"`     // capacite : formule des PV rendus à la cible
 }
 
 func (p Action) valeurInt() int {
@@ -956,6 +1040,8 @@ func (st *Etat) appliquer(p Action) error {
 		return st.mana(p)
 	case "usage":
 		return st.usage(p)
+	case "capacite":
+		return st.capacite(p)
 	case "attaque":
 		return st.attaquer(p)
 	case "chance":
@@ -1416,6 +1502,85 @@ func (st *Etat) mana(p Action) error {
 	c.Pm += gagne
 	st.log(fmt.Sprintf("%s récupère %d PM (%d / %d).", gras(c.Nom), gagne, c.Pm, c.PmMax), "")
 	return nil
+}
+
+// capacite : un PJ utilise une capacité de la bibliothèque sans jet d'attaque, telle que le MJ l'a
+// validée (les valeurs viennent de la capacité, modifiables à l'écran) : PM dépensés, utilisation
+// comptée, dégâts ou soins lancés sur la cible, état posé.
+func (st *Etat) capacite(p Action) error {
+	c, err := st.get(p.ID)
+	if err != nil {
+		return err
+	}
+	if p.CoutPm < 0 {
+		return ErrAction("Le coût en PM ne peut pas être négatif.")
+	}
+	if p.CoutPm > c.Pm {
+		return ErrAction(fmt.Sprintf("%s n'a que %d PM : la capacité en coûte %d.", c.Nom, c.Pm, p.CoutPm))
+	}
+	dm, soin := "", strings.TrimSpace(p.Soin)
+	if p.Dm != nil {
+		dm = strings.TrimSpace(*p.Dm)
+	}
+	etat := strings.TrimSpace(p.Etat)
+	var t *Combattant
+	if dm != "" || soin != "" || etat != "" {
+		if t, err = st.get(p.Cible); err != nil {
+			return ErrAction("Choisissez la cible de la capacité.")
+		}
+	}
+	if etat != "" {
+		if etat, err = nomEtat(etat); err != nil {
+			return err
+		}
+	}
+	// les formules d'abord : une formule refusée ne doit rien dépenser
+	var rdm, rsoin des.Resultat
+	if dm != "" {
+		if rdm, err = lancerOuNombre(dm); err != nil {
+			return ErrAction("Dégâts : " + err.Error())
+		}
+	}
+	if soin != "" {
+		if rsoin, err = lancerOuNombre(soin); err != nil {
+			return ErrAction("Soin : " + err.Error())
+		}
+	}
+	if _, err := st.utiliser(c, p.Capacite); err != nil {
+		return err
+	}
+	if p.CoutPm > 0 {
+		c.Pm -= p.CoutPm
+		st.log(fmt.Sprintf("%s dépense %d PM (reste %d).", gras(c.Nom), p.CoutPm, c.Pm), "")
+	}
+	if dm != "" {
+		if err := st.modifierPv(t.ID, -max(0, rdm.Total), fmt.Sprintf("%s subit %d DM (%s)", gras(t.Nom), max(0, rdm.Total), rdm.Detail)); err != nil {
+			return err
+		}
+	}
+	if soin != "" {
+		if err := st.modifierPv(t.ID, max(0, rsoin.Total), ""); err != nil {
+			return err
+		}
+	}
+	if etat != "" {
+		d := max(0, p.Duree)
+		t.Etats[etat] = Duree(d)
+		duree := ""
+		if d > 0 {
+			duree = fmt.Sprintf(" (%d round%s)", d, map[bool]string{true: "s"}[d > 1])
+		}
+		st.log(fmt.Sprintf("%s : %s%s.", gras(t.Nom), etat, duree), "")
+	}
+	return nil
+}
+
+// lancerOuNombre : une formule de dés, ou un simple nombre (« 5 » : 5 PV rendus).
+func lancerOuNombre(f string) (des.Resultat, error) {
+	if n, err := strconv.Atoi(strings.TrimSpace(f)); err == nil && n >= 0 {
+		return des.Resultat{Formule: f, Total: n, Detail: strconv.Itoa(n)}, nil
+	}
+	return des.Lancer(f)
 }
 
 // usage : une capacité à usage limité (« une fois par combat ») est marquée utilisée, ou rendue.

@@ -3,8 +3,10 @@ package fiches
 import (
 	"encoding/json"
 	"regexp"
+	"strconv"
 	"strings"
 
+	"github.com/Tchyze/cof_dm/internal/reference"
 	"github.com/Tchyze/cof_dm/internal/regles"
 )
 
@@ -77,6 +79,9 @@ type Feuille struct {
 	Equipement     string     `json:"equipement"`
 	Bourse         Bourse     `json:"bourse"`
 	Notes          string     `json:"notes"` // notes du MJ : jamais montrées au joueur
+	// Utilisations : ce qui a été utilisé des capacités à utilisations comptées (par jour, par repos,
+	// à remettre à zéro à la main ; celles « par combat » se comptent dans le combat), par CleCapacite.
+	Utilisations map[string]Utilisation `json:"utilisations,omitempty"`
 	// Effets : ce que les capacités atteintes ajoutent (« A + b »), calculé à la lecture, jamais
 	// rangé (Stockage).
 	Effets *Effets `json:"effets,omitempty"`
@@ -84,6 +89,30 @@ type Feuille struct {
 	effets       []EffetVoie    // bonus des capacités atteintes, donnés par PrendreEffets
 	effetsConnus bool           // false : feuille relue sans la bibliothèque (synchronisation, restauration)
 	bonus        map[string]int // ce que les effets ajoutent, par clé de Effets.Base
+}
+
+// Utilisation : combien de fois une capacité a servi depuis sa dernière remise à zéro, et quand
+// celle-ci vient (jour, repos:<clé>, main).
+type Utilisation struct {
+	Par string `json:"par"`
+	N   int    `json:"n"`
+}
+
+// CleCapacite : la clé d'une capacité dans Utilisations, tirée du nom de sa voie et de son rang.
+func CleCapacite(voie string, rang int) string {
+	return reference.Cle(voie) + "#" + strconv.Itoa(rang)
+}
+
+// RemettreAZero oublie les utilisations dont la période est l'une de celles données.
+func (f *Feuille) RemettreAZero(pars ...string) int {
+	n := 0
+	for k, u := range f.Utilisations {
+		if dans(pars, u.Par) {
+			delete(f.Utilisations, k)
+			n++
+		}
+	}
+	return n
 }
 
 // EffetVoie : un bonus permanent d'une capacité que le PJ a atteinte, repris de la bibliothèque. Il
@@ -232,6 +261,21 @@ func normaliser(raw []byte, niveau int, rg *regles.Feuille, effets []EffetVoie, 
 	}
 	if f.Voies == nil {
 		f.Voies = []Voie{}
+	}
+	if len(f.Utilisations) > 200 {
+		return nil, invalide("utilisations : trop de capacités.")
+	}
+	for k, u := range f.Utilisations {
+		if u.N <= 0 || u.Par == "" || u.Par == "combat" {
+			delete(f.Utilisations, k)
+			continue
+		}
+		if len(k) > 160 || len(u.Par) > 80 || u.N > 999 {
+			return nil, invalide("utilisations.%s : invalide.", k)
+		}
+	}
+	if len(f.Utilisations) == 0 {
+		f.Utilisations = nil
 	}
 	for i := range f.Voies {
 		v := &f.Voies[i]

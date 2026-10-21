@@ -119,7 +119,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
   const retour = () => { if (auRetour) auRetour(); else location.hash = "#/combat"; };
   let st = null, annulable = 0, ws = null, retry = 0, ferme = false, cleTour = null;
   let monstres = [], pjs = [], pnjs = [];
-  const ui = { tMode: "diff", tWho: null, tOpp: null, att: null, tgt: null, atk: 0, act: "A", actAuto: true, pane: "ordre", fiche: null, resFerme: 0, addTab: "monstre", delArm: null, dmAuto: true, des: lireDes() };
+  const ui = { tMode: "diff", tWho: null, tOpp: null, att: null, tgt: null, atk: 0, act: "A", actAuto: true, pane: "ordre", fiche: null, capa: null, resFerme: 0, addTab: "monstre", delArm: null, dmAuto: true, des: lireDes() };
   // Qui lance les dés d'un combattant : la table (dés réels, saisis ici) ou l'application.
   const virtuel = c => ui.des === "tous" || (ui.des === "pnj" && c?.camp !== "pj");
   const fenetre = (id, titre, corps) => `<div class="fen" id="${id}" hidden><div class="fen-boite" role="dialog" aria-label="${titre}">
@@ -180,6 +180,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
             <div class="vs" id="vs"></div>
             <p class="hint ligne2" id="mods"></p>
             <p class="hint ligne1" id="actInfo"></p>
+            <p class="hint" id="aCapa" hidden></p>
             <div><button type="button" class="primary big" id="bAtk">Lancer l'attaque</button></div>
           </div>
           <div id="result"></div>
@@ -210,6 +211,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       </div>`)}
     ${fenetre("fTous", "Tous les combattants", `<ol class="order" id="orderTous"></ol>`)}
     ${fenetre("fCbt", "Combattant", `<div id="ficheCbt" class="col"></div>`)}
+    ${fenetre("fCapa", "Capacité", `<div id="capaBox" class="col"></div>`)}
     ${fenetre("fTest", "Test de caractéristique", `<div class="col" id="testPanel">
         <div class="seg" aria-label="Type de test"><button type="button" id="tDiff" aria-pressed="true">Difficulté</button><button type="button" id="tOpp" aria-pressed="false">Opposition</button></div>
         <div class="row">
@@ -493,6 +495,58 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     if (ui.fiche) rendreFiche();
   }
 
+  // Capacités de la bibliothèque (PJ) : ce qu'il en reste, et leur utilisation validée par le MJ.
+  function restantes(c, x) {
+    if (!x.fois) return -1;
+    const n = (c.usages?.[x.cle] || 0) + (x.par !== "combat" ? x.deja || 0 : 0);
+    return Math.max(0, x.fois - n);
+  }
+  const parLib = p => p === "combat" ? "par combat" : p === "jour" ? "par jour" : p === "main" ? "avant remise à zéro" : "par repos";
+  function ouvrirCapa(id, cle) {
+    const c = st.cbts[id], x = c?.actives?.find(a => a.cle === cle);
+    if (!x) return;
+    const a = x.action || {};
+    if (a.attaque) { // un jet d'attaque : l'attaque se prépare, le MJ la lance
+      fermerFenetres();
+      ui.att = id; ui.atk = 0; ui.capa = cle; ui.tgtAuto = true;
+      if (x.limitee) { ui.act = "L"; ui.actAuto = false; }
+      rendreSelects();
+      $e("#aPm").value = a.cout_pm || 0;
+      $e("#aDiv").value = a.bonus || 0;
+      if (a.degats) { $e("#aDm").value = a.degats; ui.dmAuto = false; }
+      rendreCapaAtk(); rendreVs(); setPane("action");
+      return;
+    }
+    ouvrir("fCapa");
+    const cibles = st.ordre.map(i => st.cbts[i]);
+    const defaut = a.soin ? id : st.cbts[c.cible] ? c.cible : cibles.find(o => o.camp !== c.camp)?.id || id;
+    $e("#capaBox").innerHTML = `<p><b>${esc(x.nom)}</b> <span class="hint">${esc(x.voie)}, rang ${x.rang}${x.fois ? ` · reste ${restantes(c, x)}/${x.fois} ${parLib(x.par)}` : ""}</span></p>
+      ${x.texte ? `<p class="hint">${esc(x.texte)}</p>` : ""}
+      <label>Cible<select id="cpCible">${cibles.map(o => `<option value="${esc(o.id)}"${o.id === defaut ? " selected" : ""}>${esc(o.nom)}</option>`).join("")}</select></label>
+      <div class="row deux">
+        ${c.pmMax ? `<label class="s">Coût PM<input id="cpPm" type="number" min="0" inputmode="numeric" value="${esc(a.cout_pm || 0)}"></label>` : ""}
+        <label>Dégâts<input id="cpDm" value="${esc(a.degats || "")}" placeholder="aucun"></label>
+        <label>Soin<input id="cpSoin" value="${esc(a.soin || "")}" placeholder="aucun"></label>
+        <label>État<input id="cpEtat" list="cpEtats" value="${esc(a.etat || "")}" placeholder="aucun"></label>
+        <label class="s">Durée (rounds)<input id="cpDuree" type="number" min="0" inputmode="numeric" placeholder="∞"></label>
+      </div>
+      <datalist id="cpEtats">${Object.keys(ETATS).map(e => `<option value="${esc(e)}">`).join("")}</datalist>
+      <p class="hint">Les valeurs de la capacité, modifiables. Valider dépense les PM et compte l'utilisation.</p>
+      <div class="row"><button type="button" class="primary" id="cpOk">Valider</button><button type="button" class="ghost" data-fermer>Annuler</button></div>`;
+    $e("#cpOk").onclick = () => {
+      send({ type: "capacite", id, capacite: cle, cible: $e("#cpCible").value, cout_pm: c.pmMax ? +$e("#cpPm").value || 0 : 0,
+        dm: $e("#cpDm").value.trim(), soin: $e("#cpSoin").value.trim(), etat: $e("#cpEtat").value.trim(), duree: +$e("#cpDuree").value || 0 });
+      fermerFenetres();
+    };
+  }
+  // l'attaque préparée par une capacité : elle comptera une utilisation
+  function rendreCapaAtk() {
+    const box = $e("#aCapa"), x = ui.capa && st?.cbts[ui.att]?.actives?.find(a => a.cle === ui.capa);
+    if (!x) ui.capa = null;
+    box.hidden = !x;
+    box.innerHTML = x ? `Capacité : <b>${esc(x.nom)}</b> (compte une utilisation) <button type="button" class="ghost petit" data-a="sansCapa" aria-label="Attaque sans la capacité">✕</button>` : "";
+  }
+
   // Fenêtre d'un combattant : tout ce que sa ligne ne montre pas.
   function rendreFiche() {
     const c = st.cbts[ui.fiche];
@@ -510,12 +564,19 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       ${c.capacites ? `<div class="capa">${esc(c.capacites)}</div>` : ""}
       <div class="usages">
         <span class="hint">Capacités à usage limité : touchez celle qui vient d'être utilisée dans ce combat.</span>
-        <div class="chips">${[...new Set([...(c.voies || []), ...(c.utilise || [])])].map(n => {
+        <div class="chips">${[...new Set([...(c.voies || []).filter(n => !(c.actives || []).some(x => n.startsWith(x.nom))), ...(c.utilise || [])])].map(n => {
           const u = (c.utilise || []).includes(n);
           return `<button type="button" class="ghost${u ? " used" : ""}" data-a="usage" data-id="${id}" data-cap="${esc(n)}" data-u="${u ? 1 : 0}" title="${u ? "Utilisée : toucher pour la rendre" : "Marquer comme utilisée"}">${u ? "✓ " : ""}${esc(n)}</button>`;
         }).join("")}</div>
         <div class="row"><input id="ficheCap" maxlength="80" placeholder="Autre capacité utilisée" aria-label="Autre capacité utilisée"><button type="button" data-a="usageLibre" data-id="${id}">Noter</button></div>
       </div>
+      ${c.actives?.length ? `<div class="usages">
+        <span class="hint">Capacités de ses voies : touchez pour les utiliser (le MJ valide).</span>
+        <div class="chips">${c.actives.map(x => {
+          const r = restantes(c, x);
+          return `<button type="button" class="ghost${r === 0 ? " used" : ""}" data-a="capa" data-id="${id}" data-cle="${esc(x.cle)}" title="${esc(x.texte || "")}"${r === 0 ? " disabled" : ""}>${esc(x.nom)}${x.fois ? ` · ${r}/${x.fois} ${parLib(x.par)}` : ""}</button>`;
+        }).join("")}</div>
+      </div>` : ""}
       <div class="menu-combat deux">
         <button type="button" data-a="viser" data-id="${id}">🎯 Prendre pour cible</button>
         <button type="button" data-a="tester" data-id="${id}">🎲 Test de caractéristique</button>
@@ -827,6 +888,8 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       send({ type: "pm", id, valeur: v, sens: a === "pmMoins" ? "depense" : "gain" });
       q.value = "";
     } else if (a === "usage") send({ type: "usage", id, cle: b.dataset.cap, valeur: b.dataset.u !== "1" });
+    else if (a === "capa") ouvrirCapa(id, b.dataset.cle);
+    else if (a === "sansCapa") { ui.capa = null; rendreCapaAtk(); }
     else if (a === "usageLibre") {
       const q = $e("#ficheCap");
       if (!q.value.trim()) { q.focus(); toast("Nommez la capacité utilisée."); return; }
@@ -878,7 +941,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
   $e("#addSeg").onclick = e => { const b = e.target.closest("button"); if (b) { ui.addTab = b.dataset.t; rendreAjout(); } };
 
   $e("#aAtt").onchange = e => {
-    ui.att = e.target.value; ui.atk = 0; ui.dmAuto = true; ui.actAuto = true;
+    ui.att = e.target.value; ui.atk = 0; ui.dmAuto = true; ui.actAuto = true; ui.capa = null; rendreCapaAtk();
     const A = st.cbts[ui.att], t = A && st.cbts[A.cible];
     ui.tgt = t && t.pv > 0 && t.id !== A.id ? t.id : null; ui.tgtAuto = !ui.tgt;
     rendreSelects(); rendreVs();
@@ -892,8 +955,9 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     if (reel && nat === "") { $e("#aNat").focus(); toast("Saisissez d'abord le dé lancé à la table."); return; }
     ui.resFerme = 0;
     send({ type: "attaque", att: ui.att, cible: ui.tgt, attaque: ui.atk, mode: reel ? "reel" : "auto", nat: reel ? +nat : null,
-      divers: +$e("#aDiv").value || 0, dm: $e("#aDm").value.trim(), act: ui.act, cout_pm: st.cbts[ui.att]?.pmMax ? +$e("#aPm").value || 0 : 0 });
+      divers: +$e("#aDiv").value || 0, dm: $e("#aDm").value.trim(), act: ui.act, cout_pm: st.cbts[ui.att]?.pmMax ? +$e("#aPm").value || 0 : 0, capacite: ui.capa || "" });
     $e("#aNat").value = ""; $e("#aPm").value = "0";
+    if (ui.capa) { ui.capa = null; $e("#aDiv").value = "0"; ui.dmAuto = true; rendreCapaAtk(); }
   };
   $e("#bAtk").onclick = attaquer;
   $e("#aNat").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); attaquer(); } });
