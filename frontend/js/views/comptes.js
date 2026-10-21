@@ -79,7 +79,7 @@ export async function panneauComptes(box, moi) {
   const choixPJ = c => `<select data-a="pj" aria-label="PJ de ${esc(c.nom)}"><option value="0">— son PJ —</option>${pjs.map(p => `<option value="${p.id}" ${p.id === c.pj ? "selected" : ""}>${esc(p.nom)}</option>`).join("")}</select>`;
   const choixRole = (v, attrs = "") => `<select ${attrs}>${Object.entries(ROLES).map(([k, n]) => `<option value="${k}" ${k === (v || "") ? "selected" : ""}>${n}</option>`).join("")}</select>`;
   box.innerHTML = `<h3>Comptes du serveur</h3>
-    <p class="hint">Le rôle vaut pour l'univers où vous êtes (changez d'univers pour régler les autres) : un <b>MJ</b> le lit et le modifie, un <b>auditeur</b> le lit en entier (secrets compris) sans rien modifier, un <b>joueur</b> ne lit que les fiches que le MJ partage, sans leurs champs réservés au MJ. Un <b>administrateur</b> gère le serveur et est MJ de tous les univers.</p>
+    <p class="hint">Le rôle vaut pour l'univers où vous êtes (changez d'univers pour régler les autres) : un <b>MJ</b> le lit et le modifie, un <b>auditeur</b> le lit en entier (secrets compris) sans rien modifier, un <b>joueur</b> n'a que sa page de joueur, avec le PJ rattaché à son compte. Un <b>administrateur</b> gère le serveur et est MJ de tous les univers.</p>
     <div style="overflow-x:auto"><table class="tab"><thead><tr><th>Compte</th><th>Rôle dans cet univers</th><th>Admin</th><th>Actif</th><th></th></tr></thead><tbody>
       ${l.map(c => `<tr data-nom="${esc(c.nom)}">
         <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons.length ? ` <span class="hint">· ${c.jetons.length} jeton(s)</span>` : ""}</td>

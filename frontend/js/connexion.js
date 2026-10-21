@@ -180,8 +180,7 @@ export async function ouvrirPanneau() {
 /** Paramètres → Mises à jour, avec une recherche tout de suite : le serveur est plus récent. */
 export async function allerAuxMisesAJour() {
   try { await api("POST", "/api/univers/mise-a-jour/chercher"); } catch { /* le panneau dira l'erreur */ }
-  location.hash = "#/parametres";
-  setTimeout(() => $("#maj")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+  location.hash = "#/parametres/maj";
 }
 
 /** Se connecter à un serveur (ou en changer, ou s'y reconnecter), puis choisir quoi faire. */

@@ -58,7 +58,7 @@ export async function rencontre(box, f) {
     const e = r.evaluation;
     const groupe = r.nb_pj ? `${r.nb_pj} PJ de niveau moyen ${virgule(r.niveau_pj)}` : "aucun PJ en jeu dans la campagne";
     let evaluation;
-    if (!e) evaluation = `<p class="hint">La difficulté se calcule avec un fichier de règles : importez-le dans <a href="#/parametres">Paramètres → Bestiaire et règles</a>.</p>`;
+    if (!e) evaluation = `<p class="hint">La difficulté se calcule avec un fichier de règles : importez-le dans <a href="#/parametres/biblio">Paramètres → Bestiaire et règles</a>.</p>`;
     else if (e.cle === "vide") evaluation = "";
     else {
       const couleur = TON[e.ton] || "var(--gold)";

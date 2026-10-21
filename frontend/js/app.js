@@ -1,7 +1,7 @@
 // Routeur et cadre de l'application.
 // Routes : #/  #/t/<type>  #/f/<id>  #/f/<id>/modifier  #/nouveau/<type>?nom=…  #/nouveau?nom=…
 //          #/bestiaire[/<id>|/nouveau]  #/createur
-//          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres
+//          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres[/<bloc>]
 import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers } from "./ui.js";
 import { chargerSchema, schema, typeDe, vignette, badgeType, actif as fonctionActive } from "./schema.js";
 import * as tableau from "./views/tableau.js";
@@ -88,7 +88,7 @@ async function route() {
     else if (nom === "secrets") { actif = "secrets"; nettoyage = await secrets.mount(el, params); }
     else if (nom === "chronologie") { actif = "chronologie"; nettoyage = await chronologie.mount(el, params); }
     else if (nom === "synchro" && !window.cofAcces?.serveur) { nettoyage = await synchro.mount(el); }
-    else if (["liens", "journal", "parametres"].includes(nom)) { actif = nom; nettoyage = await outils[nom](el); }
+    else if (["liens", "journal", "parametres"].includes(nom)) { actif = nom; nettoyage = await outils[nom](el, a); }
     else { location.replace("#/"); return; }
   } catch (e) {
     el.innerHTML = `<div class="erreur">${esc(e.message)}</div>`;
@@ -217,7 +217,7 @@ async function afficherVersion(bureau) {
   el.textContent = git ? `dev ${git[1]}` : /^\d/.test(v) ? "v" + v : v;
   el.classList.toggle("test", test);
   el.title = git ? `Version de développement (commit ${git[1]})` : test ? `Version d'essai ${v}` : `Version ${v}`;
-  if (bureau) { el.href = "#/parametres"; el.title += " — mises à jour dans Paramètres"; }
+  if (bureau) { el.href = "#/parametres/maj"; el.title += " — mises à jour dans Paramètres"; }
   el.hidden = !v;
 }
 

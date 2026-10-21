@@ -157,42 +157,51 @@ async function panneauClaude(box) {
   };
 }
 
-export async function parametres(el) {
+// Les blocs de Paramètres, par groupe, dans l'ordre de la page : un titre (et sa description au
+// survol), qui s'étend sur place. Un seul bloc ouvert à la fois ; il se retient (#/parametres/<clé>).
+const GROUPES_PARAM = [
+  ["Univers", [
+    ["fonctions", "Fonctionnalités", "Activer ou couper les parties de l'application dans cet univers."],
+    ["biblio", "Bestiaire et règles", "Fichier de règles, bestiaire, profils et voies de cet univers ; les reprendre d'un autre univers."],
+    ["cal", "Calendrier du monde", "Mois, jours de la semaine et ère, pour les dates en jeu."],
+  ]],
+  ["Sauvegardes et exports", [
+    ["donnees", "Sauvegardes, exports et import", "Sauvegarder, exporter (JSON, Obsidian), restaurer un export ou une sauvegarde, importer des fiches."],
+  ]],
+  ["Joueurs et accès", [
+    ["acces", "Tablette et réseau", "Mot de passe MJ, accès depuis la tablette, page des joueurs et édition par les joueurs."],
+    ["compte", "Mon compte", "Mot de passe et jetons d'API de votre compte."],
+    ["comptes", "Comptes du serveur", "Les comptes, leur rôle dans cet univers, le PJ des joueurs, l'édition par les joueurs."],
+  ]],
+  ["Application", [
+    ["maj", "Mises à jour", "Canal, recherche et installation des nouvelles versions."],
+    ["version-serveur", "Version du serveur", "Version du serveur, commande de mise à jour, postes reliés."],
+    ["claude", "Claude", "Brancher COF DM sur Claude Desktop ou Claude Code."],
+    ["api", "API", "Adresse et jeton, pour un programme ou pour Claude."],
+  ]],
+];
+const CLE_PARAM = "cof-parametres";
+
+export async function parametres(el, voulu = "") {
   const p = await api("GET", "/api/parametres");
   const surPlace = window.cofAcces?.local !== false; // sur l'ordinateur du MJ (pas une tablette connectée)
   const serveur = !!window.cofAcces?.serveur; // mode serveur : chacun a son compte
   const admin = serveur && !!window.cofAcces.compte?.admin;
   const cal = structuredClone(schema.calendrier);
-  el.innerHTML = `
-    <div class="entete"><h1>Paramètres</h1></div>
-    <div class="grille-param">
-      <section class="panneau" id="fonctions"></section>
-      <section class="panneau" id="cal">
-        <h3>Calendrier du monde</h3>
-        <p class="hint">Sert aux dates en jeu (séances, événements, campagnes). Par défaut : douze mois de trente jours, une décade et cinq jours complémentaires.</p>
+  // le contenu des blocs écrits ici ; les autres se montent à leur première ouverture
+  const contenus = {
+    cal: `<p class="hint">Sert aux dates en jeu (séances, événements, campagnes). Par défaut : douze mois de trente jours, une décade et cinq jours complémentaires.</p>
         <label class="champ"><span>Ère <small>écrite après l'année, ex. « de la Couronne »</small></span><input id="ere" value="${esc(cal.ere)}"></label>
         <div class="champ"><span style="font-size:.78rem;color:var(--muted)">Mois</span><div id="mois" style="display:flex;flex-direction:column;gap:6px"></div>
           <div><button class="petit" id="ajout-mois">＋ Mois</button></div></div>
         <label class="champ"><span>Jours de la semaine <small>séparés par des virgules</small></span><input id="semaine" value="${esc(cal.semaine.join(", "))}"></label>
-        <div class="ligne"><button class="primary" id="enr-cal">Enregistrer le calendrier</button><span class="hint" id="jours-an"></span></div>
-      </section>
-      ${surPlace && !serveur ? `<section class="panneau" id="maj"></section>` : ""}
-      ${surPlace && !serveur ? `<section class="panneau" id="claude"></section>` : ""}
-      ${surPlace ? `<section class="panneau" id="acces"></section>` : ""}
-      ${serveur ? `<section class="panneau" id="compte"></section>` : ""}
-      ${admin ? `<section class="panneau" id="comptes"></section>` : ""}
-      ${admin ? `<section class="panneau" id="version-serveur"></section>` : ""}
-      <section class="panneau"${surPlace ? "" : " hidden"}>
-        <h3>API</h3>
-        <p class="hint">Tout ce que fait l'interface est possible par l'API, pour un programme ou pour Claude. Documentation : <code>docs/API.md</code> du dépôt.</p>
+        <div class="ligne"><button class="primary" id="enr-cal">Enregistrer le calendrier</button><span class="hint" id="jours-an"></span></div>`,
+    api: `<p class="hint">Tout ce que fait l'interface est possible par l'API, pour un programme ou pour Claude. Documentation : <code>docs/API.md</code> du dépôt.</p>
         <div class="champ"><span style="font-size:.78rem;color:var(--muted)">Adresse</span><div class="jeton">http://${esc(p.adresse.replace("0.0.0.0", "<adresse de cet ordinateur>"))}</div></div>
         <div class="champ"><span style="font-size:.78rem;color:var(--muted)">Jeton (en-tête <code>Authorization: Bearer …</code>)</span><div class="jeton" id="jeton">${esc(p.jeton)}</div></div>
         <div class="ligne"><button id="copier">Copier le jeton</button><button class="danger" id="renouveler">Renouveler</button></div>
-        <p class="hint">Renouveler invalide l'ancien jeton. Depuis une autre machine, l'API demande que l'application écoute sur le réseau local (« Tablette et réseau », ou l'option <code>-reseau</code>) ; le jeton y est obligatoire.</p>
-      </section>
-      <section class="panneau">
-        <h3>Univers « ${esc(p.univers.nom)} »</h3>
-        <p class="hint">${p.univers.chemin ? `Fichier : <code>${esc(p.univers.chemin)}</code>. Fiches, images et journal y sont rangés ensemble : il se copie tel quel (menu <b>Fichier</b>). ` : ""}Version ${esc(p.version)}.</p>
+        <p class="hint">Renouveler invalide l'ancien jeton. Depuis une autre machine, l'API demande que l'application écoute sur le réseau local (« Tablette et réseau », ou l'option <code>-reseau</code>) ; le jeton y est obligatoire.</p>`,
+    donnees: `<p class="hint">Univers « ${esc(p.univers.nom)} ». ${p.univers.chemin ? `Fichier : <code>${esc(p.univers.chemin)}</code>. Fiches, images et journal y sont rangés ensemble : il se copie tel quel (menu <b>Fichier</b>). ` : ""}Version ${esc(p.version)}.</p>
         <div class="ligne">
           <button id="sauver">💾 Sauvegarder maintenant</button>
           <a href="${lien("/api/export")}" download><button>⬇ Exporter en JSON</button></a>
@@ -206,21 +215,58 @@ export async function parametres(el) {
         <h3 style="margin-top:18px">Importer des fiches</h3>
         <p class="hint">Ajoute les fiches d'un fichier JSON (une liste de <code>{"type", "nom", "data", "tags"}</code>, par exemple des règles). Une fiche dont le type et le nom existent déjà est ignorée : rien n'est remplacé.</p>
         <div class="ligne"><button id="importer">⬆ Importer des fiches (JSON)…</button><input type="file" id="fichier-imp" accept="application/json,.json" hidden></div>
-        <div id="import-res" class="alerte" hidden></div>
-      </section>
-      <section class="panneau" id="biblio"></section>
-    </div>`;
+        <div id="import-res" class="alerte" hidden></div>`,
+  };
+  // les blocs montés à la demande, et où ils existent
+  const montes = {
+    fonctions: panneauFonctions,
+    // reprendre d'un autre univers touche aux fichiers : ordinateur du MJ, ou administrateur du serveur
+    biblio: box => panneauBibliotheque(box, { peutReprendre: surPlace || admin }),
+    acces: surPlace && panneauAcces,
+    compte: serveur && panneauCompte,
+    comptes: admin && (box => panneauComptes(box, window.cofAcces.compte.nom)),
+    maj: surPlace && !serveur && panneauMaj,
+    "version-serveur": admin && panneauVersionServeur,
+    claude: surPlace && !serveur && panneauClaude,
+  };
+  const present = cle => cle in contenus ? cle !== "api" || surPlace : !!montes[cle];
+  el.innerHTML = `
+    <div class="entete"><h1>Paramètres</h1></div>
+    <div class="param-liste">${GROUPES_PARAM.map(([groupe, blocs]) => {
+      const ici = blocs.filter(([cle]) => present(cle));
+      return ici.length ? `<h2 class="param-groupe">${esc(groupe)}</h2>` + ici.map(([cle, titre, description]) => `<section class="param-bloc">
+        <button class="param-titre" data-bloc="${cle}" aria-expanded="false" aria-controls="${cle}" title="${esc(description)}"><span>${esc(titre)}</span><span class="chevron" aria-hidden="true">›</span></button>
+        <div class="panneau param-corps" id="${cle}" hidden>${contenus[cle] || ""}</div></section>`).join("") : "";
+    }).join("")}</div>`;
 
-  const monter = (id, f) => f($(id, el)).catch(e => { $(id, el).innerHTML = `<div class="erreur">${esc(e.message)}</div>`; });
-  monter("#fonctions", panneauFonctions);
-  if (surPlace) monter("#acces", panneauAcces);
-  if (surPlace && !serveur) monter("#maj", panneauMaj);
-  if (surPlace && !serveur) monter("#claude", panneauClaude);
-  // reprendre d'un autre univers touche aux fichiers : ordinateur du MJ, ou administrateur du serveur
-  monter("#biblio", box => panneauBibliotheque(box, { peutReprendre: surPlace || admin }));
-  if (serveur) monter("#compte", panneauCompte);
-  if (admin) monter("#comptes", box => panneauComptes(box, window.cofAcces.compte.nom));
-  if (admin) monter("#version-serveur", panneauVersionServeur);
+  const dejaMonte = new Set();
+  const ouvrir = (cle, defiler = true) => {
+    const ouvert = $(`.param-titre[data-bloc="${cle}"]`, el)?.getAttribute("aria-expanded") === "true";
+    $$(".param-titre", el).forEach(b => {
+      const lui = b.dataset.bloc === cle && !ouvert;
+      b.setAttribute("aria-expanded", lui);
+      $("#" + CSS.escape(b.dataset.bloc), el).hidden = !lui;
+    });
+    const garde = ouvert ? "" : cle;
+    try { garde ? localStorage.setItem(CLE_PARAM, garde) : localStorage.removeItem(CLE_PARAM); } catch { /* stockage indisponible */ }
+    history.replaceState(null, "", garde ? "#/parametres/" + garde : "#/parametres");
+    if (!garde) return;
+    const box = $("#" + CSS.escape(cle), el);
+    if (montes[cle] && !dejaMonte.has(cle)) {
+      dejaMonte.add(cle);
+      box.innerHTML = `<p class="hint">Chargement…</p>`;
+      Promise.resolve(montes[cle](box)).catch(e => { box.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; });
+    }
+    if (defiler) box.closest(".param-bloc").scrollIntoView({ block: "nearest" });
+  };
+  $(".param-liste", el).onclick = e => {
+    const b = e.target.closest(".param-titre");
+    if (b) ouvrir(b.dataset.bloc);
+  };
+  let depart = voulu;
+  if (!depart) { try { depart = localStorage.getItem(CLE_PARAM) || ""; } catch { /* idem */ } }
+  if (depart && $(`.param-titre[data-bloc="${CSS.escape(depart)}"]`, el)) setTimeout(() => ouvrir(depart), 0);
+  else if (voulu) history.replaceState(null, "", "#/parametres");
 
   // import de fiches
   const fimp = $("#fichier-imp", el);
@@ -273,11 +319,11 @@ export async function parametres(el) {
   };
 
   // API
-  $("#copier", el).onclick = async () => {
+  if ($("#copier", el)) $("#copier", el).onclick = async () => {
     try { await navigator.clipboard.writeText($("#jeton", el).textContent); toast("Jeton copié."); }
     catch { toast("Copie impossible : sélectionnez le jeton à la main.", true); }
   };
-  armer($("#renouveler", el), "Confirmer", async () => {
+  if ($("#renouveler", el)) armer($("#renouveler", el), "Confirmer", async () => {
     const r = await api("POST", "/api/parametres/jeton");
     $("#jeton", el).textContent = r.jeton;
     toast("Nouveau jeton créé.");
