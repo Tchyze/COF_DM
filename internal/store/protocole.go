@@ -468,6 +468,11 @@ type CopieInscrite struct {
 	Compte string  `json:"compte"`
 	Cree   float64 `json:"cree"`
 	Vu     float64 `json:"vu"`
+	// à son dernier passage : la version de l'application (vide avant la 1.2.3, qui ne l'annonçait
+	// pas), son protocole et son modèle (voir versions.go)
+	Version   string `json:"version"`
+	Protocole int    `json:"protocole"`
+	Modele    int    `json:"modele"`
 }
 
 func lireCopies(q execer) map[int64]CopieInscrite {
@@ -497,8 +502,9 @@ func (s *Store) Copies() []CopieInscrite {
 	return out
 }
 
-// CopieConnue : la copie n est inscrite ; son passage est noté.
-func (s *Store) CopieConnue(n int64) bool {
+// CopieConnue : la copie n est inscrite ; son passage est noté, avec les numéros de l'application
+// qui la tient.
+func (s *Store) CopieConnue(n int64, version string, protocole, modele int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	l := lireCopies(s.db)
@@ -507,6 +513,7 @@ func (s *Store) CopieConnue(n int64) bool {
 		return false
 	}
 	c.Vu = maintenant()
+	c.Version, c.Protocole, c.Modele = version, protocole, modele
 	l[n] = c
 	_ = ecrireCopies(s.db, l)
 	return true

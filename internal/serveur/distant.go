@@ -664,6 +664,9 @@ func (a *Application) copierEtOuvrir(w http.ResponseWriter, r *http.Request, uni
 		erreur(w, 403, "La synchronisation est réservée au MJ de l'univers et à l'administrateur.")
 		return
 	}
+	if !a.verifierServeur(w, c, false) {
+		return
+	}
 	if o := a.parIdentifiant(choisi.ID); o != "" {
 		erreur(w, 409, "Cet univers est déjà sur cet ordinateur : "+o)
 		return
@@ -757,6 +760,9 @@ func (a *Application) routeEnvoyer(w http.ResponseWriter, r *http.Request) {
 	}
 	if st.EstCopie() {
 		erreur(w, 409, erreurDejaCopie)
+		return
+	}
+	if !a.verifierServeur(w, c, true) {
 		return
 	}
 	nom := strings.TrimSpace(in.Nom)
