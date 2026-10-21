@@ -292,12 +292,13 @@ func (s *Serveur) ficheCombat(kind string, id int64) (*combat.FicheCombat, error
 		if err != nil || !existe {
 			return nil, combat.ErrAction(e.Nom + " n'a pas encore de feuille de personnage.")
 		}
-		f := combat.FicheCombat{ID: id, Nom: e.Nom, Init: fe.Init, Defense: fe.Defense, Pv: fe.Pv, PvActuel: fe.PvActuel,
-			Rd: fe.Rd, Crit: fe.Crit, Pc: fe.Pc, Pm: fe.Pm, PmMax: fe.PmMax, Attaques: fe.Attaques, Capacites: fe.Capacites,
+		// avec les bonus des capacités atteintes
+		f := combat.FicheCombat{ID: id, Nom: e.Nom, Init: fe.Init, Defense: fe.Defense, Pv: fe.PvMax(), PvActuel: fe.PvActuel,
+			Rd: fe.RdTotal(), Crit: fe.Crit, Pc: fe.Pc, Pm: fe.Pm, PmMax: fe.PmMaxTotal(), Attaques: fe.Attaques, Capacites: fe.Capacites,
 			Voies: capacitesAcquises(fe.Voies), Carac: fe.Carac}
 		f.Valeurs = &struct {
 			SAG int `json:"SAG"`
-		}{fe.Valeurs.SAG}
+		}{fe.ValeurTotale("SAG")}
 		return &f, nil
 	}
 	return nil, combat.ErrAction("Fiche inconnue.")

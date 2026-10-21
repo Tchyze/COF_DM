@@ -982,7 +982,7 @@ func ecrireFeuille(tx execer, o *objetRecu) error {
 		niveau = int(n)
 	}
 	brut, _ := json.Marshal(d)
-	f, err := fiches.NormaliserFeuille(brut, niveau, nil)
+	f, err := fiches.RelireFeuille(brut, niveau)
 	if err != nil {
 		return invalide("feuille de la fiche n°%d : %v", id, err)
 	}

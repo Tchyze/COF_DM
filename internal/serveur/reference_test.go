@@ -215,3 +215,48 @@ func TestReferenceEditeurRoles(t *testing.T) {
 		t.Fatalf("lecture par le joueur : %d", c)
 	}
 }
+
+// Une voie liée à la bibliothèque ajoute ses bonus à la feuille, jusqu'au rang atteint ; une voie
+// libre n'en donne pas. Le combat prend les totaux.
+func TestReferenceEffetsFeuille(t *testing.T) {
+	b := nouveau(t)
+	c, v := b.local("POST", "/api/reference/voies", map[string]any{"nom": "Voie du gué", "rangs": []any{
+		map[string]any{"nom": "Pas sûr", "bonus": []any{map[string]any{"cible": "def", "valeur": 1, "par_rang": true}}},
+		map[string]any{"nom": "Endurant", "bonus": []any{map[string]any{"cible": "pv", "valeur": 5}}},
+		map[string]any{"nom": "Hors d'atteinte", "bonus": []any{map[string]any{"cible": "def", "valeur": 10}}}}})
+	if c != 201 {
+		t.Fatalf("voie : %d %v", c, v)
+	}
+	pj := b.fiche("pj", "Aldric", map[string]any{"niveau": 2})
+	url := fmt.Sprintf("/api/entites/%v/feuille", pj)
+	sans := func(rang int, nom string) map[string]any {
+		// une voie liée peut arriver sans ses capacités : les règles en complètent les rangs
+		b.local("POST", "/api/regles/import", `{"format":"cof-dm-regles","personnage":{"rang_max":5}}`)
+		_, f := b.local("PUT", url, map[string]any{"pv": 10, "pv_actuel": 14, "voies": []any{map[string]any{"nom": nom, "rang": rang, "capacites": []any{}}}})
+		return f
+	}
+	f := sans(2, "Voie libre")
+	if f["effets"] != nil || f["pv_actuel"] != float64(10) {
+		t.Fatalf("voie libre : %v %v", f["effets"], f["pv_actuel"])
+	}
+	f = sans(2, "voie du GUÉ") // liée par son nom : rangs 1 et 2, pas le 3
+	e := f["effets"].(map[string]any)
+	if e["bonus"].(map[string]any)["def"] != float64(2) || e["bonus"].(map[string]any)["pv"] != float64(5) || f["pv_actuel"] != float64(14) || f["pv"] != float64(10) {
+		t.Fatalf("voie liée : %v, PV %v/%v", e, f["pv_actuel"], f["pv"])
+	}
+	if base := e["base"].(map[string]any)["def"].(float64); f["defense"] != base+2 {
+		t.Fatalf("DEF : %v, base %v", f["defense"], base)
+	}
+	// rangée sans les effets, relue avec
+	raw, _, _ := b.s.store.LireFeuille(int64(pj))
+	if strings.Contains(string(raw), "effets") {
+		t.Fatalf("effets rangés : %s", raw)
+	}
+	if _, f = b.local("GET", url, nil); f["effets"] == nil {
+		t.Fatal("effets absents à la lecture")
+	}
+	fc, err := b.s.ficheCombat("pj", int64(pj))
+	if err != nil || fc.Pv != 15 || *fc.PvActuel != 14 {
+		t.Fatalf("fiche de combat : %+v %v", fc, err)
+	}
+}

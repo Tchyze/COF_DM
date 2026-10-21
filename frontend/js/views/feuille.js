@@ -23,7 +23,35 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   let enLecture = false; // la vue de lecture est affichée (et non le formulaire)
   api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; if (enLecture) lire(); }, () => {});
   const R = () => F.regles || {};
-  const pvActuel = () => F.pv_actuel ?? F.pv;
+  // bonus des capacités atteintes, calculés par le serveur : « A + b », b en vert, détail au survol
+  const E = () => F.effets || { base: {}, bonus: {}, detail: [] };
+  const CLES = { att: ["att_C", "att_D", "att_M"], att_c: ["att_C"], att_d: ["att_D"], att_m: ["att_M"] };
+  const NOMS_CIBLE = { def: "DEF", init: "Init", pv: "PV max", pm: "PM max", rd: "RD", att: "attaques", att_c: "contact", att_d: "distance", att_m: "magique" };
+  function plus(k) {
+    const b = E().bonus[k];
+    if (!b) return "";
+    const directs = E().detail.filter(d => (CLES[d.cible] || [d.cible]).includes(k));
+    const lignes = directs.map(d => `${d.capacite} (${d.voie}, rang ${d.rang}) : ${signe(d.valeur)}`);
+    const reste = b - directs.reduce((n, d) => n + d.valeur, 0);
+    if (reste) lignes.push(`${signe(reste)} par une caractéristique augmentée`);
+    return ` <span class="fp-bonus" title="${esc(lignes.join("\n"))}">${b > 0 ? "+" : "−"} ${Math.abs(b)}</span>`;
+  }
+  const AB = (k, total) => (E().bonus[k] ? `${esc(E().base[k])}${plus(k)}` : esc(total));
+  const pvMax = () => F.pv + (E().bonus.pv || 0);
+  const pmMax = () => F.pm_max + (E().bonus.pm || 0);
+  const maxDe = k => (k === "pm" ? pmMax() : F[k + "_max"]);
+  const pvActuel = () => F.pv_actuel ?? pvMax();
+  // un bonus de capacité et un « divers » saisi à la main au même endroit : à vérifier
+  function doublons() {
+    const b = E().bonus, d = [];
+    if (b.def && F.def_divers) d.push(`DEF, divers (${signe(F.def_divers)})`);
+    if (b.init && F.init_divers) d.push(`Init, divers (${signe(F.init_divers)})`);
+    for (const [t, nom] of [["C", "Contact"], ["D", "Distance"], ["M", "Magique"]]) {
+      const direct = E().detail.some(x => (CLES[x.cible] || []).includes("att_" + t));
+      if (direct && F.att_divers?.[t]) d.push(`${nom}, divers (${signe(F.att_divers[t])})`);
+    }
+    return d;
+  }
 
   async function enregistrer(feuille, message) {
     try {
@@ -128,7 +156,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   function lire() {
     enLecture = true;
     redessiner = lire;
-    const compteur = (k, nom) => (F[k + "_max"] || F[k]) ? `<span class="fp-res" data-res="${k}"><b>${nom}</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="${nom} −1">−</button>` : ""}<span>${F[k]}/${F[k + "_max"]}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="${nom} +1">+</button>` : ""}</span>` : "";
+    const compteur = (k, nom) => (maxDe(k) || F[k]) ? `<span class="fp-res" data-res="${k}"><b>${nom}</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="${nom} −1">−</button>` : ""}<span>${F[k]}/${AB(k, F[k + "_max"])}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="${nom} +1">+</button>` : ""}</span>` : "";
     const identite = [["Sexe", F.sexe], ["Âge", F.age], ["Taille", F.taille_physique], ["Poids", F.poids], ["Divinité", F.divinite], ["Langues", F.langues]].filter(x => x[1]);
     const bourse = ["po", "pa", "pc"].filter(k => F.bourse?.[k]).map(k => `${F.bourse[k]} ${k}`).join(", ");
     box.innerHTML = `<h3>Feuille de personnage <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">niveau ${esc(F.niveau)}</span>
@@ -136,12 +164,13 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
       ${F.existe ? "" : `<p class="vide">Feuille vierge${peutEcrire ? " : cliquez sur « Modifier » pour la remplir" : ""}.</p>`}
       <div class="bloc-combat">
         <div class="ligne" style="gap:6px 14px">
-          <span class="fp-res" data-res="pv"><b>PV</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="PV −1">−</button>` : ""}<span>${pvActuel()}/${F.pv}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="PV +1">+</button>` : ""}</span>
-          <span><b>DEF</b> ${F.defense}</span><span><b>Init</b> ${F.init}</span>${F.rd ? `<span><b>RD</b> ${F.rd}</span>` : ""}${F.dv ? `<span><b>DV</b> ${esc(F.dv)}</span>` : ""}
+          <span class="fp-res" data-res="pv"><b>PV</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="PV −1">−</button>` : ""}<span>${pvActuel()}/${AB("pv", F.pv)}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="PV +1">+</button>` : ""}</span>
+          <span><b>DEF</b> ${AB("def", F.defense)}</span><span><b>Init</b> ${AB("init", F.init)}</span>${F.rd || E().bonus.rd ? `<span><b>RD</b> ${AB("rd", F.rd)}</span>` : ""}${F.dv ? `<span><b>DV</b> ${esc(F.dv)}</span>` : ""}
           ${compteur("pc", "PC")}${compteur("pr", "PR")}${compteur("pm", "PM")}
         </div>
-        <div class="carac">${CARACS.map(k => `<span><small>${k}</small>${F.valeurs[k]} (${signe(F.carac[k])})</span>`).join("")}</div>
-        ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b> ${signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        <div class="carac">${CARACS.map(k => `<span><small>${k}</small>${AB(k, F.valeurs[k])} (${signe(F.carac[k])})</span>`).join("")}</div>
+        ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b> ${E().bonus["att_" + a.type] ? `${signe(a.bonus - E().bonus["att_" + a.type])}${plus("att_" + a.type)}` : signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        ${peutEcrire && doublons().length ? `<p class="hint fp-doublon">⚠ À vérifier : ${doublons().map(esc).join(", ")} s'ajoute${doublons().length > 1 ? "nt" : ""} aux bonus des capacités. Un bonus saisi à la main pour la même capacité compterait deux fois.</p>` : ""}
         ${peutEcrire && R().repos?.length ? `<div class="ligne">${R().repos.map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}</div>` : ""}
       </div>
       ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3>${grilleLecture()}` : ""}
@@ -158,8 +187,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     $$(".fp-res button", box).forEach(b => b.onclick = async () => {
       const k = b.closest(".fp-res").dataset.res, d = +b.dataset.d;
       const f = structuredClone(F);
-      if (k === "pv") f.pv_actuel = Math.max(0, Math.min(F.pv, pvActuel() + d));
-      else f[k] = Math.max(0, Math.min(F[k + "_max"], F[k] + d));
+      if (k === "pv") f.pv_actuel = Math.max(0, Math.min(pvMax(), pvActuel() + d));
+      else f[k] = Math.max(0, Math.min(maxDe(k), F[k] + d));
       if (await enregistrer(f)) lire();
     });
     $$("[data-repos]", box).forEach(b => b.onclick = () => reposer(R().repos[+b.dataset.repos]));
@@ -180,10 +209,10 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         return [`${signe(F.niveau)} niv.`, F.niveau];
       });
       const gain = Math.max(0, termes.reduce((s, x) => s + x[1], 0));
-      f.pv_actuel = Math.min(F.pv, avant + gain);
+      f.pv_actuel = Math.min(pvMax(), avant + gain);
       detail = ` : ${termes.map(x => x[0]).join(" ")} = ${gain} PV (${avant} → ${f.pv_actuel})`;
     }
-    if (r.pm_max) f.pm = F.pm_max;
+    if (r.pm_max) f.pm = pmMax();
     if (await enregistrer(f, `${r.libelle}${detail}`)) lire();
   }
 
@@ -192,6 +221,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     enLecture = false;
     bulle().hidden = true;
     const f = structuredClone(F), rg = R();
+    // à côté d'un champ saisi, ce que les capacités y ajoutent
+    const nomB = (nom, ...cles) => { const b = cles.reduce((n, k) => n + (E().bonus[k] || 0), 0); return b && cles.some(k => E().detail.some(d => (CLES[d.cible] || [d.cible]).includes(k))) ? `${nom} <small class="fp-bonus">${signe(b)} capacités</small>` : nom; };
     const nombre = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input type="number" data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? 0)}" ${plus}></label>`;
     const texte = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? "")}" ${plus}></label>`;
     const choix = (nom, chemin, liste, valeur) => liste?.length
@@ -200,19 +231,19 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     const profil = REF.profils.find(p => cle(p.nom) === cle(fiche.data.profil));
     box.innerHTML = `<h3>Feuille de personnage</h3>
       <form id="fp-form" class="colonne" style="gap:12px" novalidate>
-        <div class="bst-grille">${CARACS.map(k => nombre(k, "valeurs." + k)).join("")}</div>
+        <div class="bst-grille">${CARACS.map(k => nombre(nomB(k, k), "valeurs." + k)).join("")}</div>
         <div class="bst-grille">
-          ${nombre("PV max", "pv", 'min="1"')}${choix("Dé de vie", "dv", rg.des_de_vie, f.dv)}${nombre("RD", "rd", 'min="0"')}${nombre("Critique sur", "crit", 'min="2" max="20"')}
-          ${nombre("PC max", "pc_max", 'min="0"')}${nombre("PR max", "pr_max", 'min="0"')}${nombre("PM max", "pm_max", 'min="0"')}
+          ${nombre(nomB("PV max", "pv"), "pv", 'min="1"')}${choix("Dé de vie", "dv", rg.des_de_vie, f.dv)}${nombre(nomB("RD", "rd"), "rd", 'min="0"')}${nombre("Critique sur", "crit", 'min="2" max="20"')}
+          ${nombre("PC max", "pc_max", 'min="0"')}${nombre("PR max", "pr_max", 'min="0"')}${nombre(nomB("PM max", "pm"), "pm_max", 'min="0"')}
           ${choix("Carac. de magie", "carac_magie", rg.caracs_magie?.length ? rg.caracs_magie : CARACS, f.carac_magie)}
         </div>
         <h3>Défense et initiative</h3>
         <div class="bst-grille">
           ${texte("Armure", "armure.nom")}${nombre("Bonus d'armure", "armure.bonus", 'min="0"')}${texte("Bouclier", "bouclier.nom")}${nombre("Bonus de bouclier", "bouclier.bonus", 'min="0"')}
-          ${nombre("DEF, divers", "def_divers")}${nombre("Init, divers", "init_divers")}
+          ${nombre(nomB("DEF, divers", "def"), "def_divers")}${nombre(nomB("Init, divers", "init"), "init_divers")}
         </div>
         <h3>Attaques</h3>
-        <div class="bst-grille">${nombre("Contact, divers", "att_divers.C")}${nombre("Distance, divers", "att_divers.D")}${nombre("Magique, divers", "att_divers.M")}</div>
+        <div class="bst-grille">${nombre(nomB("Contact, divers", "att_C"), "att_divers.C")}${nombre(nomB("Distance, divers", "att_D"), "att_divers.D")}${nombre(nomB("Magique, divers", "att_M"), "att_divers.M")}</div>
         <div class="colonne" style="gap:6px" id="fp-atks"></div>
         <div><button type="button" class="petit" id="fp-atk">＋ Attaque</button></div>
         <p class="hint">Le bonus d'attaque est calculé : niveau + modificateur + divers + bonus propre à l'arme.</p>
@@ -314,7 +345,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
           capacites: lib ? lib.rangs.map(nomCap) : v.capacites.map(c => (c || "").trim()) };
       });
       for (const v of f.voies) while (v.capacites.length > v.rang && !v.capacites.at(-1)) v.capacites.pop();
-      if (f.pv_actuel != null) f.pv_actuel = Math.min(f.pv_actuel, f.pv);
+      if (f.pv_actuel != null) f.pv_actuel = Math.min(f.pv_actuel, f.pv + (E().bonus.pv || 0));
       if (await enregistrer(f, "Feuille enregistrée.")) lire();
     };
   }

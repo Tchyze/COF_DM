@@ -329,7 +329,7 @@ func (s *Store) restaurer(x Export, auteur string) error {
 		if presentes[f.Entite] != "pj" {
 			continue
 		}
-		fe, err := fiches.NormaliserFeuille(f.Data, niveaux[f.Entite], nil)
+		fe, err := fiches.RelireFeuille(f.Data, niveaux[f.Entite])
 		if err != nil {
 			return invalide("Feuille de la fiche n°%d : %v", f.Entite, err)
 		}
