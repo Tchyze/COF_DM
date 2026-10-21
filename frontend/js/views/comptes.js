@@ -1,6 +1,7 @@
 // Mode serveur : « Mon compte » (mot de passe, jetons d'API) et, pour l'administrateur, les comptes
 // du serveur et leur rôle dans l'univers ouvert.
 import { $, $$, esc, api, toast, armer, dateHeure } from "../ui.js";
+import { typeDe } from "../schema.js";
 
 const ROLES = { mj: "MJ", auditeur: "Auditeur", joueur: "Joueur", "": "Aucun accès" };
 const MDP_MIN = 10;
@@ -12,8 +13,22 @@ function nouveauMdp(a, b) {
   return a.value;
 }
 
-/** Mon compte : changer son mot de passe, créer et retirer ses jetons d'API. */
-export async function panneauCompte(box) {
+/** Ce qu'ouvre l'édition par les joueurs, et à quelles conditions : sur un serveur (ou depuis un
+ * bureau relié), par les comptes des joueurs ; à la maison, sur la page libre. */
+export function aideEditionJoueurs(acces = window.cofAcces || {}) {
+  const voie = "Ajouter une voie de la bibliothèque reste au MJ.";
+  if (!acces.serveur && !acces.relie) {
+    return `Sur la page des joueurs, chacun modifie la feuille du PJ qu'il a choisi, sauf vos notes. ${voie} La page doit être ouverte au réseau local (Paramètres → Tablette et réseau).`;
+  }
+  const champs = (typeDe("pj")?.champs || []).filter(c => c.joueur).map(c => `« ${c.nom} »`);
+  const fiche = champs.length ? `, et ${champs.length > 1 ? `les champs ${champs.slice(0, -1).join(", ")} et ${champs.at(-1)}` : `le champ ${champs[0]}`} de sa fiche` : "";
+  return `Chaque joueur modifie, depuis sa page, toute la feuille de son PJ sauf les notes du MJ${fiche}. ${voie}
+    Conditions : un compte au rôle joueur, le PJ rattaché à ce compte, la fiche du PJ partagée. Vaut pour tout l'univers${acces.relie ? " ; envoyé au serveur à la prochaine synchronisation" : ""}.`;
+}
+
+/** Mon compte : changer son mot de passe, créer et retirer ses jetons d'API (pas sur la page des
+ * joueurs : jetons: false). */
+export async function panneauCompte(box, { jetons = true } = {}) {
   const c = await api("GET", "/api/compte");
   const qui = c.admin ? "Administrateur du serveur" : `${ROLES[c.role || ""]} de cet univers`;
   box.innerHTML = `<h3>Mon compte</h3>
@@ -27,13 +42,13 @@ export async function panneauCompte(box) {
       <div><button class="primary" type="submit">Changer le mot de passe</button></div>
     </form>
     <p class="hint">Changer le mot de passe déconnecte vos autres appareils.</p>
-    <h3 style="margin-top:14px">Jetons d'API</h3>
+    ${jetons ? `<h3 style="margin-top:14px">Jetons d'API</h3>
     <p class="hint">Pour un programme ou pour Claude (en-tête <code>Authorization: Bearer …</code>). Un jeton a les droits de ce compte, sauf changer le mot de passe et gérer les jetons ou les comptes.</p>
     ${c.jetons.length ? `<table class="tab"><tbody>${c.jetons.map(j => `<tr><td>${esc(j.nom || "sans nom")}</td><td class="num" style="white-space:nowrap">${dateHeure(j.cree)}</td>
       <td style="text-align:right"><button class="ghost petit" data-jeton="${esc(j.id)}">Retirer</button></td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucun jeton.</p>`}
     <form id="cpt-jeton" class="ligne"><input id="cpt-jeton-nom" placeholder="À quoi sert-il ? (ex. import Obsidian)" maxlength="60" style="flex:1;min-width:0"><button type="submit">＋ Créer un jeton</button></form>
-    <div id="cpt-clair" class="alerte" hidden></div>`;
-  const maj = () => panneauCompte(box);
+    <div id="cpt-clair" class="alerte" hidden></div>` : ""}`;
+  const maj = () => panneauCompte(box, { jetons });
   $("#cpt-mdp", box).onsubmit = async e => {
     e.preventDefault();
     const nouveau = nouveauMdp($("#cpt-nouveau", box), $("#cpt-nouveau2", box));
@@ -41,7 +56,7 @@ export async function panneauCompte(box) {
     try { await api("POST", "/api/compte/mdp", { ancien: $("#cpt-ancien", box).value, nouveau }); toast("Mot de passe changé."); maj(); }
     catch (err) { toast(err.message, true); }
   };
-  $("#cpt-jeton", box).onsubmit = async e => {
+  if (jetons) $("#cpt-jeton", box).onsubmit = async e => {
     e.preventDefault();
     try {
       const j = await api("POST", "/api/compte/jetons", { nom: $("#cpt-jeton-nom", box).value });
@@ -75,7 +90,7 @@ export async function panneauComptes(box, moi) {
       </tr>`).join("")}
     </tbody></table></div>
     <label class="t-coche" style="margin-top:10px"><input type="checkbox" id="cpts-edition" ${etat.edition_joueurs ? "checked" : ""}>
-      <span>Édition par les joueurs<small>Chaque joueur peut modifier l'apparence, l'historique et les objectifs du PJ qui lui est rattaché, si sa fiche est partagée. Rien d'autre.</small></span></label>
+      <span>Édition par les joueurs<small>${esc(aideEditionJoueurs())}</small></span></label>
     <h3 style="margin-top:14px">Nouveau compte</h3>
     <form id="cpts-nouveau" class="colonne" style="gap:10px">
       <div class="org-form">
@@ -113,7 +128,7 @@ export async function panneauComptes(box, moi) {
     });
   });
   $("#cpts-edition", box).onchange = async e => {
-    try { await api("PUT", "/api/joueurs/edition", { active: e.target.checked }); toast(e.target.checked ? "Les joueurs peuvent modifier leur fiche de PJ." : "Les joueurs ne modifient plus rien."); }
+    try { await api("PUT", "/api/joueurs/edition", { active: e.target.checked }); window.cofAcces.edition_joueurs = e.target.checked; toast(e.target.checked ? "Les joueurs peuvent modifier leur fiche de PJ." : "Les joueurs ne modifient plus rien."); }
     catch (err) { toast(err.message, true); }
     maj();
   };

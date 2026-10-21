@@ -5,11 +5,10 @@ import { types, vignette, texteDate, valeurCourte, actif as fonctionActive } fro
 export async function mount(el) {
   const st = await api("GET", "/api/stats");
   const lignes = (l, meta) => l.length ? `<div class="lignes">${l.map(f => `<a href="#/f/${f.id}">${vignette(f, 30)}<span class="t">${esc(f.nom)}</span><span class="m">${meta(f)}</span></a>`).join("")}</div>` : "";
-  const joueur = !!window.cofAcces?.joueur;
-  const premier = st.total === 0 && !joueur;
+  const premier = st.total === 0;
   el.innerHTML = `
     <div class="entete"><h1>Tableau de bord</h1><span class="sp"></span>
-      ${joueur || !fonctionActive("ecran_mj") ? "" : `<a href="#/table"><button class="primary">🧭 Écran du MJ</button></a>`}
+      ${!fonctionActive("ecran_mj") ? "" : `<a href="#/table"><button class="primary">🧭 Écran du MJ</button></a>`}
       <button id="rech">🔍 Rechercher <kbd>/</kbd></button>
     </div>
     ${premier ? `<div class="panneau" style="margin-bottom:16px">
@@ -19,8 +18,7 @@ export async function mount(el) {
       <div class="ligne"><a href="#/nouveau/campagne"><button class="primary">📖 Nouvelle campagne</button></a>
       <a href="#/nouveau/pnj"><button>👤 Nouveau PNJ</button></a><a href="#/nouveau/lieu"><button>🏰 Nouveau lieu</button></a></div>
     </div>` : ""}
-    ${joueur && st.total === 0 ? `<div class="panneau" style="margin-bottom:16px"><p class="vide">Le MJ n'a encore partagé aucune fiche avec les joueurs.</p></div>` : ""}
-    <div class="accueil${joueur ? " vue-joueur" : ""}">
+    <div class="accueil">
       <section class="panneau large">
         <h3>Le monde</h3>
         <div class="compteurs">${types().map(t => `<a href="#/t/${t.cle}" data-type="${t.cle}">${vignette({ type: t.cle }, 36)}<span><b>${st.compte[t.cle] || 0}</b><span>${esc(t.pluriel)}</span></span></a>`).join("")}</div>

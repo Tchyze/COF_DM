@@ -1,8 +1,10 @@
 // Page des joueurs : la feuille de son personnage, le combat en cours (l'ordre d'initiative et les
 // états, sans aucun chiffre), les documents (aides de jeu envoyées par le MJ), les dés (ses jets et
 // ceux de la table) et les hauts faits. À la maison, la page est libre quand le MJ l'a
-// ouverte et chacun y choisit son PJ ; sur un serveur, on y entre par son compte, avec son PJ.
-import { $, $$, esc, api, toast, lien } from "./ui.js";
+// ouverte et chacun y choisit son PJ ; sur un serveur, on y entre par son compte, avec son PJ : c'est
+// alors tout ce qu'un compte joueur a de l'application (son compte, et le choix de l'univers).
+import { $, $$, esc, api, toast, lien, universOnglet, choisirUniversOnglet } from "./ui.js";
+import { panneauCompte } from "./views/comptes.js";
 import { panneauFeuille, CARACS } from "./views/feuille.js";
 import { lignesEffets, libellePar, voieLiee } from "./capacites.js";
 import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
@@ -14,7 +16,7 @@ const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], 
 // les onglets et la fonctionnalité de l'univers dont chacun dépend (Paramètres → Fonctionnalités)
 const ONGLETS = [["fiche", "feuilles"], ["voies", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["des", "des"], ["hauts-faits", "combat"]];
 const fonction = cle => etat.fonctions[cle] !== false;
-const onglets = () => ONGLETS.filter(([, f]) => fonction(f)).map(([v]) => v);
+const onglets = () => ONGLETS.filter(([, f]) => fonction(f)).map(([v]) => v).concat(etat.serveur ? ["compte"] : []);
 const vue = $("#vue");
 
 const lireChoix = () => { try { return +localStorage.getItem(CLE) || 0; } catch { return 0; } };
@@ -58,13 +60,93 @@ async function vueFiche() {
         <span class="hint">${esc([p.peuple, p.profil, p.niveau ? "niveau " + p.niveau : ""].filter(Boolean).join(" · "))}</span>
         <span class="badge">${etat.edition ? "🔓 feuille modifiable" : "🔒 feuille verrouillée par le MJ"}</span></div>
       <section class="panneau" id="p-feuille"></section>
+      ${p.recit?.length ? `<section class="panneau" id="p-recit"></section>` : ""}
     </div>`;
+  if ($("#p-recit", vue)) peindreRecit($("#p-recit", vue));
   await panneauFeuille($("#p-feuille", vue), { id: p.id, nom: p.nom, data: { profil: p.profil } }, { peutEcrire: etat.edition, joueur: true });
+}
+
+// Les champs de la fiche que le joueur tient lui-même (apparence…). Sur un serveur, il les modifie
+// quand le MJ a ouvert l'édition ; à la maison, c'est le MJ qui les écrit.
+function peindreRecit(box, saisie = false) {
+  const p = etat.pj, modifiable = etat.serveur && etat.edition;
+  if (saisie && modifiable) {
+    box.innerHTML = `<h3>Mon personnage</h3><form class="colonne" id="recit-form" style="gap:10px">
+      ${p.recit.map(c => `<label class="champ"><span>${esc(c.nom)}</span><textarea data-cle="${esc(c.cle)}" rows="5" spellcheck="true">${esc(c.texte)}</textarea></label>`).join("")}
+      <div class="ligne"><button class="primary" type="submit">Enregistrer</button><button type="button" id="recit-annuler">Annuler</button></div></form>`;
+    $("#recit-annuler", box).onclick = () => peindreRecit(box);
+    $("#recit-form", box).onsubmit = async e => {
+      e.preventDefault();
+      const data = {};
+      for (const z of $$("textarea[data-cle]", box)) if (z.value !== (p.recit.find(c => c.cle === z.dataset.cle)?.texte ?? "")) data[z.dataset.cle] = z.value;
+      if (!Object.keys(data).length) { peindreRecit(box); return; }
+      try {
+        const maj = await api("PATCH", `/api/joueur/pj/${p.id}`, { data, modifie: p.modifie });
+        Object.assign(p, maj);
+        toast("Fiche enregistrée.");
+        peindreRecit(box);
+      } catch (err) { toast(err.message, true); }
+    };
+    return;
+  }
+  const remplis = p.recit.filter(c => c.texte);
+  box.innerHTML = `<h3>Mon personnage${modifiable ? ` <button class="petit" id="recit-modifier">✎ Modifier</button>` : ""}</h3>
+    ${remplis.map(c => `<h4>${esc(c.nom)}</h4><div class="md">${rendu(c.texte)}</div>`).join("") || `<p class="empty">${modifiable ? "Rien d'écrit pour l'instant : à vous de le raconter." : "Rien d'écrit pour l'instant."}</p>`}`;
+  const bouton = $("#recit-modifier", box);
+  if (bouton) bouton.onclick = () => peindreRecit(box, true);
 }
 // La feuille a changé ailleurs (combat, MJ) : on la relit, sauf pendant une saisie.
 function rafraichirFiche() {
-  if (etat.vue === "fiche" && etat.pj && !$("#fp-form", vue)) vueFiche();
+  if (etat.vue === "fiche" && etat.pj && !$("#fp-form", vue) && !$("#recit-form", vue)) vueFiche();
   if (etat.vue === "voies" && etat.pj) vueVoies();
+}
+
+// La fiche du PJ a pu changer (niveau, date en jeu, récit écrit sur un autre appareil).
+async function relirePJ() {
+  try { etat.pjs = await api("GET", "/api/joueur/pj"); } catch { return; }
+  const p = etat.pjs.find(x => x.id === etat.pj?.id);
+  if (p) etat.pj = p;
+  $("#pj-date").hidden = !etat.pj?.date;
+  $("#pj-date").textContent = etat.pj?.date ? "📅 " + etat.pj.date : "";
+  rafraichirFiche();
+}
+
+/* ---------------------------------------------------------- mon compte (serveur) */
+function vueCompte() {
+  vue.className = "";
+  vue.innerHTML = `<div class="pj-fiche"><section class="panneau" id="p-compte"><p class="hint">Chargement…</p></section>
+    <div class="ligne"><button id="pj-sortir">Se déconnecter</button></div></div>`;
+  panneauCompte($("#p-compte", vue), { jetons: false }).catch(e => { $("#p-compte", vue).innerHTML = `<p class="alerte">${esc(e.message)}</p>`; });
+  $("#pj-sortir", vue).onclick = sortir;
+}
+
+async function sortir() {
+  await api("POST", "/api/acces/deconnexion").catch(() => {});
+  choisirUniversOnglet(""); // le prochain compte part de ses propres univers
+  location.href = "/";
+}
+
+// Sur un serveur, un compte qui a un rôle dans plusieurs univers passe de l'un à l'autre : sa page
+// de joueur là où il est joueur, l'application ailleurs (MJ, auditeur).
+async function choixUnivers() {
+  const m = await api("GET", "/api/mes-univers").catch(() => null);
+  if (!m) return false;
+  if (m.courant && !universOnglet()) choisirUniversOnglet(m.courant);
+  if (m.univers.length < 2) return true;
+  const roles = { mj: "MJ", auditeur: "auditeur", joueur: "joueur" };
+  const sel = $("#pj-mondes");
+  sel.innerHTML = m.univers.map(u => `<option value="${esc(u.id)}" ${u.id === m.courant ? "selected" : ""}>🌍 ${esc(u.nom)}${u.role === "joueur" ? "" : " — " + (roles[u.role] || esc(u.role))}</option>`).join("");
+  sel.hidden = false;
+  $("#pj-univers").hidden = true;
+  sel.onchange = async () => {
+    const u = m.univers.find(x => x.id === sel.value);
+    try {
+      await api("POST", "/api/mes-univers/courant", { id: sel.value });
+      choisirUniversOnglet(sel.value);
+      location.href = u?.role === "joueur" ? "/joueur.html" : "/";
+    } catch (e) { toast(e.message, true); sel.value = m.courant; }
+  };
+  return true;
 }
 
 /* ---------------------------------------------------------- mes voies */
@@ -268,6 +350,7 @@ function peindreJets() {
 }
 
 async function relireJets() {
+  if (!fonction("des")) return;
   try {
     const d = await api("GET", "/api/joueur/des?depuis=" + etat.dernierJet);
     if (d.dernier < etat.dernierJet) { etat.jets = []; etat.dernierJet = 0; } // l'application a redémarré
@@ -338,7 +421,7 @@ function connecter() {
     if (m.type === "etat") { relireJets(); chargerDocs(); etat.combat = m.combat; if (etat.edition !== m.edition) { etat.edition = m.edition; rafraichirFiche(); } }
     else if (m.type === "combat") etat.combat = m.combat;
     else if (m.type === "edition") { etat.edition = m.active; toast(m.active ? "Le MJ a déverrouillé les feuilles : vous pouvez modifier la vôtre." : "Le MJ a verrouillé les feuilles."); if (etat.vue === "fiche" && etat.pj) vueFiche(); }
-    else if (m.type === "fiche" && etat.pj && m.id === etat.pj.id) rafraichirFiche();
+    else if (m.type === "fiche" && etat.pj && m.id === etat.pj.id) relirePJ();
     else if (m.type === "hauts_faits") { if (etat.vue === "hauts-faits") vueHautsFaits(); }
     else if (m.type === "document") { if (etat.pj && m.pj.includes(etat.pj.id)) { toast(`✉ Nouveau document : ${m.nom}`); chargerDocs(); } }
     else if (m.type === "documents") chargerDocs();
@@ -369,6 +452,8 @@ async function route() {
   $$("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === etat.vue));
   $("#pj-nav").hidden = !etat.pj;
   $("#pj-changer").hidden = etat.serveur || !etat.pj || etat.vue === "choix";
+  $("#pj-date").hidden = !etat.pj?.date;
+  $("#pj-date").textContent = etat.pj?.date ? "📅 " + etat.pj.date : "";
   rendreBandeau();
   vue.onclick = null;
   window.scrollTo(0, 0);
@@ -378,25 +463,32 @@ async function route() {
   else if (etat.vue === "documents") vueDocuments();
   else if (etat.vue === "des") await vueDes();
   else if (etat.vue === "hauts-faits") await vueHautsFaits();
+  else if (etat.vue === "compte") vueCompte();
   else if (etat.vue === "voies") await vueVoies();
   else await vueFiche();
 }
 
-function fermee(titre, texte) {
+function fermee(titre, texte, compte = false) {
   arrete = true;
   $("#pj-nav").hidden = true; $("#bandeau").hidden = true;
   vue.className = "combat";
-  vue.innerHTML = `<section class="panel pj-choix"><h1>${esc(titre)}</h1><p class="hint">${texte}</p><div><button class="primary" id="pj-reessayer">Réessayer</button></div></section>`;
+  vue.innerHTML = `<section class="panel pj-choix"><h1>${esc(titre)}</h1><p class="hint">${texte}</p>
+    <div class="row"><button class="primary" id="pj-reessayer">Réessayer</button>${compte ? `<button id="pj-sortir">Se déconnecter</button>` : ""}</div></section>`;
   $("#pj-reessayer").onclick = () => location.reload();
+  if (compte) $("#pj-sortir").onclick = sortir;
 }
 
 async function demarrer() {
+  const acces = await api("GET", "/api/acces").catch(() => ({}));
+  if (acces.serveur && !acces.connecte) { fermee("Connectez-vous", `La page des joueurs s'ouvre avec votre compte : <a href="/">connectez-vous</a>.`); return; }
+  const compte = !!acces.serveur && await choixUnivers(); // sur un serveur, avec un compte
   let e;
   try { e = await api("GET", "/api/joueur/etat"); }
   catch (err) {
     if (err.status === 401) fermee("La page des joueurs est fermée", `Demandez au MJ de l'ouvrir dans Paramètres → Tablette et réseau. Sur un serveur, <a href="/">connectez-vous</a> d'abord avec votre compte.`);
-    else if (err.status === 403) fermee("Pas d'accès", "Votre compte n'a pas de rôle dans cet univers.");
-    else fermee("COF DM ne répond pas", esc(err.message));
+    else if (err.status === 403) fermee("Pas d'accès", "Votre compte n'a pas de rôle dans cet univers.", compte);
+    else if (err.status === 404) fermee("Page des joueurs désactivée", "Le MJ ne l'a pas activée dans cet univers.", compte);
+    else fermee("COF DM ne répond pas", esc(err.message), compte);
     return;
   }
   Object.assign(etat, { serveur: e.serveur, edition: e.edition, combat: e.combat, de: e.de || 20, fonctions: e.fonctionnalites || {} });
@@ -408,7 +500,7 @@ async function demarrer() {
   const voulu = e.serveur && e.pj ? e.pj : lireChoix();
   etat.pj = etat.pjs.find(p => p.id === voulu) || null;
   if (e.serveur && !etat.pj && etat.pjs.length === 1) etat.pj = etat.pjs[0];
-  if (e.serveur && !etat.pj && !etat.pjs.length) { fermee("Aucun personnage", "Aucun PJ n'est rattaché à votre compte, ou sa fiche n'est pas partagée. Demandez au MJ."); return; }
+  if (e.serveur && !etat.pj && !etat.pjs.length) { fermee("Aucun personnage", "Aucun PJ n'est rattaché à votre compte, ou sa fiche n'est pas partagée. Demandez au MJ.", true); return; }
   if (!etat.pj) garderChoix(0);
   $("#pj-changer").onclick = () => { location.hash = "#/choix"; };
   window.addEventListener("hashchange", route);

@@ -122,8 +122,9 @@ func TestRencontreRoles(t *testing.T) {
 			t.Fatalf("difficulté lue par %s : %d %v", nom, c, v)
 		}
 	}
-	// la fiche partagée ne montre au joueur ni ses créatures ni le profil de combat d'un PNJ
-	if c, v, _ := b.proxy("GET", fiche, nil, b.connecter("joueuse")); c != 200 || v["data"].(map[string]any)["adversaires"] != nil {
-		t.Fatalf("rencontre vue par la joueuse : %d %v", c, v)
+	// la fiche partagée ne montre aux joueurs ni ses créatures ni le profil de combat d'un PNJ
+	vues, err := b.s.mondeJoueur()
+	if r, ok := vues[int64(v["id"].(float64))]; err != nil || !ok || r.Data["adversaires"] != nil {
+		t.Fatalf("rencontre vue des joueurs : %v %v", err, r)
 	}
 }

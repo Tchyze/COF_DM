@@ -86,7 +86,7 @@ Pour jouer à distance, préférez un VPN (Tailscale, WireGuard…) à une redir
 
 Chaque joueur suit la partie sur son téléphone, à l'adresse `http://<adresse>:8100/joueur.html` :
 
-- **Ma fiche** : la feuille de son personnage, sans les notes du MJ. Pendant un combat, ses PV et ses points de chance y bougent en direct. Elle est en lecture seule tant que le MJ n'a pas déverrouillé les feuilles ; déverrouillée, le joueur la tient lui-même (PV, ressources, repos, attaques, voies, équipement).
+- **Ma fiche** : la feuille de son personnage, sans les notes du MJ, et son apparence, son historique et ses objectifs ; la date en jeu de sa campagne s'affiche en haut de la page. Pendant un combat, ses PV et ses points de chance y bougent en direct. Elle est en lecture seule tant que le MJ n'a pas déverrouillé les feuilles ; déverrouillée, le joueur la tient lui-même (PV, ressources, repos, attaques, voies, équipement ; ajouter une voie de la bibliothèque reste au MJ).
 - **Combat** : le round, à qui c'est le tour, qui joue ensuite, l'ordre d'initiative et les états de chacun. Aucun PV, aucune DEF, aucune attaque, aucune statistique ; les adversaires hors de combat disparaissent de la liste. Un bandeau rappelle le tour sur sa fiche et annonce « C'est à vous ! ».
 - **Documents** : les aides de jeu que le MJ lui a envoyées (lettres, images, indices), avec une pastille pour celles qu'il n'a pas encore ouvertes ; une nouvelle s'annonce aussitôt.
 - **Dés** : des tests tout faits lus sur sa feuille (caractéristiques, attaques et leurs dégâts), avec dé bonus ou malus, une formule libre, et les jets de toute la table, en direct.
@@ -94,9 +94,11 @@ Chaque joueur suit la partie sur son téléphone, à l'adresse `http://<adresse>
 
 Les joueurs regardent le combat, ils n'y agissent pas. Tout se met à jour en temps réel.
 
-**À la maison**, la page est libre, sans mot de passe, pour les appareils du réseau local : dans **Paramètres → Tablette et réseau**, sur l'ordinateur du MJ, cochez **Ouvrir la page des joueurs au réseau local** (éteinte par défaut ; l'application doit écouter sur le réseau, donc travailler en mode local) et faites scanner son QR code. Chacun y choisit son personnage, gardé sur son appareil. N'importe qui sur ce réseau peut donc lire les feuilles et les documents des PJ ; rien d'autre de l'univers n'est accessible sans le mot de passe MJ. **Déverrouiller les feuilles** se règle au même endroit.
+Le MJ déverrouille les feuilles dans **Paramètres** (Tablette et réseau à la maison, Comptes du serveur sur un serveur) ou, en pleine partie, dans les **options de l'écran du MJ** (⚙, case « Édition par les joueurs »).
 
-**Sur un serveur**, on y entre par son compte : un joueur n'y trouve que le PJ rattaché à son compte, ses documents, les combats où il se bat et leurs hauts faits (lien « Ma feuille et le combat » dans son menu).
+**À la maison**, la page est libre, sans mot de passe, pour les appareils du réseau local : dans **Paramètres → Tablette et réseau**, sur l'ordinateur du MJ, cochez **Ouvrir la page des joueurs au réseau local** (éteinte par défaut ; l'application doit écouter sur le réseau, donc travailler en mode local) et faites scanner son QR code. Chacun y choisit son personnage, gardé sur son appareil. N'importe qui sur ce réseau peut donc lire les feuilles et les documents des PJ ; rien d'autre de l'univers n'est accessible sans le mot de passe MJ. L'apparence, l'historique et les objectifs s'y lisent ; seul le MJ les écrit.
+
+**Sur un serveur**, on y entre par son compte, et c'est tout ce qu'un compte joueur a de l'application : il y est renvoyé dès sa connexion. Il n'y trouve que le PJ rattaché à son compte (fiche partagée), ses documents, les combats où il se bat et leurs hauts faits, et l'onglet **Compte** (mot de passe, déconnexion). Feuilles déverrouillées, il écrit aussi l'apparence, l'historique et les objectifs de son PJ. Un compte qui a un rôle dans plusieurs univers en change par la liste en haut de la page : là où il est joueur, sa page ; ailleurs, l'application.
 
 ### En serveur, derrière nginx
 
@@ -109,11 +111,11 @@ Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche
 | Administrateur | Tout le serveur : comptes, univers, réglages. |
 | MJ (par univers) | Lit et modifie l'univers. |
 | Auditeur (par univers) | Lit tout, secrets du MJ compris, sans rien modifier. |
-| Joueur (par univers) | Lit les fiches que le MJ partage, sans leurs champs réservés au MJ. |
+| Joueur (par univers) | N'a que sa page de joueur (voir « Page des joueurs »). |
 
-Rien n'est montré aux joueurs par défaut : sur chaque fiche, le MJ clique **👁 Partager avec les joueurs** pour la rendre visible (et **Retirer aux joueurs** pour la cacher). Les champs du groupe « MJ », les relations secrètes, le tableau « qui sait quoi », les fiches « Secret » et les aides de jeu (qui n'arrivent que par un envoi, dans leurs documents), le journal et l'écran du MJ ne leur sont jamais montrés ; leur recherche ne porte que sur les noms et les tags.
+Rien n'est partagé avec les joueurs par défaut : sur chaque fiche, le MJ clique **👁 Partager avec les joueurs** (et **Retirer aux joueurs**). Le PJ d'un joueur doit être partagé pour qu'il le voie ; les fiches partagées forment aussi l'export vers Obsidian « joueurs ». Les champs du groupe « MJ », les relations secrètes, le tableau « qui sait quoi », les fiches « Secret », le journal et l'écran du MJ n'y entrent jamais.
 
-Les joueurs ne modifient rien, sauf si l'administrateur coche **Édition par les joueurs** (Paramètres → Comptes du serveur) et rattache chaque compte à son PJ : le joueur peut alors modifier l'apparence, l'historique et les objectifs de ce PJ, et rien d'autre.
+Les joueurs ne modifient rien, sauf si le MJ coche **Édition par les joueurs** (Paramètres → Comptes du serveur, ou les options de l'écran du MJ) et que l'administrateur rattache chaque compte à son PJ : depuis sa page, le joueur tient alors toute la feuille de ce PJ (sauf les notes du MJ) et son apparence, son historique et ses objectifs. Ajouter une voie de la bibliothèque reste au MJ.
 
 Le serveur héberge **plusieurs univers à la fois** : tous les fichiers `.cofdm` de son dossier `univers/` sont ouverts, et chaque compte a son rôle dans chacun (MJ de l'un, joueur de l'autre). L'administrateur en crée un par le menu **Fichier** ; un compte qui a un rôle dans plusieurs univers passe de l'un à l'autre par la liste en haut du menu. Pour ajouter un univers préparé sur votre ordinateur, l'administrateur choisit **Fichier → Déposer un univers…** : le fichier est contrôlé (univers intact, sans objet étranger, qui n'est pas la copie d'un univers déjà présent) puis rangé dans `univers/`, sans relancer le serveur. Déposer le fichier dans `univers/` à la main et relancer le serveur reste possible.
 
@@ -227,7 +229,7 @@ Sans fichier de règles, tout fonctionne en saisie libre, et le créateur de mon
 
 La fiche d'un PJ porte sa **feuille de personnage** : caractéristiques et modificateurs, PV, DEF, initiative, points de chance, de récupération et de mana, attaques, voies et rangs, équipement, bourse, notes du MJ. Rien n'est saisi deux fois : le nom, le peuple, le profil et le niveau restent ceux de la fiche. Les modificateurs, la DEF, l'initiative et les bonus d'attaque sont calculés ; les PV et les ressources se règlent d'un clic, et les boutons de repos appliquent ce que décrit votre fichier de règles. Si les profils et voies sont importés, « Appliquer le profil » ajoute ses voies à la feuille.
 
-Sur un serveur, un joueur voit la feuille de son PJ (sans les notes du MJ) et la tient lui-même quand l'administrateur a ouvert l'édition par les joueurs.
+Sur un serveur, un joueur voit la feuille de son PJ (sans les notes du MJ) sur sa page de joueur, et la tient lui-même quand le MJ a ouvert l'édition par les joueurs.
 
 ### Rencontres et profil de combat des PNJ
 

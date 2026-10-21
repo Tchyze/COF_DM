@@ -104,7 +104,11 @@ func TestPreparationJoueur(t *testing.T) {
 	if c, _, _ := b.proxy("GET", fmt.Sprintf("/api/entites/%v/preparation", id), nil, joueuse); c != 403 {
 		t.Fatalf("préparation lue par la joueuse : %d", c)
 	}
-	if c, v, _ := b.proxy("GET", fmt.Sprintf("/api/entites/%v", id), nil, joueuse); c != 200 || strings.Contains(toJSON(v), "SECRET-PREPA") {
-		t.Fatalf("fiche de séance vue par la joueuse : %d %v", c, v)
+	if c, _, _ := b.proxy("GET", fmt.Sprintf("/api/entites/%v", id), nil, joueuse); c != 403 {
+		t.Fatalf("fiche de séance lue par la joueuse : %d", c)
+	}
+	// ni dans ce que voient les joueurs (export vers Obsidian « joueurs »)
+	if vues, err := b.s.mondeJoueur(); err != nil || strings.Contains(toJSON(vues), "SECRET-PREPA") {
+		t.Fatalf("séance vue des joueurs : %v %v", err, vues)
 	}
 }

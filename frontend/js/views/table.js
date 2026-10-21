@@ -7,6 +7,7 @@ import { rendu, inline, resolveur } from "../md.js";
 import { ecran as ecranCombat, lancerCombat } from "./combat.js";
 import { lireMonstre, blocMonstre } from "../monstres.js";
 import { COURTS, RESUMES } from "./fiche.js";
+import { aideEditionJoueurs } from "./comptes.js";
 
 const PREFS = "cof-table";
 const SONDE = 5000; // relecture de ce qui bouge (PV des PJ, combat en cours)
@@ -351,8 +352,20 @@ export async function mount(el, arg) {
     if (pop.dataset.quoi === "options") {
       pop.innerHTML = `<h3>Options de l'écran</h3><div class="t-defile">
         <label class="t-coche"><input type="checkbox" id="o-chrono" ${prefs.chrono ? "checked" : ""}><span>Chronomètre de séance et rappels<small>Durée de la partie et comptes à rebours (« torche : 120 min »), dans la barre du haut.</small></span></label>
-        <p class="hint">Ces réglages sont propres à cet appareil.</p></div>`;
+        <p class="hint">Ce réglage est propre à cet appareil.</p>
+        <h4>Joueurs</h4>
+        ${fonctionActive("page_joueurs") ? `<label class="t-coche"><input type="checkbox" id="o-edition" ${window.cofAcces?.edition_joueurs ? "checked" : ""} ${window.cofAcces?.lecture_seule ? "disabled" : ""}>
+          <span>Édition par les joueurs<small>${esc(aideEditionJoueurs())}</small></span></label>`
+        : `<p class="hint">La page des joueurs est désactivée dans cet univers (Paramètres → Fonctionnalités) : ils ne modifient rien.</p>`}</div>`;
       $("#o-chrono", pop).onchange = e => { prefs.chrono = e.target.checked; garder(); battre(); };
+      const edition = $("#o-edition", pop);
+      if (edition) edition.onchange = async e => {
+        try {
+          const r = await api("PUT", "/api/joueurs/edition", { active: e.target.checked });
+          window.cofAcces.edition_joueurs = r.edition_joueurs;
+          toast(r.edition_joueurs ? "Les joueurs peuvent modifier leur feuille." : "Feuilles des joueurs verrouillées.");
+        } catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
+      };
       return;
     }
     const enMarche = !!prefs.debut;

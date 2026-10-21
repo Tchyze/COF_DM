@@ -28,7 +28,7 @@ Par défaut l'application n'écoute que sur l'ordinateur du MJ. En mode local (a
 | `POST /api/acces/mdp` `{"nouveau": "…"}` | Définit ou change le mot de passe MJ (8 caractères au moins) ; `""` le retire. Les appareils connectés sont déconnectés. |
 | `POST /api/acces/reseau` `{"reseau": true}` | Enregistre l'ouverture au réseau local, appliquée au prochain lancement. `409` pour l'ouvrir quand l'application est reliée à un serveur. |
 | `POST /api/acces/joueurs` `{"active": true}` | Ouvre (ou ferme) la page des joueurs au réseau local, sans mot de passe ; effet immédiat. Sur l'ordinateur du MJ seulement ; `409` pour l'ouvrir quand l'application est reliée à un serveur. `GET /api/acces` donne au MJ `"page_joueurs"` et `"edition_joueurs"`. |
-| `PUT /api/joueurs/edition` `{"active": true}` | Déverrouille (ou verrouille) les feuilles de personnage pour les joueurs. Réglage de l'univers ; sur l'ordinateur du MJ seulement. |
+| `PUT /api/joueurs/edition` `{"active": true}` | Déverrouille (ou verrouille) les feuilles de personnage pour les joueurs. Réglage de l'univers (synchronisé) ; le MJ le règle, sur son ordinateur ou depuis la tablette (écran du MJ). |
 | `GET /api/acces/qr?url=http://…` | QR code (PNG) d'une adresse. |
 
 **Application reliée à un serveur.** Tant que l'application de bureau est en mode serveur, elle ne répond plus qu'à son ordinateur, même si elle écoute sur le réseau local : toute requête venue d'ailleurs (tablette, page des joueurs, jeton d'API) reçoit `403`. Elle ne s'ouvre pas au réseau à son lancement. La tablette et les joueurs passent alors par le serveur.
@@ -44,7 +44,7 @@ L'**édition serveur** (image Docker, compilée avec l'étiquette `serveur`) tou
 | Administrateur (tout le serveur) | Tout : comptes, univers (`/api/univers`), et MJ de chaque univers. |
 | `mj` (par univers) | Lit et modifie l'univers. |
 | `auditeur` (par univers) | Lit tout l'univers, secrets du MJ et journal compris ; toute écriture répond `403`. |
-| `joueur` (par univers) | Lit les fiches que le MJ a partagées, sans leurs champs réservés au MJ. Voir « Vue des joueurs ». |
+| `joueur` (par univers) | N'a que sa page de joueur (`/joueur.html`). Voir « Comptes joueurs ». |
 | Aucun rôle dans l'univers ouvert | Son compte et ses jetons seulement ; l'univers répond `403`. |
 
 **Plusieurs univers.** Le serveur ouvre tous les univers de son dossier (`univers/`) et chaque compte a son rôle dans chacun. Une requête vise un univers par l'en-tête `X-COF-Univers: <identifiant>` ; pour une lecture (`GET`), aussi par le paramètre `?univers=<identifiant>`, qui sert aux images, au suivi en direct et aux téléchargements d'un onglet (il est ignoré en écriture et ne donne aucun droit) ; sinon par le choix du navigateur (`POST /api/mes-univers/courant`) ; sinon c'est le premier univers où le compte a un rôle. Un jeton d'API dont le compte a accès à plusieurs univers **doit** envoyer l'en-tête (`400` sans lui). Partout dans cette page, « l'univers ouvert » désigne alors l'univers visé par la requête.
@@ -60,7 +60,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 
 | Requête | Effet |
 |---|---|
-| `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'en voit que la vue des joueurs. |
+| `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`). |
 | `POST /api/acces/connexion` `{"nom", "mdp"}` | Ouvre la session (cookie `cof_dm_mj`, 30 jours, `Secure` en HTTPS). `401` : nom ou mot de passe incorrect ; `429` : huit essais ratés en cinq minutes depuis cette adresse, ou vingt sur ce nom. |
 | `POST /api/acces/deconnexion` | Ferme la session. |
 | `GET /api/compte` | Son compte : `{"nom", "admin", "inactif", "role"` (dans l'univers ouvert)`, "roles"` (par identifiant d'univers)`, "jetons": [{"id", "nom", "cree"}], "cree"}`. |
@@ -73,25 +73,21 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 | `PATCH /api/comptes/{nom}` `{"mdp"?, "admin"?, "inactif"?, "role"?, "pj"?}` | Administrateur : modifie un compte ; `"role": ""` retire l'accès à l'univers ouvert. Changer le mot de passe ou désactiver le compte ferme ses sessions. `409` s'il ne restait plus d'administrateur actif. |
 | `DELETE /api/comptes/{nom}` | Administrateur : supprime un compte. |
 
-### Vue des joueurs
+### Comptes joueurs
 
-Le MJ choisit les fiches que les joueurs voient : `POST /api/entites/{id}/partage` `{"partage": true}` (`false` pour la retirer). Chaque fiche porte `"partage"` ; une fiche « Secret » ou une aide de jeu ne se partage pas (`422` : une aide s'envoie, voir « Aides de jeu »), une fiche archivée n'est plus montrée.
+Le MJ choisit les fiches que les joueurs voient : `POST /api/entites/{id}/partage` `{"partage": true}` (`false` pour la retirer). Chaque fiche porte `"partage"` ; une fiche « Secret » ou une aide de jeu ne se partage pas (`422` : une aide s'envoie, voir « Aides de jeu »), une fiche archivée n'est plus montrée. Le partage décide de ce que contient l'export vers Obsidian « joueurs » (`GET /api/export/obsidian?secrets=0`), et qu'un PJ s'ouvre à son joueur.
 
-Un compte `joueur` n'atteint que les routes ci-dessous, en lecture ; tout le reste répond `403` (journal, export, graphe, chronologie, organigramme, écran du MJ, bestiaire, combats, secrets, écritures).
+Un compte `joueur` n'a que sa page de joueur : il n'atteint que les routes ci-dessous ; tout le reste répond `403` (fiches, listes, schéma, calendrier, journal, export, graphe, chronologie, organigramme, écran du MJ, bestiaire, combats, secrets, écritures). Un jeton d'API de ce compte a les mêmes droits.
 
 | Requête | Ce qu'un joueur reçoit |
 |---|---|
-| `GET /api/entites?type=&tag=&q=&limite=` | Les fiches partagées. `q` ne cherche que dans les noms et les tags, jamais dans les textes. |
-| `GET /api/entites/{id}` | La fiche partagée : ses champs non réservés au MJ (ni profil de combat, ni créatures d'une rencontre), les champs `ref` / `refs` réduits aux fiches partagées, ses images. Relations : sans les relations secrètes, sans « sait », sans les notes, vers des fiches partagées seulement. `references` est vide. Une fiche cachée répond `404`, comme une fiche inexistante. |
-| `GET /api/resoudre?nom=` | L'aperçu d'une fiche partagée. |
-| `GET /medias/{fichier}` | Les images des fiches partagées. |
-| `GET /api/schema` | Le schéma sans les types « Secret » et « Aide de jeu », sans les champs réservés au MJ ni les relations réservées. |
+| `GET /api/joueur/…`, `PATCH /api/joueur/pj/{id}` | La page des joueurs, restreinte à son PJ (voir « Page des joueurs »), documents compris. |
 | `GET /api/entites/{id}/feuille`, `PUT` | La feuille de son propre PJ seulement (voir « Feuille de personnage »). |
 | `GET /api/reference?pj=<id>` | La part de la bibliothèque qui concerne son PJ : les voies de sa feuille (par `ref` ou par nom), son profil et son peuple (par nom). Le PJ d'un autre : `404` ; sans `pj` : une bibliothèque vide. |
-| `GET /api/joueur/…` | La page des joueurs, restreinte à son PJ (voir « Page des joueurs »), documents compris. |
-| `GET /api/stats`, `GET /api/calendrier`, `GET /api/parametres`, `GET /api/sante` | Comptes des fiches partagées, calendrier, nom de l'univers, version (et numéros : voir « Synchronisation », Versions). |
+| `GET /api/sante` | Version (et numéros : voir « Synchronisation », Versions). |
+| `GET /api/acces`, `/api/compte…`, `/api/mes-univers…` | Son compte (mot de passe, jetons) et ses univers : un compte qui a un rôle dans plusieurs univers passe de l'un à l'autre depuis sa page. |
 
-**Édition par les joueurs.** Fermée par défaut. L'administrateur l'ouvre pour l'univers avec `PUT /api/joueurs/edition` `{"active": true}` et rattache chaque compte à son PJ avec `PATCH /api/comptes/{nom}` `{"pj": <id>}` (`0` : aucun). Un joueur peut alors `PATCH /api/entites/{id}` `{"data": {…}, "modifie"?}` sur la fiche de son PJ, si elle est partagée, pour les seuls champs que le schéma marque `"joueur": true` (apparence, historique, objectifs). Tout autre champ, le nom, les tags ou une autre fiche répondent `403` ou `422`. La fiche lue par ce joueur annonce ces champs dans `"modifiable"`, et `GET /api/acces` donne `"edition_joueurs"`.
+**Édition par les joueurs.** Fermée par défaut. Le MJ de l'univers (ou l'administrateur) l'ouvre avec `PUT /api/joueurs/edition` `{"active": true}` ; l'administrateur rattache chaque compte à son PJ avec `PATCH /api/comptes/{nom}` `{"pj": <id>}` (`0` : aucun). Le réglage se synchronise : ouvert sur un bureau relié, il vaut sur le serveur après l'échange, et les pages des joueurs en sont prévenues. Si la fiche du PJ est partagée, son joueur tient alors toute sa feuille, sauf les notes du MJ (« Feuille de personnage »), et `PATCH /api/joueur/pj/{id}` `{"data": {…}, "modifie"?}` écrit les seuls champs de sa fiche que le schéma marque `"joueur": true`. Tout autre champ, le nom, les tags répondent `403` ou `422` ; le PJ d'un autre, une autre fiche, `404`. `GET /api/acces` donne `"edition_joueurs"`.
 
 Sans objet en mode serveur : `POST /api/acces/mdp`, `POST /api/acces/reseau` et `POST /api/parametres/jeton` (`404`). `GET /api/parametres` ne donne les chemins du serveur qu'à l'administrateur.
 
@@ -283,14 +279,15 @@ Deux façons d'y entrer :
 | Requête | Effet |
 |---|---|
 | `GET /api/joueur/etat` | `{"serveur", "pj", "edition", "combat", "univers", "de", "fonctionnalites"}` : `serveur` dit si l'on entre par un compte, `pj` est alors le PJ du compte ; `edition` : les feuilles sont déverrouillées ; `combat` : voir ci-dessous, ou `null` ; `de` : le dé des tests (partie `combat` des règles, 20 à défaut). |
-| `GET /api/joueur/pj` | Les PJ parmi lesquels choisir le sien, ni morts, ni partis, ni archivés : `[{"id", "nom", "joueur", "peuple", "profil", "niveau", "statut", "feuille"}]`. |
+| `GET /api/joueur/pj` | Les PJ parmi lesquels choisir le sien, ni morts, ni partis, ni archivés : `[{"id", "nom", "joueur", "peuple", "profil", "niveau", "statut", "feuille", "date", "recit", "modifie"}]`. `date` : la date en jeu de sa campagne, en toutes lettres (rien d'autre de la campagne) ; `recit` : les champs de sa fiche que le schéma marque `"joueur": true`, `[{"cle", "nom", "texte"}]`. |
+| `PATCH /api/joueur/pj/{id}` `{"data": {…}, "modifie"?}` | Sur un serveur, un compte `joueur`, édition ouverte : écrit le récit de son PJ (voir « Comptes joueurs ») ; réponse : le PJ comme dans la liste. Absente de la page libre à la maison (`401`). |
 | `GET /api/joueur/hauts-faits` | `{"combats": [{"id", "recap"}], "records": [{"pj", "nom", "combats", "victoires", "infliges", "abattus", "critiques", "touches", "tentatives", "tombe", "meilleur_coup", "meilleur_txt", "meilleur_ou", "titres"}]}` : les combats terminés, du plus récent au plus ancien, et les records de chaque PJ. |
 | `GET /api/joueur/des?depuis=`, `POST /api/joueur/des` | Les jets de dés de la table, et un jet du joueur pour son PJ (voir « Lanceur de dés »). |
 | `GET /api/joueur/documents?pj=4` | Les aides de jeu reçues par le PJ, de la plus récente à la plus ancienne : `[{"id", "nom", "forme", "image", "recu"}]` (`image` : l'image principale). Sur un serveur, un compte `joueur` lit celles de son PJ, quel que soit `pj` ; à la maison et pour le MJ, `pj` est obligatoire (`404` sinon). |
 | `GET /api/joueur/documents/{id}?pj=4` | Une aide reçue par ce PJ : `{"id", "nom", "forme", "image", "recu", "contenu", "images": [{"fichier", "legende"}]}`. Rien d'autre de la fiche : ni le secret, ni la séance prévue, ni les notes ; les liens `[[Nom]]` du texte sont remplacés par leur texte (`![[…]]` retiré). Aide non reçue, archivée ou inexistante : `404`. |
 | `GET /api/joueur/documents/{id}/images/{fichier}?pj=4` | Une image de cette aide, si le PJ l'a reçue ; aucune autre image ne passe par là. |
 | `GET /api/joueur/direct` | WebSocket, qui ne fait que recevoir : `{"type": "etat", "edition", "combat"}` à la connexion, puis `{"type": "combat", "combat"}` à chaque action, `{"type": "fiche", "id"}` quand une feuille change, `{"type": "edition", "active"}`, `{"type": "hauts_faits"}` quand un combat se termine, `{"type": "jet", "jet"}` à chaque jet public, `{"type": "document", "id", "nom", "pj": [ids]}` quand une aide arrive (un compte `joueur` n'est prévenu que pour son PJ), `{"type": "documents"}` quand un envoi est retiré. `{"type": "ping"}` → `{"type": "pong"}`. Même contrôle d'origine que le suivi d'un combat. |
-| `GET /api/entites/{id}/feuille`, `PUT …` | À la maison, sur la page libre : la feuille d'un PJ sans les notes du MJ ; l'écriture demande les feuilles déverrouillées (`403` sinon) et ne touche pas aux notes du MJ. Sur un serveur, un joueur passe par les mêmes routes pour son seul PJ (« Vue des joueurs »). |
+| `GET /api/entites/{id}/feuille`, `PUT …` | À la maison, sur la page libre : la feuille d'un PJ sans les notes du MJ ; l'écriture demande les feuilles déverrouillées (`403` sinon) et ne touche pas aux notes du MJ. Sur un serveur, un joueur passe par les mêmes routes pour son seul PJ (« Comptes joueurs »). |
 | `GET /api/reference?pj=<id>` | Les voies de la feuille de ce PJ, son profil et son peuple ; rien d'autre de la bibliothèque. Sans `pj` : une bibliothèque vide. |
 
 Le combat vu par les joueurs : `{"nom", "round", "ordre": [{"nom", "camp", "pj"?, "a_terre"?, "courant", "suivant", "etats": ["…"]}]}`. `pj` : la fiche du PJ, pour que son joueur reconnaisse son tour ; `a_terre` : PJ inconscient. Les adversaires et les alliés hors de combat n'y figurent pas, et aucun chiffre (PV, DEF, initiative, attaques) n'est transmis. C'est le combat en cours le plus récemment joué.
@@ -447,7 +444,7 @@ Sauvegardes automatiques : à l'ouverture d'un univers, toutes les demi-heures e
 
 Une application de bureau garde une **copie** d'un univers du serveur et la tient à jour, y compris après un travail hors ligne. Ces routes n'existent qu'en mode serveur, pour les comptes qui écrivent dans l'univers (MJ, administrateur) ; l'auditeur et le joueur en sont exclus.
 
-L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}`. `objet` vaut `entite` (fiche), `relation`, `media` (image), `document` (bestiaire, profil, peuple, voie, combat terminé), `feuille`, `meta` (`calendrier`, `regles`, `fonctionnalites` ; `reference` : l'ancien réglage des profils et voies, envoyé par un serveur d'avant le modèle 2, que la copie range aussitôt un par un) ou `journal`. `champ` vaut `nom`, `type`, `tags`, `archive`, `partage`, `cree`, `data.<clé>` pour une fiche ou une feuille, le nom de la colonne pour une relation ou une image, `data` pour un document, `valeur` pour un réglage, `ligne` pour le journal. Le champ `*` dit qu'un objet existe ; `null`, qu'il est supprimé. Un combat en cours ne se synchronise pas. Chaque copie a un numéro et tire les identifiants de ce qu'elle crée dans sa propre plage (2^40 par copie) : une fiche créée hors ligne garde son identifiant partout. La dernière plage (numéro 8191) n'est donnée à aucune copie : elle reçoit les profils, peuples et voies repris de l'ancien réglage, sous un identifiant tiré de leur `ref` ou de leur nom, le même sur toutes les copies.
+L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}`. `objet` vaut `entite` (fiche), `relation`, `media` (image), `document` (bestiaire, profil, peuple, voie, combat terminé), `feuille`, `meta` (`calendrier`, `regles`, `fonctionnalites`, `edition_joueurs` ; `reference` : l'ancien réglage des profils et voies, envoyé par un serveur d'avant le modèle 2, que la copie range aussitôt un par un) ou `journal`. `champ` vaut `nom`, `type`, `tags`, `archive`, `partage`, `cree`, `data.<clé>` pour une fiche ou une feuille, le nom de la colonne pour une relation ou une image, `data` pour un document, `valeur` pour un réglage, `ligne` pour le journal. Le champ `*` dit qu'un objet existe ; `null`, qu'il est supprimé. Un combat en cours ne se synchronise pas. Chaque copie a un numéro et tire les identifiants de ce qu'elle crée dans sa propre plage (2^40 par copie) : une fiche créée hors ligne garde son identifiant partout. La dernière plage (numéro 8191) n'est donnée à aucune copie : elle reçoit les profils, peuples et voies repris de l'ancien réglage, sous un identifiant tiré de leur `ref` ou de leur nom, le même sur toutes les copies.
 
 | Route | Rôle |
 |---|---|

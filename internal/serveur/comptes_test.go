@@ -506,7 +506,9 @@ func TestServeurMultiUnivers(t *testing.T) {
 	}
 }
 
-// Un joueur ne lit que les fiches partagées, sans leurs champs réservés au MJ, et rien d'autre.
+// Un compte joueur n'a que sa page de joueur : le reste de l'univers lui est fermé, même les fiches
+// partagées. Le filtre des fiches partagées sert à l'export « joueurs » du MJ, et ne laisse rien
+// passer de ce qui est réservé au MJ.
 func TestServeurJoueur(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
@@ -529,22 +531,9 @@ func TestServeurJoueur(t *testing.T) {
 	lieu := creer("lieu", "Fort Boueux", nil, true)
 	gautier := creer("pnj", "Gautier", map[string]any{
 		"resume": "Aubergiste jovial, ami de [[Fort Boueux]] et de [[Le Traître]].", "secrets": "SECRET-MJ : il empoisonne ses clients.",
-		"notes": "SECRET-MJ notes", "responsable_secret": float64(cache)}, true)
+		"notes": "SECRET-MJ notes", "responsable_secret": float64(cache), "lieu": float64(lieu)}, true)
 	secret := creer("secret", "La vérité sur Gautier", map[string]any{"resume": "SECRET-MJ"}, false)
 	chemin := func(id int64) string { return "/api/entites/" + strconv.FormatInt(id, 10) }
-	relier := func(a, c int64, typ string, plus map[string]any) {
-		corps := map[string]any{"a": a, "b": c, "type": typ}
-		for k, v := range plus {
-			corps[k] = v
-		}
-		if code, v, _ := b.proxy("POST", "/api/relations", corps, mj); code != 201 {
-			t.Fatalf("relation %s : %d %v", typ, code, v)
-		}
-	}
-	relier(gautier, lieu, "habite", map[string]any{"note": "SECRET-MJ note de relation"})
-	relier(gautier, cache, "allie", nil)
-	relier(gautier, secret, "sait", nil)
-	relier(gautier, lieu, "possede", map[string]any{"secrete": true})
 
 	// une fiche « Secret » ne se partage pas
 	if c, _, _ := b.proxy("POST", chemin(secret)+"/partage", map[string]any{"partage": true}, mj); c != 422 {
@@ -557,121 +546,70 @@ func TestServeurJoueur(t *testing.T) {
 	if c, _, _ := b.proxy("PATCH", chemin(gautier), map[string]any{"nom": "X"}, joueuse); c != 403 {
 		t.Fatalf("écriture par un joueur : %d", c)
 	}
-	// la fiche partagée : ni champ du MJ, ni fiche cachée, ni relation secrète, ni « qui sait quoi »
-	c, v, _ := b.proxy("GET", chemin(gautier), nil, joueuse)
-	texte := toJSON(v)
-	if c != 200 || !strings.Contains(texte, "Aubergiste jovial") {
-		t.Fatalf("fiche partagée : %d %s", c, texte)
+	// ni fiche, même partagée, ni liste, ni schéma, ni rien de l'application du MJ
+	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 32)
+	r := httptest.NewRequest("POST", chemin(gautier)+"/medias?nom=a.png", strings.NewReader(png))
+	r.Host, r.RemoteAddr = "jdr.example", "127.0.0.1:5000"
+	r.Header.Set("X-COF-DM", "1")
+	r.Header.Set("Content-Type", "image/png")
+	mj(r)
+	w := httptest.NewRecorder()
+	b.s.ServeHTTP(w, r)
+	var m map[string]any
+	json.Unmarshal(w.Body.Bytes(), &m)
+	if w.Code != 201 {
+		t.Fatalf("image : %d %s", w.Code, w.Body.String())
 	}
-	for _, interdit := range []string{"SECRET-MJ", "responsable_secret", "La vérité sur Gautier", `"sait"`, `"secrete"`, `"allie"`, `"possede"`} {
-		if strings.Contains(texte, interdit) {
-			t.Fatalf("fuite de %q vers le joueur : %s", interdit, texte)
-		}
-	}
-	if rels := v["relations"].([]any); len(rels) != 1 || rels[0].(map[string]any)["type"] != "habite" {
-		t.Fatalf("relations vues par le joueur : %v", v["relations"])
-	}
-	if m := v["mentions"].(map[string]any); m["fort boueux"] == nil || m["le traître"] != nil {
-		t.Fatalf("mentions vues par le joueur : %v", m)
-	}
-	// les fiches cachées n'existent pas pour lui : même réponse qu'une fiche inconnue
-	for _, id := range []int64{cache, secret, 99999} {
-		if c, _, _ := b.proxy("GET", chemin(id), nil, joueuse); c != 404 {
-			t.Fatalf("fiche cachée n°%d lue par le joueur : %d", id, c)
-		}
-	}
-	// listes, recherche et tableau de bord : les fiches partagées seulement, sans recherche dans les textes
-	liste := func(u string) string {
-		r := httptest.NewRequest("GET", u, nil)
-		r.Host, r.RemoteAddr = "jdr.example", "127.0.0.1:5000"
-		joueuse(r)
-		w := httptest.NewRecorder()
-		b.s.ServeHTTP(w, r)
-		if w.Code != 200 {
-			t.Fatalf("GET %s par le joueur : %d", u, w.Code)
-		}
-		return w.Body.String()
-	}
-	if l := liste("/api/entites"); !strings.Contains(l, "Gautier") || !strings.Contains(l, "Fort Boueux") || strings.Contains(l, "Traître") || strings.Contains(l, "vérité") {
-		t.Fatalf("liste vue par le joueur : %s", l)
-	}
-	for _, q := range []string{"empoisonne", "soupçonne", "traitre"} {
-		if l := liste("/api/entites?q=" + q); strings.TrimSpace(l) != "[]" {
-			t.Fatalf("recherche de %q par le joueur : %s", q, l)
-		}
-	}
-	if l := liste("/api/entites?q=gaut&type=pnj"); !strings.Contains(l, "Gautier") {
-		t.Fatalf("recherche par nom : %s", l)
-	}
-	if l := liste("/api/stats"); !strings.Contains(l, `"total":2`) || strings.Contains(l, "Traître") {
-		t.Fatalf("tableau de bord du joueur : %s", l)
-	}
-	if l := liste("/api/schema"); strings.Contains(l, `"secret"`) || strings.Contains(l, "Notes du MJ") || strings.Contains(l, "profil_combat") {
-		t.Fatal("le schéma du joueur montre des champs du MJ")
-	}
-	if c, _, _ := b.proxy("GET", "/api/resoudre?nom=Le%20Tra%C3%AEtre", nil, joueuse); c != 404 {
-		t.Fatalf("aperçu d'une fiche cachée : %d", c)
-	}
-	if c, v, _ := b.proxy("GET", "/api/resoudre?nom=gautier", nil, joueuse); c != 200 || strings.Contains(toJSON(v), "SECRET") {
-		t.Fatalf("aperçu d'une fiche partagée : %d %v", c, v)
-	}
-	// tout le reste de l'API lui est fermé
-	for _, u := range []string{"/api/journal", "/api/export", "/api/export/obsidian", "/api/export/obsidian?secrets=0", "/api/secrets", "/api/graphe", "/api/chronologie", "/api/table", "/api/combats",
-		"/api/liens-morts", "/api/bestiaire", chemin(gautier) + "/organigramme", "/api/comptes"} {
+	for _, u := range []string{chemin(gautier), chemin(lieu), "/api/entites", "/api/entites?q=gaut", "/api/stats", "/api/schema",
+		"/api/calendrier", "/api/parametres", "/api/resoudre?nom=gautier", "/medias/" + m["fichier"].(string),
+		"/api/journal", "/api/export", "/api/export/obsidian", "/api/export/obsidian?secrets=0", "/api/secrets", "/api/graphe",
+		"/api/chronologie", "/api/table", "/api/combats", "/api/liens-morts", "/api/bestiaire", chemin(gautier) + "/organigramme",
+		"/api/comptes", "/api/fonctionnalites", "/api/regles"} {
 		if c, _, _ := b.proxy("GET", u, nil, joueuse); c != 403 {
 			t.Fatalf("GET %s par le joueur : %d", u, c)
+		}
+	}
+	// sa page répond
+	for _, u := range []string{"/api/joueur/etat", "/api/joueur/pj", "/api/joueur/hauts-faits", "/api/sante"} {
+		if c, v, _ := b.proxy("GET", u, nil, joueuse); c != 200 {
+			t.Fatalf("GET %s par le joueur : %d %v", u, c, v)
 		}
 	}
 	if _, v, _ := b.proxy("GET", "/api/acces", nil, joueuse); v["joueur"] != true || v["lecture_seule"] != true || v["mj"] != true {
 		t.Fatalf("état du joueur : %v", v)
 	}
-	// images : celles des fiches partagées seulement
-	png := "\x89PNG\r\n\x1a\n" + strings.Repeat("\x00", 32)
-	image := func(id int64) string {
-		r := httptest.NewRequest("POST", chemin(id)+"/medias?nom=a.png", strings.NewReader(png))
-		r.Host, r.RemoteAddr = "jdr.example", "127.0.0.1:5000"
-		r.Header.Set("X-COF-DM", "1")
-		r.Header.Set("Content-Type", "image/png")
-		mj(r)
-		w := httptest.NewRecorder()
-		b.s.ServeHTTP(w, r)
-		var m map[string]any
-		json.Unmarshal(w.Body.Bytes(), &m)
-		if w.Code != 201 {
-			t.Fatalf("image : %d %s", w.Code, w.Body.String())
+	// ce que voient les joueurs (export « joueurs ») : les fiches partagées, sans champ du MJ, et
+	// leurs références réduites aux fiches partagées
+	vues, err := b.s.mondeJoueur()
+	if err != nil || len(vues) != 2 {
+		t.Fatalf("fiches vues des joueurs : %v %v", err, vues)
+	}
+	texte := toJSON(vues[gautier])
+	if !strings.Contains(texte, "Aubergiste jovial") || vues[gautier].Data["lieu"] != float64(lieu) {
+		t.Fatalf("fiche partagée : %s", texte)
+	}
+	for _, interdit := range []string{"SECRET-MJ", "responsable_secret"} {
+		if strings.Contains(texte, interdit) {
+			t.Fatalf("fuite de %q vers les joueurs : %s", interdit, texte)
 		}
-		return "/medias/" + m["fichier"].(string)
-	}
-	visible, cachee := image(gautier), image(cache)
-	if c, _, _ := b.proxy("GET", visible, nil, joueuse); c != 200 {
-		t.Fatalf("image d'une fiche partagée : %d", c)
-	}
-	if c, _, _ := b.proxy("GET", cachee, nil, joueuse); c != 404 {
-		t.Fatalf("image d'une fiche cachée : %d", c)
 	}
 	// retirer le partage, ou archiver, referme la fiche
 	b.proxy("POST", chemin(gautier)+"/partage", map[string]any{"partage": false}, mj)
-	if c, _, _ := b.proxy("GET", chemin(gautier), nil, joueuse); c != 404 {
-		t.Fatalf("fiche retirée aux joueurs : %d", c)
-	}
-	if c, _, _ := b.proxy("GET", visible, nil, joueuse); c != 404 {
-		t.Fatalf("image d'une fiche retirée : %d", c)
-	}
 	b.proxy("DELETE", chemin(lieu), nil, mj) // archivage
-	if c, _, _ := b.proxy("GET", chemin(lieu), nil, joueuse); c != 404 {
-		t.Fatalf("fiche archivée lue par le joueur : %d", c)
+	if vues, _ := b.s.mondeJoueur(); len(vues) != 0 {
+		t.Fatalf("fiches retirées ou archivées : %v", vues)
 	}
 }
 
-// Édition par les joueurs : fermée par défaut ; ouverte par l'administrateur, chaque joueur modifie
-// les seuls champs prévus, sur la seule fiche de son PJ.
+// Édition par les joueurs : fermée par défaut ; ouverte par le MJ de l'univers, chaque joueur modifie,
+// depuis sa page, les seuls champs prévus de la fiche de son PJ.
 func TestServeurEditionJoueur(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
 		reg.Creer(nom, "mot-de-passe-"+nom, false)
 		reg.Modifier(nom, func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
 	}
-	chef, mj, joueuse, autre := b.connecter("chef"), b.connecter("meneur"), b.connecter("joueuse"), b.connecter("autre")
+	chef, mj, audit, joueuse, autre := b.connecter("chef"), b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse"), b.connecter("autre")
 	creer := func(typ, nom string) string {
 		_, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": typ, "nom": nom, "data": map[string]any{"secrets": "SECRET-MJ"}}, mj)
 		u := "/api/entites/" + strconv.FormatInt(int64(v["id"].(float64)), 10)
@@ -681,6 +619,7 @@ func TestServeurEditionJoueur(t *testing.T) {
 	pj, pnj := creer("pj", "Aldric"), creer("pnj", "Gautier")
 	idPJ, _ := strconv.ParseInt(strings.TrimPrefix(pj, "/api/entites/"), 10, 64)
 	idPNJ, _ := strconv.ParseInt(strings.TrimPrefix(pnj, "/api/entites/"), 10, 64)
+	page := func(id int64) string { return "/api/joueur/pj/" + strconv.FormatInt(id, 10) }
 	texte := map[string]any{"data": map[string]any{"historique": "Né à Fort Boueux."}}
 
 	// rattacher un compte à son PJ : l'administrateur seulement, et à un PJ
@@ -693,31 +632,38 @@ func TestServeurEditionJoueur(t *testing.T) {
 	if c, v, _ := b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": idPJ}, chef); c != 200 || v["pj"] != float64(idPJ) {
 		t.Fatalf("rattachement : %d %v", c, v)
 	}
+	// sa page montre les champs qu'elle tiendra, sans ceux du MJ
+	r := httptest.NewRequest("GET", "/api/joueur/pj", nil)
+	r.Host, r.RemoteAddr = "jdr.example", "127.0.0.1:5000"
+	joueuse(r)
+	w := httptest.NewRecorder()
+	b.s.ServeHTTP(w, r)
+	var liste []pjJoueur
+	if err := json.Unmarshal(w.Body.Bytes(), &liste); err != nil || len(liste) != 1 || len(liste[0].Recit) != 3 || strings.Contains(w.Body.String(), "SECRET-MJ") {
+		t.Fatalf("PJ de la joueuse : %d %s", w.Code, w.Body.String())
+	}
 	// édition fermée par défaut
-	if c, _, _ := b.proxy("PATCH", pj, texte, joueuse); c != 403 {
+	if c, _, _ := b.proxy("PATCH", page(idPJ), texte, joueuse); c != 403 {
 		t.Fatalf("édition fermée : %d", c)
 	}
-	if _, v, _ := b.proxy("GET", pj, nil, joueuse); v["modifiable"] != nil {
-		t.Fatalf("champs modifiables annoncés, édition fermée : %v", v["modifiable"])
-	}
-	// seul l'administrateur l'ouvre
-	for nom, qui := range map[string]func(*http.Request){"meneur": mj, "joueuse": joueuse} {
+	// le MJ de l'univers l'ouvre (l'administrateur aussi) ; ni l'auditeur ni le joueur
+	for nom, qui := range map[string]func(*http.Request){"audit": audit, "joueuse": joueuse} {
 		if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, qui); c != 403 {
 			t.Fatalf("édition ouverte par %s : %d", nom, c)
 		}
 	}
-	if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, chef); c != 200 {
-		t.Fatalf("ouverture de l'édition : %d", c)
+	if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, mj); c != 200 {
+		t.Fatalf("ouverture de l'édition par le MJ : %d", c)
 	}
 	if _, v, _ := b.proxy("GET", "/api/acces", nil, joueuse); v["edition_joueurs"] != true {
 		t.Fatalf("état : %v", v)
 	}
 	// la joueuse modifie les champs prévus de son PJ
-	c, v, _ := b.proxy("PATCH", pj, texte, joueuse)
-	if c != 200 || !strings.Contains(toJSON(v), "Fort Boueux") || strings.Contains(toJSON(v), "SECRET-MJ") || len(v["modifiable"].([]any)) != 3 {
+	c, v, _ := b.proxy("PATCH", page(idPJ), texte, joueuse)
+	if c != 200 || !strings.Contains(toJSON(v), "Fort Boueux") || strings.Contains(toJSON(v), "SECRET-MJ") || v["id"] != float64(idPJ) {
 		t.Fatalf("modification de son PJ : %d %v", c, v)
 	}
-	// … et rien d'autre : ni champ du MJ, ni champ non prévu, ni nom, ni tags, ni remplacement
+	// … et rien d'autre : ni champ du MJ, ni champ non prévu, ni nom, ni tags
 	for _, corps := range []map[string]any{
 		{"data": map[string]any{"secrets": "j'efface les secrets"}},
 		{"data": map[string]any{"statut": "mort"}},
@@ -725,24 +671,24 @@ func TestServeurEditionJoueur(t *testing.T) {
 		{"data": map[string]any{"historique": "x", "joueur": "moi"}},
 		{"data": map[string]any{"inconnu": "x"}},
 		{"data": map[string]any{}},
+		{"nom": "Autre nom"},
+		{"tags": []string{"x"}},
+		{"data": map[string]any{"historique": "x"}, "remplacer": true},
 	} {
-		if c, _, _ := b.proxy("PATCH", pj, corps, joueuse); c != 403 && c != 422 {
+		if c, _, _ := b.proxy("PATCH", page(idPJ), corps, joueuse); c != 403 && c != 422 {
 			t.Fatalf("modification refusée attendue pour %v : %d", corps, c)
 		}
 	}
-	for _, corps := range []map[string]any{{"nom": "Autre nom"}, {"tags": []string{"x"}}, {"data": map[string]any{"historique": "x"}, "remplacer": true}} {
-		if c, _, _ := b.proxy("PATCH", pj, corps, joueuse); c != 422 {
-			t.Fatalf("modification de %v : %d", corps, c)
+	// ni par l'API du MJ, ni la fiche d'un autre, ni une autre fiche : elles n'existent pas pour elle
+	for _, m := range []string{"PATCH", "PUT"} {
+		if c, _, _ := b.proxy(m, pj, texte, joueuse); c != 403 {
+			t.Fatalf("%s %s par la joueuse : %d", m, pj, c)
 		}
 	}
-	if c, _, _ := b.proxy("PUT", pj, texte, joueuse); c != 403 {
-		t.Fatalf("remplacement de la fiche : %d", c)
-	}
-	// ni la fiche d'un autre, ni une autre fiche
-	if c, _, _ := b.proxy("PATCH", pj, texte, autre); c != 403 {
+	if c, _, _ := b.proxy("PATCH", page(idPJ), texte, autre); c != 404 {
 		t.Fatalf("PJ d'un autre joueur : %d", c)
 	}
-	if c, _, _ := b.proxy("PATCH", pnj, map[string]any{"data": map[string]any{"apparence": "x"}}, joueuse); c != 403 {
+	if c, _, _ := b.proxy("PATCH", page(idPNJ), map[string]any{"data": map[string]any{"apparence": "x"}}, joueuse); c != 404 {
 		t.Fatalf("fiche d'un PNJ : %d", c)
 	}
 	// les secrets du MJ sont intacts, et le journal dit qui a écrit
@@ -754,14 +700,16 @@ func TestServeurEditionJoueur(t *testing.T) {
 	if j[0].Auteur != "joueuse" {
 		t.Fatalf("auteur de la modification : %+v", j[0])
 	}
-	// un PJ retiré aux joueurs ne se modifie plus ; l'édition refermée non plus
+	// un PJ retiré aux joueurs ne se modifie plus ; l'édition refermée (par l'administrateur) non plus
 	b.proxy("POST", pj+"/partage", map[string]any{"partage": false}, mj)
-	if c, _, _ := b.proxy("PATCH", pj, texte, joueuse); c != 404 {
+	if c, _, _ := b.proxy("PATCH", page(idPJ), texte, joueuse); c != 404 {
 		t.Fatalf("PJ caché : %d", c)
 	}
 	b.proxy("POST", pj+"/partage", map[string]any{"partage": true}, mj)
-	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, chef)
-	if c, _, _ := b.proxy("PATCH", pj, texte, joueuse); c != 403 {
+	if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, chef); c != 200 {
+		t.Fatalf("fermeture par l'administrateur : %d", c)
+	}
+	if c, _, _ := b.proxy("PATCH", page(idPJ), texte, joueuse); c != 403 {
 		t.Fatalf("édition refermée : %d", c)
 	}
 }

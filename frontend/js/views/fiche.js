@@ -67,12 +67,10 @@ function lecture(el, f) {
   for (const c of courts) (groupes[c.groupe || ""] ||= []).push(c);
   const longs = t.champs.filter(c => c.genre === "long" && f.data[c.cle]);
   const etapes = t.champs.find(c => c.genre === "etapes");
-  const joueur = !!window.cofAcces?.joueur; // vue des joueurs : la fiche seule, sans les outils du MJ
   // sur un serveur, le MJ choisit les fiches que les joueurs voient (jamais une fiche « Secret »)
   const partageable = !!window.cofAcces?.serveur && !window.cofAcces.lecture_seule && f.type !== "secret" && f.type !== "aide";
-  // la feuille de personnage : pour le MJ et l'auditeur sur tout PJ, pour un joueur sur le sien
-  const sienne = joueur && window.cofAcces.compte?.pj === f.id;
-  const feuille = f.type === "pj" && (!joueur || sienne) && fonctionActive("feuilles");
+  // la feuille de personnage (les joueurs tiennent la leur sur leur page)
+  const feuille = f.type === "pj" && fonctionActive("feuilles");
   // panneau propre au type ; celui d'une séance montre ses combats
   const special = f.type === "seance" && !fonctionActive("combat") ? null : PANNEAUX[f.type];
 
@@ -86,8 +84,8 @@ function lecture(el, f) {
         <div class="actions">
           <a href="#/f/${f.id}/modifier"><button class="primary">✎ Modifier</button></a>
           ${fonctionActive("graphe") ? `<a href="#/graphe/${f.id}"><button>🕸 Graphe</button></a>` : ""}
-          ${f.type === "seance" && !joueur && fonctionActive("seances") ? `<a href="#/preparer/${f.id}"><button title="Rassembler les quêtes, secrets, PNJ et rencontres de la campagne">🧭 Préparer</button></a>` : ""}
-          ${f.type === "seance" && !joueur && !window.cofAcces?.lecture_seule && fonctionActive("seances") ? `<a href="#/apres/${f.id}"><button title="Reporter ce qui s'est passé et préparer la séance suivante">✅ Après la séance</button></a>` : ""}
+          ${f.type === "seance" && fonctionActive("seances") ? `<a href="#/preparer/${f.id}"><button title="Rassembler les quêtes, secrets, PNJ et rencontres de la campagne">🧭 Préparer</button></a>` : ""}
+          ${f.type === "seance" && !window.cofAcces?.lecture_seule && fonctionActive("seances") ? `<a href="#/apres/${f.id}"><button title="Reporter ce qui s'est passé et préparer la séance suivante">✅ Après la séance</button></a>` : ""}
           ${liensCreation(f)}
           <span style="flex:1"></span>
           ${partageable ? `<button id="partager" class="${f.partage ? "" : "ghost"}" title="Les joueurs ne voient jamais les champs réservés au MJ">${f.partage ? "Retirer aux joueurs" : "👁 Partager avec les joueurs"}</button>` : ""}
@@ -96,7 +94,6 @@ function lecture(el, f) {
         </div>
       </div>
     </div>
-    ${f.modifiable?.length ? `<div class="ligne" style="margin-bottom:14px"><button class="primary" id="ma-fiche">✎ Modifier ma fiche</button><span class="hint">Vous pouvez modifier : ${f.modifiable.map(k => esc(t.champs.find(c => c.cle === k)?.nom || k)).join(", ")}.</span></div>` : ""}
     ${f.type === "faction" && fonctionActive("organigramme") ? `<section class="panneau" id="organigramme" style="margin-bottom:18px"></section>` : ""}
     <div class="fiche-corps">
       <div class="colonne">
@@ -126,12 +123,9 @@ function lecture(el, f) {
   relations(el, f);
   images(el, f);
   const rafraichir = () => recharger(el, f.id);
-  if (feuille) panneauFeuille($("#p-feuille", el), f, { joueur,
-    peutEcrire: joueur ? !!window.cofAcces.edition_joueurs : !window.cofAcces?.lecture_seule });
-  if (special && !joueur) special($("#p-special", el), f, rafraichir);
-  if ($("#p-secrets", el) && !joueur) panneaux.secretsDe($("#p-secrets", el), f);
-  const maFiche = $("#ma-fiche", el);
-  if (maFiche) maFiche.onclick = () => editerMaFiche(f, t, rafraichir);
+  if (feuille) panneauFeuille($("#p-feuille", el), f, { peutEcrire: !window.cofAcces?.lecture_seule });
+  if (special) special($("#p-special", el), f, rafraichir);
+  if ($("#p-secrets", el)) panneaux.secretsDe($("#p-secrets", el), f);
   const partager = $("#partager", el);
   if (partager) partager.onclick = async () => {
     try {
@@ -140,7 +134,7 @@ function lecture(el, f) {
       recharger(el, f.id);
     } catch (err) { toast(err.message, true); }
   };
-  if ($("#organigramme", el) && !joueur) organigramme($("#organigramme", el), f, () => { window.dispatchEvent(new Event("cof-change")); recharger(el, f.id); });
+  if ($("#organigramme", el)) organigramme($("#organigramme", el), f, () => { window.dispatchEvent(new Event("cof-change")); recharger(el, f.id); });
   $(".fiche-tete .vignette", el).onclick = () => { if (f.medias.length) visionneuse(f, 0, () => recharger(el, f.id)); else $("#depot", el)?.click(); };
 
   const coches = $("#etapes", el);
@@ -201,30 +195,6 @@ function liensCreation(f) {
     }
   }
   return liens.slice(0, 6).join("");
-}
-
-/** Édition par un joueur : les seuls champs de son PJ que le serveur lui ouvre (f.modifiable). */
-function editerMaFiche(f, t, apres) {
-  const champs = f.modifiable.map(k => t.champs.find(c => c.cle === k)).filter(Boolean);
-  const voile = document.createElement("div");
-  voile.className = "voile";
-  voile.innerHTML = `<div class="boite" role="dialog" aria-label="Modifier ma fiche"><div class="boite-corps" style="overflow:auto"><h3>${esc(f.nom)}</h3>
-    <form class="colonne" style="gap:10px">
-      ${champs.map(c => `<label class="champ"><span>${esc(c.nom)}</span><textarea data-cle="${esc(c.cle)}" rows="6" spellcheck="true">${esc(f.data[c.cle] ?? "")}</textarea></label>`).join("")}
-      <div class="ligne"><button class="primary" type="submit">Enregistrer</button><button type="button" id="mf-annuler">Annuler</button></div>
-    </form></div></div>`;
-  document.body.append(voile);
-  const fermer = () => voile.remove();
-  voile.addEventListener("click", e => { if (e.target === voile) fermer(); });
-  $("#mf-annuler", voile).onclick = fermer;
-  $("form", voile).onsubmit = async e => {
-    e.preventDefault();
-    const data = {};
-    for (const z of $$("textarea[data-cle]", voile)) if (z.value !== (f.data[z.dataset.cle] ?? "")) data[z.dataset.cle] = z.value;
-    if (!Object.keys(data).length) { fermer(); return; }
-    try { await api("PATCH", "/api/entites/" + f.id, { data, modifie: f.modifie }); toast("Fiche enregistrée."); fermer(); apres(); }
-    catch (err) { toast(err.message, true); }
-  };
 }
 
 /** Fiches qui pointent vers celle-ci, regroupées par type et par champ. */
@@ -307,7 +277,7 @@ function relations(el, f) {
 
 function images(el, f) {
   const box = $("#images", el);
-  // lecture seule (auditeur, joueur) : rien à déposer, le cadre n'apparaît qu'avec des images
+  // lecture seule (auditeur) : rien à déposer, le cadre n'apparaît qu'avec des images
   box.hidden = !!window.cofAcces?.lecture_seule && !f.medias.length;
   if (box.hidden) return;
   box.innerHTML = `<h3>Images</h3>

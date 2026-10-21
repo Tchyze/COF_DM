@@ -117,10 +117,14 @@ func (s *Serveur) syncEchanger(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	edition := s.editionJoueurs()
 	rep, err := s.store.Recevoir(in.Curseur, in.Changements)
 	if err != nil {
 		erreurStore(w, err)
 		return
+	}
+	if e := s.editionJoueurs(); e != edition { // réglée sur un bureau relié : les pages des joueurs suivent
+		s.joueurs.envoyer(map[string]any{"type": "edition", "active": e})
 	}
 	repondre(w, 200, rep)
 }
