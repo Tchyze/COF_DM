@@ -20,7 +20,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
   try { F = await api("GET", url); }
   catch (e) { box.innerHTML = `<h3>Feuille de personnage</h3><p class="alerte">${esc(e.message)}</p>`; return; }
   // le MJ lit toute la bibliothèque ; un joueur, les voies de ce PJ, son profil et son peuple
-  api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; }, () => {});
+  let enLecture = false; // la vue de lecture est affichée (et non le formulaire)
+  api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; if (enLecture) lire(); }, () => {});
   const R = () => F.regles || {};
   const pvActuel = () => F.pv_actuel ?? F.pv;
 
@@ -36,8 +37,97 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     }
   }
 
+  // ---------------------------------------------------------------- voies
+  // Une grille comme sur la feuille papier : une colonne par voie (trois par bloc, une seule en
+  // étroit), une ligne par rang. Une voie liée à la bibliothèque (même ref, sinon même nom) en
+  // montre les capacités ; une voie libre, celles saisies sur la feuille. Au survol (ou au toucher),
+  // le texte du rang et ses effets.
+  const voieDeRef = v => REF.voies.find(x => (v.ref && x.ref === v.ref) || cle(x.nom) === cle(v.nom));
+  const capacitesDe = v => voieDeRef(v)?.rangs || v.capacites.map(nom => ({ nom }));
+  const parBloc = () => (box.clientWidth && box.clientWidth < 560 ? 1 : 3);
+  let blocAffiche = 0;
+
+  // grille de voies (lecture ou édition) : tete, sous et cellule donnent le contenu de l'en-tête,
+  // de la ligne sous l'en-tête et d'une case (i : la voie, r : le rang, c : sa capacité)
+  function grilleVoies(voies, { tete, sous, cellule }) {
+    const k = blocAffiche = parBloc();
+    const caps = voies.map(capacitesDe);
+    let html = "";
+    for (let d = 0; d < voies.length; d += k) {
+      const idx = [...Array(k).keys()].map(i => d + i); // un bloc incomplet garde ses colonnes vides, comme sur papier
+      const nbRangs = Math.max(R().rang_max || 5, ...idx.filter(i => i < voies.length).map(i => {
+        const c = caps[i]; let n = c.length; while (n && !c[n - 1]?.nom) n--; return n;
+      }));
+      html += `<div class="fp-vbloc" style="grid-template-columns:1.8em repeat(${idx.length},minmax(0,1fr))">
+        <div class="fp-vcoin"></div>${idx.map(i => i < voies.length ? tete(i) : `<div class="fp-vtete"></div>`).join("")}
+        <div class="fp-vcoin2"></div>${idx.map(i => i < voies.length ? sous(i) : `<div class="fp-vsous"></div>`).join("")}
+        ${[...Array(nbRangs).keys()].map(r => `<div class="fp-vrang">${r + 1}</div>${idx.map(i => i < voies.length ? cellule(i, r, caps[i][r]) : `<div class="fp-vcase vide"></div>`).join("")}`).join("")}
+      </div>`;
+    }
+    return `<div class="fp-voies">${html}</div>`;
+  }
+  const origineRang = v => `${esc(v.origine || "")}${v.origine ? " · " : ""}rang ${v.rang}`;
+  const grilleLecture = () => grilleVoies(F.voies, {
+    tete: i => `<div class="fp-vtete">${esc(F.voies[i].nom)}</div>`,
+    sous: i => `<div class="fp-vsous">${origineRang(F.voies[i])}</div>`,
+    cellule: (i, r, c) => c?.nom ? `<div class="fp-vcase${r < F.voies[i].rang ? " acquise" : ""}" tabindex="0" data-v="${i}" data-r="${r}">${esc(nomCap(c))}</div>` : `<div class="fp-vcase vide"></div>`,
+  });
+  let redessiner = null; // ce qu'il faut repeindre quand la grille change de nombre de colonnes
+
+  const CIBLES = { pv: "PV max", pm: "PM max", def: "DEF", init: "Initiative", att: "Attaques", att_c: "Attaque au contact", att_d: "Attaque à distance", att_m: "Attaque magique", rd: "RD" };
+  const GENRES = { sort: "Sort", attaque: "Attaque spéciale", soin: "Soin", etat: "État", autre: "Action" };
+  function utilisations(u) {
+    if (u.par === "main") return `${u.fois} fois, à remettre à zéro à la main`;
+    if (u.par.startsWith("repos:")) { const c = u.par.slice(6); return `${u.fois} fois par ${R().repos?.find(r => r.cle === c)?.libelle || c}`; }
+    return `${u.fois} fois par ${u.par}`;
+  }
+  function detail(c, voie, r) {
+    const lignes = [];
+    for (const b of c.bonus || []) lignes.push(`${CIBLES[b.cible] || b.cible} ${signe(b.valeur)}${b.par_rang ? " × rang" : ""}${b.niveau ? " + niveau" : ""}${b.carac ? ` + mod. ${b.carac}` : ""}`);
+    if (c.action) {
+      const a = c.action;
+      lignes.push([GENRES[a.genre] || a.genre, a.cout_pm && `${a.cout_pm} PM`, a.attaque && `attaque ${(TYPES[a.attaque] || a.attaque).toLowerCase()}${a.bonus ? ` ${signe(a.bonus)}` : ""}`,
+        a.degats && `DM ${a.degats}`, a.soin && `soigne ${a.soin}`, a.etat && `état : ${a.etat}`].filter(Boolean).join(" · "));
+    }
+    if (c.utilisations) lignes.push(utilisations(c.utilisations));
+    if (c.limitee) lignes.push("Action limitée");
+    return `<b>${esc(c.nom)}</b> <span class="hint">${esc(voie.nom)}, rang ${r + 1}${r < voie.rang ? " · acquis" : ""}</span>
+      ${c.texte ? `<div class="bst-texte">${esc(c.texte)}</div>` : ""}
+      ${lignes.length ? `<ul>${lignes.map(l => `<li>${esc(l)}</li>`).join("")}</ul>` : ""}`;
+  }
+  // une seule bulle pour la page, placée sous la case (au-dessus si la place manque), dans l'écran
+  function bulle() {
+    let b = document.getElementById("fp-bulle");
+    if (!b) { b = document.createElement("div"); b.id = "fp-bulle"; b.className = "fp-bulle"; b.hidden = true; b.setAttribute("role", "tooltip"); document.body.append(b); }
+    return b;
+  }
+  function armerBulles(voies) {
+    const cacher = () => { bulle().hidden = true; };
+    $$(".fp-vcase[data-v][data-r]", box).forEach(el => {
+      const montrer = () => {
+        const v = voies[+el.dataset.v], r = +el.dataset.r, b = bulle();
+        b.innerHTML = detail(capacitesDe(v)[r], v, r);
+        b.hidden = false;
+        const c = el.getBoundingClientRect(), l = Math.min(360, innerWidth - 16);
+        b.style.width = l + "px";
+        b.style.left = Math.max(8, Math.min(c.left, innerWidth - l - 8)) + "px";
+        const h = b.offsetHeight;
+        b.style.top = (c.bottom + 6 + h > innerHeight && c.top - 6 - h > 0 ? c.top - 6 - h : c.bottom + 6) + "px";
+      };
+      el.addEventListener("pointerenter", montrer);
+      el.addEventListener("focus", montrer);
+      el.addEventListener("pointerleave", () => { if (document.activeElement !== el) cacher(); });
+      el.addEventListener("blur", cacher);
+    });
+    addEventListener("scroll", cacher, { capture: true, passive: true, once: true });
+  }
+  // en passant de large à étroit (ou l'inverse), la grille change de nombre de colonnes
+  new ResizeObserver(() => { if (redessiner && box.isConnected && blocAffiche && parBloc() !== blocAffiche) redessiner(); }).observe(box);
+
   // ---------------------------------------------------------------- lecture
   function lire() {
+    enLecture = true;
+    redessiner = lire;
     const compteur = (k, nom) => (F[k + "_max"] || F[k]) ? `<span class="fp-res" data-res="${k}"><b>${nom}</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="${nom} −1">−</button>` : ""}<span>${F[k]}/${F[k + "_max"]}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="${nom} +1">+</button>` : ""}</span>` : "";
     const identite = [["Sexe", F.sexe], ["Âge", F.age], ["Taille", F.taille_physique], ["Poids", F.poids], ["Divinité", F.divinite], ["Langues", F.langues]].filter(x => x[1]);
     const bourse = ["po", "pa", "pc"].filter(k => F.bourse?.[k]).map(k => `${F.bourse[k]} ${k}`).join(", ");
@@ -54,14 +144,14 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b> ${signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
         ${peutEcrire && R().repos?.length ? `<div class="ligne">${R().repos.map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}</div>` : ""}
       </div>
-      ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3><div class="colonne" style="gap:6px">${F.voies.map(v => `<div><b>${esc(v.nom)}</b> <span class="hint">${esc(v.origine || "")}${v.origine ? " · " : ""}rang ${v.rang}</span>
-          ${v.rang ? `<div class="hint">${v.capacites.slice(0, v.rang).filter(Boolean).map((c, i) => `${i + 1}. ${esc(c)}`).join(" · ")}</div>` : ""}</div>`).join("")}</div>` : ""}
+      ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3>${grilleLecture()}` : ""}
       ${F.capacites ? `<h3 style="margin-top:12px">Capacités</h3><div class="bst-texte">${esc(F.capacites)}</div>` : ""}
       ${F.equipement || bourse || F.armure?.nom || F.bouclier?.nom ? `<h3 style="margin-top:12px">Équipement</h3>
         ${[F.armure?.nom && `${F.armure.nom} (${signe(F.armure.bonus)} DEF)`, F.bouclier?.nom && `${F.bouclier.nom} (${signe(F.bouclier.bonus)} DEF)`].filter(Boolean).map(x => `<div>${esc(x)}</div>`).join("")}
         ${F.equipement ? `<div class="bst-texte">${esc(F.equipement)}</div>` : ""}${bourse ? `<p class="hint">Bourse : ${esc(bourse)}</p>` : ""}` : ""}
       ${identite.length ? `<dl class="proprietes" style="margin-top:12px">${identite.map(([n, v]) => `<div><dt>${n}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
       ${!joueur && F.notes ? `<h3 style="margin-top:12px">Notes du MJ</h3><div class="bst-texte">${esc(F.notes)}</div>` : ""}`;
+    armerBulles(F.voies);
     if (!peutEcrire) return;
     $("#fp-modifier", box).onclick = editer;
     // PV et ressources : un clic, enregistré aussitôt
@@ -99,6 +189,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
 
   // ---------------------------------------------------------------- édition
   function editer() {
+    enLecture = false;
+    bulle().hidden = true;
     const f = structuredClone(F), rg = R();
     const nombre = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input type="number" data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? 0)}" ${plus}></label>`;
     const texte = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? "")}" ${plus}></label>`;
@@ -125,7 +217,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         <div><button type="button" class="petit" id="fp-atk">＋ Attaque</button></div>
         <p class="hint">Le bonus d'attaque est calculé : niveau + modificateur + divers + bonus propre à l'arme.</p>
         <h3>Voies</h3>
-        <div class="colonne" style="gap:10px" id="fp-voies"></div>
+        <p class="hint">Une voie de la bibliothèque montre ses capacités : un clic sur une case fixe le rang. Une voie libre se remplit rang par rang.</p>
+        <div id="fp-voies"></div>
         <div class="ligne"><button type="button" class="petit" id="fp-voie">＋ Voie</button>
           ${REF.voies.length ? `<select id="fp-voie-ref" aria-label="Voie de la bibliothèque"><option value="">＋ Voie de la bibliothèque…</option>${REF.voies.map((v, i) => `<option value="${i}">${esc(v.nom)}</option>`).join("")}</select>` : ""}
           ${profil ? `<button type="button" class="petit" id="fp-profil">Appliquer le profil « ${esc(profil.nom)} »</button>` : ""}</div>
@@ -145,34 +238,66 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
         <input data-k="portee" value="${esc(a.portee)}" placeholder="Portée" aria-label="Portée">
         <input data-k="notes" value="${esc(a.notes)}" placeholder="Notes" aria-label="Notes">
         <button type="button" class="ghost petit" data-retirer aria-label="Retirer">✕</button></div>`;
-    const blocVoie = v => `<div class="fp-voie" data-ref="${esc(v.ref || "")}">
-        <div class="ligne"><input data-k="nom" value="${esc(v.nom)}" placeholder="Nom de la voie" aria-label="Nom de la voie" style="flex:1">
-          ${rg.origines_voie?.length ? `<select data-k="origine" aria-label="Origine">${rg.origines_voie.map(o => `<option${o === v.origine ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>` : `<input data-k="origine" value="${esc(v.origine)}" placeholder="Origine" aria-label="Origine">`}
-          <label class="hint">Rang <input data-k="rang" type="number" min="0" value="${esc(v.rang)}" style="width:60px"></label>
-          <button type="button" class="ghost petit" data-retirer aria-label="Retirer">✕</button></div>
-        <textarea data-k="capacites" rows="${Math.max(2, (v.capacites || []).length)}" placeholder="Une capacité par ligne, dans l'ordre des rangs" aria-label="Capacités">${esc((v.capacites || []).join("\n"))}</textarea></div>`;
-    const depuisRef = v => ({ nom: v.nom, origine: v.type || "", rang: 0, capacites: (v.rangs || []).map(nomCap), ref: v.ref || "" });
+    // les voies en grille, comme en lecture : ed garde ce qui est saisi entre deux dessins
+    const ed = f.voies.map(v => ({ ...v, capacites: [...(v.capacites || [])] }));
+    const nouvelleVoie = (nom = "") => ({ nom, origine: rg.origines_voie?.[0] || "", rang: 0, capacites: [] });
+    const depuisRef = v => ({ nom: v.nom, origine: rg.origines_voie?.includes(v.type) ? v.type : (rg.origines_voie?.[0] || v.type || ""), rang: 0, capacites: (v.rangs || []).map(nomCap), ref: v.ref || "" });
+    const origine = (v, i) => rg.origines_voie?.length
+      ? `<select data-origine="${i}" aria-label="Origine">${rg.origines_voie.map(o => `<option${o === v.origine ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>`
+      : `<input data-origine="${i}" value="${esc(v.origine)}" placeholder="Origine" aria-label="Origine">`;
+    function peindreVoies() {
+      redessiner = peindreVoies;
+      voies.innerHTML = ed.length ? grilleVoies(ed, {
+        tete: i => `<div class="fp-vtete fp-vtete-ed"><input data-nom="${i}" value="${esc(ed[i].nom)}" placeholder="Nom de la voie" aria-label="Nom de la voie">
+          <button type="button" class="ghost petit" data-retirer-voie="${i}" aria-label="Retirer la voie" title="Retirer la voie">✕</button></div>`,
+        sous: i => `<div class="fp-vsous fp-vsous-ed">${voieDeRef(ed[i]) ? `<span title="Capacités de la bibliothèque">📖</span>` : ""}${origine(ed[i], i)}
+          <label>rang <input data-rang="${i}" type="number" min="0" max="20" value="${esc(ed[i].rang)}"></label></div>`,
+        cellule: (i, r, c) => {
+          const acq = r < ed[i].rang ? " acquise" : "";
+          if (voieDeRef(ed[i])) return c?.nom ? `<button type="button" class="fp-vcase${acq}" data-v="${i}" data-r="${r}" data-fixer="${i}:${r}" title="Rang ${r + 1}">${esc(nomCap(c))}</button>` : `<div class="fp-vcase vide"></div>`;
+          return `<div class="fp-vcase fp-vcase-ed${acq}"><input data-cap="${i}:${r}" value="${esc(ed[i].capacites[r] || "")}" placeholder="Rang ${r + 1}" aria-label="${esc(ed[i].nom || "Voie")}, rang ${r + 1}"></div>`;
+        },
+      }) : `<p class="vide">Aucune voie.</p>`;
+      armerBulles(ed);
+    }
+    voies.oninput = e => {
+      const t = e.target, d = t.dataset;
+      if (d.nom != null) ed[+d.nom].nom = t.value;
+      else if (d.origine != null) ed[+d.origine].origine = t.value;
+      else if (d.rang != null) ed[+d.rang].rang = Math.max(0, +t.value || 0);
+      else if (d.cap != null) { const [i, r] = d.cap.split(":").map(Number); ed[i].capacites[r] = t.value; }
+    };
+    // un nom changé peut lier ou délier la voie de la bibliothèque ; un rang change la surbrillance
+    voies.onchange = e => { if (e.target.dataset.nom != null || e.target.dataset.rang != null) peindreVoies(); };
+    voies.onclick = e => {
+      const x = e.target.closest("[data-retirer-voie], [data-fixer]");
+      if (!x) return;
+      if (x.dataset.retirerVoie != null) ed.splice(+x.dataset.retirerVoie, 1);
+      else { const [i, r] = x.dataset.fixer.split(":").map(Number); ed[i].rang = ed[i].rang === r + 1 ? r : r + 1; }
+      bulle().hidden = true;
+      peindreVoies();
+    };
     atks.innerHTML = f.attaques.map(ligneAtk).join("");
-    voies.innerHTML = f.voies.map(blocVoie).join("");
-    const retirer = e => { const b = e.target.closest("[data-retirer]"); if (b) b.closest(".fp-atk, .fp-voie").remove(); };
-    atks.onclick = retirer; voies.onclick = retirer;
+    peindreVoies();
+    atks.onclick = e => { const b = e.target.closest("[data-retirer]"); if (b) b.closest(".fp-atk").remove(); };
     $("#fp-atk", box).onclick = () => atks.insertAdjacentHTML("beforeend", ligneAtk({ nom: "", type: "C", mod: 0, dm: "", portee: "", notes: "" }));
-    $("#fp-voie", box).onclick = () => voies.insertAdjacentHTML("beforeend", blocVoie({ nom: "", origine: rg.origines_voie?.[0] || "", rang: 0, capacites: [] }));
+    $("#fp-voie", box).onclick = () => { ed.push(nouvelleVoie()); peindreVoies(); $(`[data-nom="${ed.length - 1}"]`, voies)?.focus(); };
     const selRef = $("#fp-voie-ref", box);
-    if (selRef) selRef.onchange = () => { if (selRef.value !== "") voies.insertAdjacentHTML("beforeend", blocVoie(depuisRef(REF.voies[+selRef.value]))); selRef.value = ""; };
+    if (selRef) selRef.onchange = () => { if (selRef.value !== "") { ed.push(depuisRef(REF.voies[+selRef.value])); peindreVoies(); } selRef.value = ""; };
     const btnProfil = $("#fp-profil", box);
     if (btnProfil) btnProfil.onclick = () => {
       // le profil de la bibliothèque donne son dé de vie, sa caractéristique de magie et ses voies (au rang 0)
       for (const [champ, v] of [["dv", profil.dv], ["carac_magie", profil.carac_magie]]) { const i = $(`[data-p="${champ}"]`, box); if (v && i) i.value = v; }
-      const deja = new Set($$(".fp-voie [data-k=nom]", voies).map(i => cle(i.value)));
+      const deja = new Set(ed.map(v => cle(v.nom)));
       let n = 0;
       for (const nom of profil.voies || []) {
-        const v = REF.voies.find(x => cle(x.nom) === cle(nom));
-        if (!deja.has(cle(nom))) { voies.insertAdjacentHTML("beforeend", blocVoie(v ? depuisRef(v) : { nom, origine: rg.origines_voie?.[0] || "", rang: 0, capacites: [] })); n++; }
+        const v = REF.voies.find(x => cle(x.nom) === cle(nom) || (x.ref && x.ref === nom));
+        if (!deja.has(cle(v?.nom || nom))) { ed.push(v ? depuisRef(v) : nouvelleVoie(nom)); n++; }
       }
+      peindreVoies();
       toast(`Profil appliqué : ${n} voie${n > 1 ? "s" : ""} ajoutée${n > 1 ? "s" : ""}. Enregistrez pour valider.`);
     };
-    $("#fp-annuler", box).onclick = lire;
+    $("#fp-annuler", box).onclick = () => { bulle().hidden = true; lire(); };
     $("#fp-form", box).onsubmit = async e => {
       e.preventDefault();
       for (const i of $$("[data-p]", box)) {
@@ -182,9 +307,13 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
       }
       f.attaques = $$(".fp-atk", atks).map(r => ({ nom: $("[data-k=nom]", r).value.trim(), type: $("[data-k=type]", r).value, mod: +$("[data-k=mod]", r).value || 0,
         dm: $("[data-k=dm]", r).value.trim(), portee: $("[data-k=portee]", r).value.trim(), notes: $("[data-k=notes]", r).value.trim() }));
-      f.voies = $$(".fp-voie", voies).map(r => ({ nom: $("[data-k=nom]", r).value.trim(), origine: $("[data-k=origine]", r).value.trim(), rang: +$("[data-k=rang]", r).value || 0,
-        capacites: $("[data-k=capacites]", r).value.split("\n").map(s => s.trim()), ref: r.dataset.ref || undefined })).filter(v => v.nom);
-      for (const v of f.voies) while (v.capacites.length && !v.capacites.at(-1)) v.capacites.pop();
+      // une voie liée garde une copie des noms de la bibliothèque, lisible sans elle
+      f.voies = ed.filter(v => v.nom.trim()).map(v => {
+        const lib = voieDeRef(v);
+        return { nom: v.nom.trim(), origine: (v.origine || "").trim(), rang: v.rang, ref: v.ref || undefined,
+          capacites: lib ? lib.rangs.map(nomCap) : v.capacites.map(c => (c || "").trim()) };
+      });
+      for (const v of f.voies) while (v.capacites.length > v.rang && !v.capacites.at(-1)) v.capacites.pop();
       if (f.pv_actuel != null) f.pv_actuel = Math.min(f.pv_actuel, f.pv);
       if (await enregistrer(f, "Feuille enregistrée.")) lire();
     };

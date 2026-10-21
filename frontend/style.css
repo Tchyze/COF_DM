@@ -564,7 +564,31 @@ a.version-app[href]:hover{color:var(--muted)}
 .fp-res{display:inline-flex;align-items:center;gap:4px}
 .fp-res button{min-height:0;padding:0 7px}
 .fp-atk{display:grid;grid-template-columns:2fr 1fr 60px 1fr 1fr 2fr auto;gap:6px}
-.fp-voie{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--line);border-radius:8px}
+.fp-voies{display:flex;flex-direction:column;gap:10px}
+.fp-vbloc{display:grid;border:1px solid var(--line2);border-radius:var(--r);overflow:hidden;background:var(--sunk)}
+.fp-vcoin,.fp-vcoin2,.fp-vrang{background:var(--accent);color:var(--accent-ink)}
+.fp-vrang{display:flex;align-items:center;justify-content:center;font-family:var(--f-display);font-weight:600;font-size:.9rem;border-top:1px dotted color-mix(in srgb,var(--accent-ink) 35%,transparent)}
+.fp-vtete{background:var(--accent);color:var(--accent-ink);font-family:var(--f-display);font-weight:600;text-align:center;padding:3px 6px;overflow-wrap:anywhere}
+.fp-vsous{padding:2px 6px;text-align:center;font-size:.8rem;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--line2);border-left:1px solid var(--line2)}
+.fp-vcase{min-height:2.6em;padding:4px 6px;font-size:.9rem;border-left:1px solid var(--line2);border-top:1px dotted var(--line2);overflow-wrap:anywhere;color:var(--faint)}
+.fp-vcase[data-v]{cursor:help}
+.fp-vcase.acquise{color:var(--ink);background:color-mix(in srgb,var(--accent) 18%,transparent);font-weight:600}
+.fp-vcase[data-v]:hover,.fp-vcase[data-v]:focus-visible{background:color-mix(in srgb,var(--accent) 30%,transparent);outline:none}
+.fp-vtete-ed{display:flex;gap:4px;align-items:center;padding:3px}
+.fp-vtete-ed input{flex:1;min-width:0;color:var(--ink);background:var(--surface);font-family:var(--f-display);font-weight:600;text-align:center;padding:2px 6px;min-height:0}
+.fp-vtete-ed button{min-height:0;padding:0 6px;color:var(--accent-ink);border-color:transparent}
+.fp-vsous-ed{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;justify-content:center;padding:4px}
+.fp-vsous-ed select,.fp-vsous-ed input{min-height:0;padding:1px 4px;font-size:.8rem;max-width:100%}
+.fp-vsous-ed input[data-origine]{width:8em}
+.fp-vsous-ed input[data-rang]{width:3.5em}
+button.fp-vcase{display:block;width:100%;text-align:left;border-radius:0;border-width:0 0 0 1px;border-left:1px solid var(--line2);border-top:1px dotted var(--line2);background:transparent;white-space:normal;cursor:pointer;font:inherit;font-size:.9rem}
+button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transparent)}
+.fp-vcase-ed{padding:2px}
+.fp-vcase-ed input{width:100%;min-height:0;padding:3px 6px;font-size:.9rem;background:transparent;border-color:transparent}
+.fp-vcase-ed input:hover,.fp-vcase-ed input:focus{border-color:var(--line2);background:var(--surface)}
+.fp-bulle{position:fixed;z-index:1000;background:var(--surface);color:var(--ink);border:1px solid var(--line2);border-radius:var(--r);box-shadow:var(--ombre);padding:8px 10px;font-size:.9rem;pointer-events:none}
+.fp-bulle ul{margin:6px 0 0;padding-left:1.2em}
+.fp-bulle .bst-texte{margin-top:4px}
 @media (max-width:700px){.fp-atk{grid-template-columns:1fr 1fr}}
 
 /* lanceur de dés : panneau du MJ (toutes les pages) et onglet de la page des joueurs */
