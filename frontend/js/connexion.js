@@ -30,7 +30,12 @@ function resume(d) {
   if (s.etat === "hors_ligne" || d.synchro?.etat === "hors_ligne") return ["hors-ligne", "Hors connexion", "Synchro au retour du serveur"];
   if (d.pause) return ["pause", "Connecté · univers en pause", `Copie de ${hote(d.url)}`];
   if (!d.relie) return ["ok", "Connecté", `${hote(s.url)} · univers local`];
+  if (d.synchro?.etat === "version") return ["erreur", "Mise à jour nécessaire", `Le serveur est en ${d.synchro.version_serveur || "version plus récente"}`];
   if (d.conflits) return ["erreur", "Connecté", `${d.conflits} conflit${d.conflits > 1 ? "s" : ""} à régler`];
+  if (d.synchro?.ecart === "bureau_recent") {
+    const n = d.synchro.bilan?.en_attente || 0;
+    return ["hors-ligne", "Serveur à mettre à jour", n ? `${n} changement${n > 1 ? "s" : ""} en attente` : "Réception seule"];
+  }
   if (d.synchro?.etat === "erreur") return ["erreur", "Connecté", "Erreur de synchronisation"];
   if (d.synchro?.etat === "a_jour") return ["ok", "Connecté", `${hote(s.url)} · à jour ${heure(d.synchro.derniere)}`];
   return ["ok", "Connecté", hote(s.url)];
@@ -93,6 +98,7 @@ export async function ouvrirPanneau() {
     etat = `<p class="hint">${lignes[s.etat] || `Relié à ${qui}.`}</p>`;
     if (d.pause) etat += `<p class="hint">Cet univers est une copie de <code>${esc(hote(d.url))}</code> : en pause tant que l'application est reliée à un autre serveur.</p>`;
     else if (!d.relie) etat += `<p class="hint">L'univers ouvert est local : il n'est pas sur le serveur.</p>`;
+    else if (d.synchro?.ecart) etat += `<p class="alerte">${esc(d.synchro.message || d.synchro.erreur || "")}</p>`;
   } else {
     etat = `<p class="hint">Vos univers restent sur cet ordinateur. Vous pouvez ouvrir l'application au réseau local (tablette, page des joueurs) dans Paramètres.</p>`;
     if (d.pause) etat += `<p class="hint">Cet univers est une copie de <code>${esc(hote(d.url))}</code>, en pause : ses changements partiront quand vous vous reconnecterez à ce serveur.</p>`;
@@ -106,6 +112,7 @@ export async function ouvrirPanneau() {
     <hr>${etat}
     ${serveur ? [
       s.etat === "refuse" ? action("reconnecter", "🔑", "Se reconnecter…") : "",
+      d.synchro?.ecart === "serveur_recent" ? action("mettre-a-jour", "⬆", "Mettre à jour l'application…") : "",
       d.actif ? action("synchroniser", "⇅", "Synchroniser maintenant") : "",
       action("copier", "🌍", "Univers du serveur…"),
       !d.copie ? action("envoyer", "⇪", "Envoyer cet univers sur le serveur…") : "",
@@ -158,6 +165,7 @@ export async function ouvrirPanneau() {
       copier: () => explorerUnivers(),
       envoyer: () => dialogueEnvoyer(),
       details: () => { location.hash = "#/synchro"; },
+      "mettre-a-jour": () => allerAuxMisesAJour(),
       synchroniser: async () => {
         const r = await api("POST", "/api/univers/serveur/synchroniser");
         toast(r.etat === "a_jour" ? "Synchronisé." : r.erreur || "Échange impossible.", r.etat !== "a_jour");
@@ -167,6 +175,13 @@ export async function ouvrirPanneau() {
     };
     Promise.resolve(actions[b.dataset.a]?.()).catch(err => toast(err.message, true));
   };
+}
+
+/** Paramètres → Mises à jour, avec une recherche tout de suite : le serveur est plus récent. */
+export async function allerAuxMisesAJour() {
+  try { await api("POST", "/api/univers/mise-a-jour/chercher"); } catch { /* le panneau dira l'erreur */ }
+  location.hash = "#/parametres";
+  setTimeout(() => $("#maj")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
 }
 
 /** Se connecter à un serveur (ou en changer, ou s'y reconnecter), puis choisir quoi faire. */

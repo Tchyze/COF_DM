@@ -204,3 +204,41 @@ func TestServeurVersionsCopie(t *testing.T) {
 		t.Fatalf("numéros notés : %+v", copies)
 	}
 }
+
+// L'administrateur d'un serveur voit sa version, ses numéros, et la version des postes reliés à
+// l'univers, avec ceux qui sont à mettre à jour ou qui attendent le serveur.
+func TestVersionServeurAdmin(t *testing.T) {
+	a, reg, connecter := serveurMulti(t)
+	univers := a.st.ID()
+	chef, meneur := connecter("chef"), connecter("meneur")
+	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.MJ; return nil })
+	if c, _ := meneur.faire("GET", "/api/univers/version", nil); c != 403 {
+		t.Fatalf("version du serveur pour un MJ : %d", c)
+	}
+	for _, p := range []struct{ nom, modele string }{{"Vieux portable", "0"}, {"Portable", ""}, {"Tour", "99"}} {
+		h := []string{"X-COF-Version", "1.0.0", "X-COF-Modele", p.modele}
+		if p.modele == "" {
+			h = nil
+		}
+		// un bureau plus ancien ne tire pas de copie : il est inscrit comme un bureau d'avant les numéros,
+		// puis passe avec ses en-têtes
+		w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": p.nom})
+		if w.Code != 200 {
+			t.Fatalf("copie %s : %d", p.nom, w.Code)
+		}
+		n := w.Header().Get("X-COF-Replique")
+		meneur.faire("POST", "/api/sync", map[string]any{"replique": json.Number(n), "curseur": 0, "changements": []any{}}, h...)
+	}
+	c, v := chef.faire("GET", "/api/univers/version", nil)
+	if c != 200 || v["modele"] != float64(store.VersionModele) || v["commande"] == "" || v["univers"] == nil {
+		t.Fatalf("version du serveur : %d %v", c, v)
+	}
+	ecarts := map[string]any{}
+	for _, x := range v["copies"].([]any) {
+		cp := x.(map[string]any)
+		ecarts[cp["nom"].(string)] = cp["ecart"]
+	}
+	if ecarts["Vieux portable"] != ecartServeurRecent || ecarts["Portable"] != "" || ecarts["Tour"] != ecartBureauRecent {
+		t.Fatalf("écarts des postes : %v", ecarts)
+	}
+}

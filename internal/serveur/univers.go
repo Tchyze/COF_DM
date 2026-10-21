@@ -79,6 +79,8 @@ func NouvelleApplication(opt Options) *Application {
 	a.routesDistant()
 	if !a.multi() {
 		a.routesMaj()
+	} else {
+		a.routesMajServeur()
 	}
 	return a
 }
@@ -120,6 +122,9 @@ func (a *Application) Demarrer(demande string) error {
 	}
 	if a.multi() {
 		a.ouvrirDossier()
+		if a.opt.VeilleMaj {
+			go a.verifierEnFond()
+		}
 	}
 	go a.veiller()
 	if !a.multi() {

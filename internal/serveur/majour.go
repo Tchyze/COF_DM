@@ -7,12 +7,17 @@ import (
 	"time"
 
 	"github.com/Tchyze/cof_dm/internal/majour"
+	"github.com/Tchyze/cof_dm/internal/store"
+	"github.com/Tchyze/cof_dm/internal/synchro"
 )
 
 // Mises à jour de l'application de bureau (internal/majour) : elle cherche au lancement puis toutes
 // les six heures, le signale, et n'installe que sur le clic du MJ. Le canal (stable ou test) tient à
 // l'ordinateur : il est rangé dans les réglages. Routes du menu Fichier (/api/univers/…) : ordinateur
 // du MJ seulement, et pas sur un serveur (l'image Docker se met à jour par docker compose).
+//
+// Un serveur cherche aussi les versions stables publiées, pour le dire à son administrateur
+// (GET /api/univers/version), avec la version des postes reliés à l'univers ; il n'installe rien.
 
 const (
 	regCanal          = "maj_canal"
@@ -40,6 +45,44 @@ func (a *Application) routesMaj() {
 	a.mux.HandleFunc("POST /api/univers/mise-a-jour/chercher", a.routeChercherMaj)
 	a.mux.HandleFunc("PUT /api/univers/mise-a-jour/canal", a.routeCanalMaj)
 	a.mux.HandleFunc("POST /api/univers/mise-a-jour/installer", a.routeInstallerMaj)
+}
+
+// commandeMajServeur : la mise à jour d'un serveur installé par docker compose (README).
+const commandeMajServeur = "git pull && docker compose up -d --build"
+
+func (a *Application) routesMajServeur() {
+	a.maj = &misesAJour{}
+	a.mux.HandleFunc("GET /api/univers/version", a.routeVersionServeur)
+}
+
+// routeVersionServeur : la version du serveur et ses numéros, la dernière version stable publiée
+// si elle est plus récente, et les copies de l'univers visé avec leur version (administrateur).
+func (a *Application) routeVersionServeur(w http.ResponseWriter, r *http.Request) {
+	out := a.vueMaj()
+	delete(out, "automatique")
+	delete(out, "installable")
+	out["protocole"], out["modele"], out["commande"] = store.VersionProtocole, store.VersionModele, commandeMajServeur
+	copies := []map[string]any{}
+	a.mu.RLock()
+	o := a.vise(r)
+	a.mu.RUnlock()
+	if o != nil {
+		out["univers"] = nomUnivers(o.st.Chemin())
+		ici := synchro.Ici()
+		for _, c := range o.st.Copies() {
+			ecart := ""
+			switch synchro.Comparer(synchro.Versions{Version: c.Version, Protocole: c.Protocole, Modele: c.Modele}, ici) {
+			case synchro.ServeurRecent:
+				ecart = ecartServeurRecent // ce poste est à mettre à jour
+			case synchro.BureauRecent:
+				ecart = ecartBureauRecent // ce poste attend la mise à jour du serveur
+			}
+			copies = append(copies, map[string]any{"numero": c.Numero, "nom": c.Nom, "compte": c.Compte, "vu": c.Vu,
+				"version": c.Version, "ecart": ecart})
+		}
+	}
+	out["copies"] = copies
+	repondre(w, 200, out)
 }
 
 func (a *Application) canal() string {
