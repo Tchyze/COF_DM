@@ -265,7 +265,7 @@ Plusieurs appareils suivent le même combat en direct. Sur un serveur, le MJ jou
 
 ### Règles
 
-Fiches de règles officielles (résumés) et maison, par domaine. **Paramètres → Données → Importer des fiches** ajoute des fiches depuis un fichier JSON sans rien remplacer, par exemple les aide-mémoire du vault.
+Fiches de règles officielles (résumés) et maison, par domaine. **Paramètres → Sauvegardes, exports et import** ajoute des fiches depuis un fichier JSON sans rien remplacer, par exemple les aide-mémoire du vault.
 
 ### Outils
 
@@ -346,7 +346,7 @@ Le mode serveur (`-serveur`) n'existe que dans l'image Docker : l'application de
 
 Un univers est **un seul fichier** `.cofdm` : fiches, relations, images, calendrier et journal. Il peut être rangé n'importe où (Documents, clé USB, dossier synchronisé) et se copie tel quel. Le menu **Fichier**, en haut du menu latéral, permet de créer un univers, d'en ouvrir un autre, de rouvrir un univers récent et d'enregistrer une copie. L'application rouvre au lancement le dernier univers utilisé.
 
-Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes** les liste et permet de revenir à l'une d'elles.
+Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes, exports et import** les liste et permet de revenir à l'une d'elles.
 
 **Depuis une version précédente** : au premier lancement, l'ancienne base et ses images sont reprises dans `univers/Mon univers.cofdm`. Rien n'est effacé : `cof-dm.db` est renommé `cof-dm.db.ancien` et le dossier `medias/` reste en place ; vous pouvez les supprimer une fois l'univers vérifié.
 

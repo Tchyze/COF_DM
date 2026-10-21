@@ -82,8 +82,7 @@ async function badge() {
 export function initBadgeMaj() {
   const b = $("#maj-badge");
   b.onclick = () => {
-    location.hash = "#/parametres";
-    setTimeout(() => $("#maj")?.scrollIntoView({ behavior: "smooth", block: "start" }), 400);
+    location.hash = "#/parametres/maj";
   };
   setTimeout(badge, 8000); // l'application cherche cinq secondes après son lancement
   setInterval(badge, 30 * 60 * 1000);

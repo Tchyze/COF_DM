@@ -183,7 +183,7 @@ function ouvrirMenu(bouton, etat) {
     fermer();
     if (b.dataset.chemin) { ouvrir(b.dataset.chemin); return; }
     const action = { nouveau: dialogueNouveau, ouvrir: dialogueOuvrir, deposer: dialogueDeposer, copie: enregistrerCopie, sauver: sauvegarder,
-      sauvegardes: () => { location.hash = "#/parametres"; }, obsidian: dialogueObsidian,
+      sauvegardes: () => { location.hash = "#/parametres/donnees"; }, obsidian: dialogueObsidian,
       serveur: ouvrirPanneau }[b.dataset.a];
     Promise.resolve(action()).catch(err => toast(err.message, true));
   };

@@ -272,7 +272,17 @@ mark{background:color-mix(in srgb,var(--gold) 35%,transparent);color:inherit;bor
 .tab th,.tab td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
 .tab th{font-size:.72rem;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
 .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
-.grille-param{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:16px;align-items:start}
+/* Paramètres : des titres groupés, un bloc ouvert à la fois (son propre titre <h3> est alors en double) */
+.param-liste{max-width:860px;display:flex;flex-direction:column;gap:6px}
+.param-groupe{font:600 .75rem var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin:14px 0 2px}
+.param-groupe:first-child{margin-top:0}
+.param-bloc{display:flex;flex-direction:column;gap:6px}
+.param-titre{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;text-align:left;white-space:normal;padding:.7rem 1rem;min-height:46px;font-size:1rem;background:var(--surface);border-color:var(--line);border-radius:10px}
+.param-titre:hover{background:var(--surface2)}
+.param-titre[aria-expanded="true"]{border-color:var(--gold);color:var(--gold)}
+.param-titre .chevron{font-size:1.3rem;line-height:1;color:var(--muted);transition:transform .15s}
+.param-titre[aria-expanded="true"] .chevron{transform:rotate(90deg);color:var(--gold)}
+.param-corps > h3:first-child{display:none}
 .mois-ed{display:grid;grid-template-columns:minmax(0,1fr) 5rem auto;gap:6px;align-items:center}
 .jeton{font-family:var(--f-mono);font-size:.85rem;word-break:break-all;background:var(--sunk);padding:8px 10px;border-radius:8px;border:1px solid var(--line2)}
 
