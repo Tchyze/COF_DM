@@ -676,7 +676,7 @@ func (s *Store) Inscrire(nom, compte, fichier string) (int64, error) {
 			n = k + 1
 		}
 	}
-	if n > RepliqueMax {
+	if n >= repliqueReprise {
 		return 0, invalide("Plus aucun numéro de copie libre pour cet univers.")
 	}
 	l[n] = CopieInscrite{Numero: n, Nom: nom, Compte: compte, Cree: maintenant(), Vu: maintenant()}

@@ -6,11 +6,12 @@ import (
 )
 
 // Documents : ce que l'univers range en dehors des fiches du monde, par collection — le bestiaire
-// (« monstres ») et les combats (« combats », en cours ou terminés). Un document est un objet JSON
-// validé par son paquet (internal/fiches, internal/combat).
+// (« monstres »), les combats (« combats », en cours ou terminés), les profils, peuples et voies
+// (« profils », « peuples », « voies », un document par élément). Un document est un objet JSON
+// validé par son paquet (internal/fiches, internal/combat, internal/reference).
 
 // Collections de documents connues.
-var CollectionsDocs = []string{"monstres", "combats"}
+var CollectionsDocs = []string{"monstres", "combats", "profils", "peuples", "voies"}
 
 func collectionConnue(coll string) bool {
 	for _, c := range CollectionsDocs {

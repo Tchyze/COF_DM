@@ -39,6 +39,7 @@ func (s *Serveur) routesBestiaire() {
 	m.HandleFunc("DELETE /api/bestiaire/{id}", s.bestiaireSupprimer)
 	m.HandleFunc("POST /api/bestiaire/{id}/dupliquer", s.bestiaireDupliquer)
 	m.HandleFunc("GET /api/reference", s.referenceLire)
+	m.HandleFunc("GET /api/reference/export", s.referenceExporter)
 	m.HandleFunc("POST /api/reference/import", s.referenceImporter)
 	m.HandleFunc("DELETE /api/reference", s.referenceVider)
 	m.HandleFunc("GET /api/regles", s.reglesLire)
@@ -344,25 +345,15 @@ func (s *Serveur) bestiaireCalculer(w http.ResponseWriter, r *http.Request) {
 
 // ---------------------------------------------------------------- profils, peuples et voies
 
-var verrouReference sync.Mutex
-
 func (s *Serveur) lireReference() *reference.Reference { return referenceDe(s.store) }
 
+// referenceDe : les profils, peuples et voies d'un univers, chacun avec son identifiant.
 func referenceDe(st *store.Store) *reference.Reference {
-	v, ok := st.Meta(store.MetaReference)
-	ref := reference.Vide()
-	if !ok || v == "" || json.Unmarshal([]byte(v), ref) != nil || ref.Normaliser() != nil {
+	ref, err := st.Reference()
+	if err != nil {
 		return reference.Vide()
 	}
 	return ref
-}
-
-func (s *Serveur) ecrireReference(ref *reference.Reference) error {
-	b, err := json.Marshal(ref)
-	if err != nil {
-		return err
-	}
-	return s.store.SetMeta(store.MetaReference, string(b))
 }
 
 func totalReference(ref *reference.Reference) map[string]int {
@@ -373,15 +364,64 @@ func (s *Serveur) referenceLire(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, s.lireReference())
 }
 
-// fusionnerReference ajoute ou remplace (même référence, ou même nom) les éléments de n.
-func (s *Serveur) fusionnerReference(n *reference.Reference) (reference.Bilan, *reference.Reference, error) {
-	verrouReference.Lock()
-	defer verrouReference.Unlock()
-	ref := s.lireReference()
-	bilan := ref.Fusionner(n)
-	return bilan, ref, s.ecrireReference(ref)
+// referenceDuPJ : ce que le joueur d'un PJ lit de la bibliothèque : les voies de sa feuille, son
+// profil et son peuple, rien d'autre.
+func (s *Serveur) referenceDuPJ(e store.Entite) (*reference.Reference, error) {
+	f, _, _, err := s.feuilleDe(e)
+	if err != nil {
+		return nil, err
+	}
+	siennes := map[string]bool{}
+	for _, v := range f.Voies {
+		siennes["nom:"+reference.Cle(v.Nom)] = true
+		if v.Ref != "" {
+			siennes["ref:"+v.Ref] = true
+		}
+	}
+	texte := func(k string) string { v, _ := e.Data[k].(string); return reference.Cle(v) }
+	tout, out := s.lireReference(), reference.Vide()
+	for _, v := range tout.Voies {
+		if siennes["nom:"+reference.Cle(v.Nom)] || (v.Ref != "" && siennes["ref:"+v.Ref]) {
+			out.Voies = append(out.Voies, v)
+		}
+	}
+	for _, p := range tout.Profils {
+		if p.Nom != "" && reference.Cle(p.Nom) == texte("profil") {
+			out.Profils = append(out.Profils, p)
+		}
+	}
+	for _, p := range tout.Peuples {
+		if p.Nom != "" && reference.Cle(p.Nom) == texte("peuple") {
+			out.Peuples = append(out.Peuples, p)
+		}
+	}
+	return out, nil
 }
 
+// referenceJoueur : GET /api/reference?pj=<id> pour un joueur (compte joueur, ou page des joueurs
+// à la maison) : la part de la bibliothèque qui concerne ce PJ ; sans PJ, rien.
+func (s *Serveur) referenceJoueur(pjDe func(http.ResponseWriter, *http.Request) (store.Entite, bool)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("pj") == "" {
+			repondre(w, 200, reference.Vide())
+			return
+		}
+		r.SetPathValue("id", r.URL.Query().Get("pj"))
+		e, ok := pjDe(w, r)
+		if !ok {
+			return
+		}
+		ref, err := s.referenceDuPJ(e)
+		if err != nil {
+			erreurFiche(w, err)
+			return
+		}
+		repondre(w, 200, ref)
+	}
+}
+
+// referenceImporter : ?etiquette=officielle|maison donne cette étiquette à tout le fichier ; sans
+// elle, chaque élément garde la sienne (à défaut : officiel s'il a une référence, maison sinon).
 func (s *Serveur) referenceImporter(w http.ResponseWriter, r *http.Request) {
 	corps, err := lireCorps(r, tailleImport)
 	if err != nil {
@@ -393,24 +433,44 @@ func (s *Serveur) referenceImporter(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 422, err.Error())
 		return
 	}
-	bilan, ref, err := s.fusionnerReference(n)
+	if e := r.URL.Query().Get("etiquette"); e != "" {
+		if err := n.Etiqueter(e); err != nil {
+			erreur(w, 422, err.Error())
+			return
+		}
+	}
+	bilan, err := s.store.FusionnerReference(n, auteurDe(r))
 	if err != nil {
 		erreurStore(w, err)
 		return
 	}
-	s.store.Noter("règles", "import de profils, peuples et voies", auteurDe(r))
+	ref := s.lireReference()
 	repondre(w, 200, map[string]any{"bilan": bilan, "alertes": ref.Problemes(), "total": totalReference(ref)})
 }
 
-// referenceVider retire tous les profils, peuples et voies (les fiches ne changent pas).
+// referenceExporter : les profils, peuples et voies de l'univers en un fichier, à importer dans un
+// autre (sans les identifiants de celui-ci).
+func (s *Serveur) referenceExporter(w http.ResponseWriter, r *http.Request) {
+	ref := s.lireReference()
+	for i := range ref.Profils {
+		ref.Profils[i].ID = 0
+	}
+	for i := range ref.Peuples {
+		ref.Peuples[i].ID = 0
+	}
+	for i := range ref.Voies {
+		ref.Voies[i].ID = 0
+	}
+	w.Header().Set("Content-Disposition", `attachment; filename="profils-et-voies-cof-dm.json"`)
+	repondre(w, 200, ref)
+}
+
+// referenceVider retire tous les profils, peuples et voies (les feuilles ne changent pas).
 func (s *Serveur) referenceVider(w http.ResponseWriter, r *http.Request) {
-	verrouReference.Lock()
-	defer verrouReference.Unlock()
-	if err := s.ecrireReference(reference.Vide()); err != nil {
+	if err := s.store.ViderReference(auteurDe(r)); err != nil {
 		erreurStore(w, err)
 		return
 	}
-	s.store.Noter("règles", "profils, peuples et voies retirés", auteurDe(r))
 	repondre(w, 200, map[string]bool{"ok": true})
 }
 
@@ -452,11 +512,14 @@ func (s *Serveur) ecrireRegles(rg *regles.Regles) error {
 	return s.store.SetMeta(store.MetaRegles, string(b))
 }
 
+// verrouRegles : une lecture puis une écriture du fichier de règles à la fois.
+var verrouRegles sync.Mutex
+
 // fusionnerRegles ajoute un fichier de règles à celles de l'univers : chaque partie qu'il apporte
 // remplace celle qui était là.
 func (s *Serveur) fusionnerRegles(n *regles.Regles) (*regles.Regles, error) {
-	verrouReference.Lock()
-	defer verrouReference.Unlock()
+	verrouRegles.Lock()
+	defer verrouRegles.Unlock()
 	rg := s.lireRegles()
 	rg.Fusionner(n)
 	return rg, s.ecrireRegles(rg)
@@ -496,8 +559,8 @@ func (s *Serveur) reglesImporter(w http.ResponseWriter, r *http.Request) {
 // reglesVider retire le fichier de règles : les fiches gardent leurs valeurs, leurs champs se
 // saisissent librement et le créateur de monstre n'est plus proposé.
 func (s *Serveur) reglesVider(w http.ResponseWriter, r *http.Request) {
-	verrouReference.Lock()
-	defer verrouReference.Unlock()
+	verrouRegles.Lock()
+	defer verrouRegles.Unlock()
 	if err := s.ecrireRegles(regles.Vide()); err != nil {
 		erreurStore(w, err)
 		return
@@ -602,11 +665,11 @@ func (s *Serveur) recevoirBibliotheque(b Bibliotheque, auteur string) (map[strin
 		if err := b.Reference.Normaliser(); err != nil {
 			return nil, store.ErrValidation{Msg: "Profils et voies illisibles : " + err.Error()}
 		}
-		bilan, ref, err := s.fusionnerReference(b.Reference)
+		bilan, err := s.store.FusionnerReference(b.Reference, "")
 		if err != nil {
 			return nil, err
 		}
-		out["reference"], out["total"] = bilan, totalReference(ref)
+		out["reference"], out["total"] = bilan, totalReference(s.lireReference())
 	}
 	if b.Regles != nil {
 		if err := b.Regles.Normaliser(); err != nil {

@@ -30,7 +30,7 @@ func TestSynchronisationHTTP(t *testing.T) {
 			t.Fatalf("copie demandée sans droit d'écrire : %d", c)
 		}
 	}
-	w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": "Portable de Marion"})
+	w := meneur.brut("POST", "/api/sync/copie", map[string]any{"nom": "Portable de Marion"}, ici...)
 	if w.Code != 200 || w.Header().Get("X-COF-Replique") != "1" || w.Header().Get("X-COF-Univers") != univers {
 		t.Fatalf("copie : %d %v", w.Code, w.Header())
 	}
@@ -64,7 +64,7 @@ func TestSynchronisationHTTP(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		w := n.brut("POST", "/api/sync", map[string]any{"replique": cp.Replique(), "curseur": curseur, "changements": chs})
+		w := n.brut("POST", "/api/sync", map[string]any{"replique": cp.Replique(), "curseur": curseur, "changements": chs}, ici...)
 		var rep store.Reponse
 		_ = json.Unmarshal(w.Body.Bytes(), &rep)
 		if w.Code == 200 {

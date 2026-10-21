@@ -87,7 +87,7 @@ Un compte `joueur` n'atteint que les routes ci-dessous, en lecture ; tout le res
 | `GET /medias/{fichier}` | Les images des fiches partagées. |
 | `GET /api/schema` | Le schéma sans les types « Secret » et « Aide de jeu », sans les champs réservés au MJ ni les relations réservées. |
 | `GET /api/entites/{id}/feuille`, `PUT` | La feuille de son propre PJ seulement (voir « Feuille de personnage »). |
-| `GET /api/reference` | Les profils, peuples et voies de l'univers, pour tenir sa feuille. |
+| `GET /api/reference?pj=<id>` | La part de la bibliothèque qui concerne son PJ : les voies de sa feuille (par `ref` ou par nom), son profil et son peuple (par nom). Le PJ d'un autre : `404` ; sans `pj` : une bibliothèque vide. |
 | `GET /api/joueur/…` | La page des joueurs, restreinte à son PJ (voir « Page des joueurs »), documents compris. |
 | `GET /api/stats`, `GET /api/calendrier`, `GET /api/parametres`, `GET /api/sante` | Comptes des fiches partagées, calendrier, nom de l'univers, version (et numéros : voir « Synchronisation », Versions). |
 
@@ -195,12 +195,36 @@ Le bestiaire (monstres officiels et maison), le fichier de règles et les profil
 | `GET /api/regles` | Le fichier de règles de l'univers (vide s'il n'y en a pas). |
 | `POST /api/regles/import` | Importe un fichier de règles (voir ci-dessous). Chaque partie qu'il apporte remplace celle de l'univers ; ce qu'il ne dit pas reste. Réponse `{"titre", "createur", "rencontre", "listes": {<liste>: <nombre>}}`. |
 | `DELETE /api/regles` | Retire le fichier de règles : les fiches gardent leurs valeurs. |
-| `GET /api/reference` | `{"profils", "peuples", "voies"}` de l'univers. |
-| `POST /api/reference/import` | Fusionne un fichier de profils, peuples et voies (même `ref`, ou même nom : remplacé). Réponse `{"bilan", "alertes", "total"}`. |
-| `DELETE /api/reference` | Retire tous les profils, peuples et voies. |
+| `GET /api/reference` | `{"profils", "peuples", "voies"}` de l'univers, triés par nom ; chaque élément porte son `id` (son document dans l'univers). |
+| `GET /api/reference/export` | Les mêmes, en un fichier à importer dans un autre univers (`"format": "cof-dm-reference"`, sans les `id`). |
+| `POST /api/reference/import` | Fusionne un fichier de profils, peuples et voies (même `ref`, ou même nom : remplacé). `?etiquette=officielle` ou `maison` donne cette étiquette à tout le fichier ; sans elle, chaque élément garde la sienne. Réponse `{"bilan", "alertes", "total"}`. |
+| `DELETE /api/reference` | Retire tous les profils, peuples et voies (les feuilles ne changent pas). |
 | `GET /api/bibliotheque` | Le bestiaire, le fichier de règles et les profils et voies de l'univers en un fichier (`"format": "cof-dm-bibliotheque"`). |
 | `POST /api/bibliotheque` | Ajoute une bibliothèque à l'univers : fiches officielles mises à jour par leur `ref`, monstre maison du même nom non doublé. |
 | `POST /api/univers/bibliotheque` `{"source": "<fichier d'univers>"}` | La même reprise, directement depuis un autre univers. Comme les autres routes `/api/univers` : ordinateur du MJ, ou administrateur d'un serveur (source parmi les univers du serveur). |
+
+**Profils, peuples et voies** (`"format": "cof-dm-reference"`, version 2). Rangés dans l'univers un par un (collections de documents `profils`, `peuples`, `voies`). L'ancien format (`"tracker-cof-reference"`, version 1, ou un simple tableau de voies) se lit encore à l'import. Tous les champs sont facultatifs, sauf `nom` :
+
+```json
+{"format": "cof-dm-reference", "version": 2,
+ "profils": [{"ref": "…", "nom": "…", "etiquette": "officielle", "famille": "…", "dv": "d8", "carac_magie": "SAG",
+              "armes": "…", "armures": "…", "equipement": "…", "description": "…", "voies": ["…"], "livre": "…", "page": 0}],
+ "peuples": [{"ref": "…", "nom": "…", "etiquette": "maison", "caracs": "…", "modificateurs": {"DEX": 2, "CON": -2},
+              "description": "…", "voies": ["…"], "livre": "…", "page": 0}],
+ "voies": [{"ref": "…", "nom": "…", "etiquette": "officielle", "type": "profil", "profils": ["…"], "prerequis": "…",
+            "description": "…", "livre": "…", "page": 0,
+            "rangs": [{"nom": "…", "texte": "…", "limitee": false, "sort": false,
+                       "bonus": [{"cible": "def", "valeur": 1, "par_rang": false, "niveau": false, "carac": ""}],
+                       "action": {"genre": "sort", "cout_pm": 0, "attaque": "M", "bonus": 0, "degats": "1d6", "soin": "", "etat": ""},
+                       "utilisations": {"fois": 1, "par": "combat"}}]}]}
+```
+
+- `etiquette` : `officielle` ou `maison`, une simple marque pour trier et filtrer, qui ne verrouille rien. Absente : officielle si l'élément a une `ref`, maison sinon.
+- `modificateurs` d'un peuple : pour l'affichage et la création d'un PJ, jamais ajoutés d'office à une feuille (ses valeurs les comprennent déjà). Absents, ils sont lus dans le texte `caracs` (« +2 DEX, −2 CON »).
+- Une voie a de 5 à 20 rangs (complétée jusqu'à 5).
+- `bonus` d'une capacité : ajouté à la feuille quand le PJ a atteint son rang. `cible` : `pv`, `pm`, `def`, `init`, `att` (toutes les attaques), `att_c`, `att_d`, `att_m`, `rd`, ou une caractéristique (`FOR`…`CHA`, sa valeur). Il vaut `valeur`, multipliée par le rang atteint dans la voie si `par_rang`, plus le niveau si `niveau`, plus le modificateur de `carac`.
+- `action` : ce que la capacité préremplit en combat. `genre` : `sort`, `attaque`, `soin`, `etat` ou `autre` ; `attaque` : `C`, `D` ou `M` (vide : pas de jet) ; `etat` : la clé d'un état des règles de combat.
+- `utilisations` : `fois` (1 à 99) par `combat`, `jour`, `repos:<clé>` (un repos des règles de la feuille) ou `main` (remise à zéro à la main).
 
 **Fichier de règles** (`"format": "cof-dm-regles"`). Toutes ses parties sont facultatives :
 
@@ -241,7 +265,7 @@ Les créatures d'une rencontre (`adversaires`) et le profil de combat d'un PNJ (
 |---|---|
 | `GET /api/entites/{id}/difficulte` | Les créatures d'une rencontre et sa difficulté : `{"creatures": [{"monstre", "nom", "qte", "camp", "nc", "defense", "pv", "pnj"?, "introuvable"?}], "pnj_sans_profil": [fiche], "nb_pj", "niveau_pj", "conditions": [{"cle", "libelle", "niveau", "detail"}], "evaluation"}`. `creatures` : celles de la fiche, puis ses PNJ présents qui ont un profil de combat (`pnj` : leur fiche) ; `introuvable` : monstre retiré du bestiaire. Le groupe : les PJ de la campagne de la rencontre (sinon de sa quête) qui ne sont ni `mort`, ni `parti`, ni `absent`, avec le niveau de leur fiche (1 à défaut). `evaluation` : `{"points", "points_ajustes", "niveau", "ecart", "cle", "verdict", "ton", "detail", "alertes"}`, `null` sans partie `rencontre` dans les règles ; `cle` : celle du verdict, `vide` sans créature ennemie, `inconnu` sans PJ. Les alliés ne comptent pas. Paramètres : `?condition=<clé>`, et `?nb_pj=` / `?niveau_pj=` pour évaluer face à un autre groupe. `404` si la fiche n'est pas une rencontre. Réservée au MJ et à l'auditeur. |
 
-L'export de l'univers (`GET /api/export`) porte la version de son modèle de fiches (`"donnees"`) : un export plus ancien est remis en forme à la restauration, comme un univers à son ouverture (les créatures des rencontres sont rattachées au bestiaire par leur nom, les liens vers l'ancien tracker qui ne s'y retrouvent pas sont retirés et notés au journal ; les champs `fiche_tracker` d'un PJ et `combats` d'une séance, qui n'existent plus, sont retirés). Il contient le bestiaire (`"documents"`), le fichier de règles (`"regles"`) et les profils et voies (`"reference"`) ; les restaurer les remplace. Un export plus ancien, qui ne les contient pas, laisse ceux de l'univers en place.
+L'export de l'univers (`GET /api/export`) porte la version de son modèle de fiches (`"donnees"`) : un export plus ancien est remis en forme à la restauration, comme un univers à son ouverture (les créatures des rencontres sont rattachées au bestiaire par leur nom, les liens vers l'ancien tracker qui ne s'y retrouvent pas sont retirés et notés au journal ; les champs `fiche_tracker` d'un PJ et `combats` d'une séance, qui n'existent plus, sont retirés). Il contient le bestiaire et les profils, peuples et voies (`"documents"`) et le fichier de règles (`"regles"`) ; les restaurer les remplace. Un export d'avant le modèle 2 porte les profils et voies dans `"reference"` : ils sont rangés un par un à la restauration. Un export plus ancien, qui ne les contient pas, laisse ceux de l'univers en place.
 
 ## Page des joueurs
 
@@ -263,7 +287,7 @@ Deux façons d'y entrer :
 | `GET /api/joueur/documents/{id}/images/{fichier}?pj=4` | Une image de cette aide, si le PJ l'a reçue ; aucune autre image ne passe par là. |
 | `GET /api/joueur/direct` | WebSocket, qui ne fait que recevoir : `{"type": "etat", "edition", "combat"}` à la connexion, puis `{"type": "combat", "combat"}` à chaque action, `{"type": "fiche", "id"}` quand une feuille change, `{"type": "edition", "active"}`, `{"type": "hauts_faits"}` quand un combat se termine, `{"type": "jet", "jet"}` à chaque jet public, `{"type": "document", "id", "nom", "pj": [ids]}` quand une aide arrive (un compte `joueur` n'est prévenu que pour son PJ), `{"type": "documents"}` quand un envoi est retiré. `{"type": "ping"}` → `{"type": "pong"}`. Même contrôle d'origine que le suivi d'un combat. |
 | `GET /api/entites/{id}/feuille`, `PUT …` | À la maison, sur la page libre : la feuille d'un PJ sans les notes du MJ ; l'écriture demande les feuilles déverrouillées (`403` sinon) et ne touche pas aux notes du MJ. Sur un serveur, un joueur passe par les mêmes routes pour son seul PJ (« Vue des joueurs »). |
-| `GET /api/reference` | Profils, peuples et voies, pour tenir sa feuille. |
+| `GET /api/reference?pj=<id>` | Les voies de la feuille de ce PJ, son profil et son peuple ; rien d'autre de la bibliothèque. Sans `pj` : une bibliothèque vide. |
 
 Le combat vu par les joueurs : `{"nom", "round", "ordre": [{"nom", "camp", "pj"?, "a_terre"?, "courant", "suivant", "etats": ["…"]}]}`. `pj` : la fiche du PJ, pour que son joueur reconnaisse son tour ; `a_terre` : PJ inconscient. Les adversaires et les alliés hors de combat n'y figurent pas, et aucun chiffre (PV, DEF, initiative, attaques) n'est transmis. C'est le combat en cours le plus récemment joué.
 
@@ -413,7 +437,7 @@ Sauvegardes automatiques : à l'ouverture d'un univers, toutes les demi-heures e
 
 Une application de bureau garde une **copie** d'un univers du serveur et la tient à jour, y compris après un travail hors ligne. Ces routes n'existent qu'en mode serveur, pour les comptes qui écrivent dans l'univers (MJ, administrateur) ; l'auditeur et le joueur en sont exclus.
 
-L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}`. `objet` vaut `entite` (fiche), `relation`, `media` (image), `document` (bestiaire, combat terminé), `feuille`, `meta` (`calendrier`, `regles`, `reference`) ou `journal`. `champ` vaut `nom`, `type`, `tags`, `archive`, `partage`, `cree`, `data.<clé>` pour une fiche ou une feuille, le nom de la colonne pour une relation ou une image, `data` pour un document, `valeur` pour un réglage, `ligne` pour le journal. Le champ `*` dit qu'un objet existe ; `null`, qu'il est supprimé. Un combat en cours ne se synchronise pas. Chaque copie a un numéro et tire les identifiants de ce qu'elle crée dans sa propre plage (2^40 par copie) : une fiche créée hors ligne garde son identifiant partout.
+L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}`. `objet` vaut `entite` (fiche), `relation`, `media` (image), `document` (bestiaire, profil, peuple, voie, combat terminé), `feuille`, `meta` (`calendrier`, `regles`, `fonctionnalites` ; `reference` : l'ancien réglage des profils et voies, envoyé par un serveur d'avant le modèle 2, que la copie range aussitôt un par un) ou `journal`. `champ` vaut `nom`, `type`, `tags`, `archive`, `partage`, `cree`, `data.<clé>` pour une fiche ou une feuille, le nom de la colonne pour une relation ou une image, `data` pour un document, `valeur` pour un réglage, `ligne` pour le journal. Le champ `*` dit qu'un objet existe ; `null`, qu'il est supprimé. Un combat en cours ne se synchronise pas. Chaque copie a un numéro et tire les identifiants de ce qu'elle crée dans sa propre plage (2^40 par copie) : une fiche créée hors ligne garde son identifiant partout. La dernière plage (numéro 8191) n'est donnée à aucune copie : elle reçoit les profils, peuples et voies repris de l'ancien réglage, sous un identifiant tiré de leur `ref` ou de leur nom, le même sur toutes les copies.
 
 | Route | Rôle |
 |---|---|

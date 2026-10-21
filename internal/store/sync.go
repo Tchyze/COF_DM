@@ -635,11 +635,15 @@ func appliquerReglage(tx execer, o *objetRecu) error {
 		}
 		texte = canonique(rg)
 	case o.cle == MetaReference:
+		// l'ancien réglage, envoyé par un serveur d'avant le modèle 2 : rangé un par un, comme à
+		// l'ouverture, sous les mêmes identifiants que là-bas quand il s'y rangera
 		ref, err := reference.Lire(c.Valeur)
 		if err != nil {
 			return invalide("profils et voies : %v", err)
 		}
-		texte = canonique(ref)
+		if err := reprendre(tx, ref, "synchronisation"); err != nil {
+			return err
+		}
 	case o.cle == MetaFonctions:
 		choix, err := lireFonctions(c.Valeur)
 		if err != nil {

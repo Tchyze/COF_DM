@@ -17,7 +17,8 @@ import (
 
 const taillePlage = int64(1) << 40
 
-// RepliqueMax : le plus grand numéro de copie possible.
+// RepliqueMax : le plus grand numéro de copie possible. Sa plage est réservée à la reprise des
+// profils, peuples et voies (repliqueReprise) : aucune copie ne le reçoit.
 const RepliqueMax = int64(1)<<13 - 1
 
 // MetaReplique : clé du réglage qui garde le numéro de copie de ce fichier (absent : 0).
@@ -65,8 +66,8 @@ func (s *Store) Replique() int64 {
 // DefinirReplique donne à ce fichier son numéro de copie : ce qu'il crée ensuite prend ses
 // identifiants dans la plage de ce numéro.
 func (s *Store) DefinirReplique(n int64) error {
-	if n < 0 || n > RepliqueMax {
-		return invalide("Numéro de copie hors limites (0 à %d).", RepliqueMax)
+	if n < 0 || n >= repliqueReprise {
+		return invalide("Numéro de copie hors limites (0 à %d).", repliqueReprise-1)
 	}
 	return s.SetMeta(MetaReplique, strconv.FormatInt(n, 10))
 }

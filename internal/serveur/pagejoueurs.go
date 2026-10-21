@@ -57,7 +57,7 @@ func (s *Serveur) routesPageJoueurs() {
 	s.routesDesJoueurs(l) // la seule écriture hors de la feuille : un jet, qui ne touche pas à l'univers
 	l.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireLibre)
 	l.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireLibre)
-	l.HandleFunc("GET /api/reference", s.referenceLire) // profils et voies : utiles à qui tient sa feuille
+	l.HandleFunc("GET /api/reference", s.referenceJoueur(s.pjLibre)) // ?pj= : les voies, le profil et le peuple de ce PJ
 	l.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 401, "Accès réservé au MJ : connectez-vous avec le mot de passe MJ, ou utilisez un jeton d'API.")
 	})
