@@ -82,6 +82,10 @@ type Feuille struct {
 	// Utilisations : ce qui a été utilisé des capacités à utilisations comptées (par jour, par repos,
 	// à remettre à zéro à la main ; celles « par combat » se comptent dans le combat), par CleCapacite.
 	Utilisations map[string]Utilisation `json:"utilisations,omitempty"`
+	// Niveaux : l'historique des montées de niveau (niveaux.go) ; PointsCapacite : les points de
+	// capacité gardés pour le niveau suivant, quand les règles le permettent.
+	Niveaux        []Montee `json:"niveaux,omitempty"`
+	PointsCapacite int      `json:"points_capacite,omitempty"`
 	// Effets : ce que les capacités atteintes ajoutent (« A + b »), calculé à la lecture, jamais
 	// rangé (Stockage).
 	Effets *Effets `json:"effets,omitempty"`
@@ -261,6 +265,9 @@ func normaliser(raw []byte, niveau int, rg *regles.Feuille, effets []EffetVoie, 
 	}
 	if f.Voies == nil {
 		f.Voies = []Voie{}
+	}
+	if err := f.verifierNiveaux(); err != nil {
+		return nil, err
 	}
 	if len(f.Utilisations) > 200 {
 		return nil, invalide("utilisations : trop de capacités.")
@@ -450,9 +457,18 @@ func (f Feuille) Stockage() []byte {
 	return f.JSON()
 }
 
-// PourJoueur renvoie la feuille telle que le joueur la voit : sans les notes du MJ.
+// PourJoueur renvoie la feuille telle que le joueur la voit : sans les notes du MJ, ni le détail
+// des jets cachés de ses montées de niveau.
 func (f Feuille) PourJoueur() Feuille {
 	f.Notes = ""
+	if len(f.Niveaux) > 0 {
+		f.Niveaux = append([]Montee(nil), f.Niveaux...)
+		for i := range f.Niveaux {
+			if f.Niveaux[i].Cache {
+				f.Niveaux[i].Jet = ""
+			}
+		}
+	}
 	return f
 }
 

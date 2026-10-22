@@ -56,6 +56,49 @@ func (s *Store) EcrireFeuille(entite int64, data []byte, attendu float64, auteur
 	return t, nil
 }
 
+// ChangerNiveau change en une fois le niveau d'un PJ (sur sa fiche) et sa feuille : une montée de
+// niveau ou son annulation. attendu : date de modification de la feuille connue du client (0 : pas
+// de contrôle ; ErrConflit si elle a changé). action et detail vont au journal.
+func (s *Store) ChangerNiveau(entite int64, niveau int, data []byte, attendu float64, action, detail, auteur string) (float64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	e, err := lire(tx, entite)
+	if err != nil {
+		return 0, err
+	}
+	if e.Type != "pj" {
+		return 0, invalide("Seuls les PJ ont un niveau.")
+	}
+	var actuel float64
+	_ = tx.QueryRow(`SELECT modifie FROM feuilles WHERE entite=?`, entite).Scan(&actuel)
+	if attendu != 0 && actuel != 0 && actuel != attendu {
+		return 0, ErrConflit
+	}
+	if e.Data == nil {
+		e.Data = map[string]any{}
+	}
+	e.Data["niveau"] = float64(niveau)
+	dj, _ := json.Marshal(e.Data)
+	t := maintenant()
+	if _, err := tx.Exec(`UPDATE entites SET data=?, modifie=? WHERE id=?`, string(dj), t, entite); err != nil {
+		return 0, err
+	}
+	if err := indexer(tx, e); err != nil {
+		return 0, err
+	}
+	if _, err := tx.Exec(`INSERT INTO feuilles (entite, data, modifie) VALUES (?,?,?)
+		ON CONFLICT(entite) DO UPDATE SET data=excluded.data, modifie=excluded.modifie`, entite, string(data), t); err != nil {
+		return 0, err
+	}
+	noter(tx, action, entite, e.Nom, detail, auteur)
+	return t, tx.Commit()
+}
+
 // FeuilleExport : une feuille dans un export.
 type FeuilleExport struct {
 	Entite  int64           `json:"entite"`

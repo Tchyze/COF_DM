@@ -3,12 +3,17 @@ package serveur
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Tchyze/cof_dm/internal/combat"
+	"github.com/Tchyze/cof_dm/internal/des"
 	"github.com/Tchyze/cof_dm/internal/fiches"
 	"github.com/Tchyze/cof_dm/internal/reference"
+	"github.com/Tchyze/cof_dm/internal/regles"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
 
@@ -20,6 +25,8 @@ func (s *Serveur) routesFeuille() {
 	s.mux.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLire)
 	s.mux.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrire)
 	s.mux.HandleFunc("POST /api/feuilles/nouveau-jour", s.nouveauJour)
+	s.mux.HandleFunc("POST /api/feuilles/{id}/niveau", s.monterNiveau)
+	s.mux.HandleFunc("POST /api/feuilles/{id}/niveau/annuler", s.annulerNiveau)
 }
 
 // niveauDe : le niveau du PJ, lu sur sa fiche (1 s'il n'est pas renseigné).
@@ -191,6 +198,10 @@ func voieLiee(ref *reference.Reference, v fiches.Voie) *reference.Voie {
 // repondreFeuille : la feuille, avec ce qu'il faut pour l'afficher et la modifier (niveau du PJ,
 // règles de la feuille dans cet univers).
 func (s *Serveur) repondreFeuille(w http.ResponseWriter, e store.Entite, f fiches.Feuille, modifie float64, existe bool) {
+	repondre(w, 200, s.vueFeuille(e, f, modifie, existe))
+}
+
+func (s *Serveur) vueFeuille(e store.Entite, f fiches.Feuille, modifie float64, existe bool) map[string]any {
 	var m map[string]any
 	_ = json.Unmarshal(f.JSON(), &m)
 	m["entite"], m["niveau"], m["modifie"], m["existe"] = e.ID, niveauDe(e), modifie, existe
@@ -204,7 +215,7 @@ func (s *Serveur) repondreFeuille(w http.ResponseWriter, e store.Entite, f fiche
 		}
 	}
 	m["comptees"] = comptees
-	repondre(w, 200, m)
+	return m
 }
 
 // niveauPermis refuse à un PJ un niveau au-delà de ce que disent les règles de l'univers.
@@ -272,10 +283,11 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 		return
 	}
 	if garderNotes {
-		f.Notes = ""
+		// ni les notes du MJ, ni l'historique des niveaux (que seul le MJ fait avancer)
+		f.Notes, f.Niveaux, f.PointsCapacite = "", nil, 0
 		ancienne, _, existe, err := s.feuilleDe(e)
 		if err == nil && existe {
-			f.Notes = ancienne.Notes
+			f.Notes, f.Niveaux, f.PointsCapacite = ancienne.Notes, ancienne.Niveaux, ancienne.PointsCapacite
 		}
 		if err == nil {
 			if nom := s.voieAjoutee(ancienne.Voies, f.Voies); nom != "" {
@@ -342,4 +354,171 @@ func (s *Serveur) feuilleEcrireJoueur(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.enregistrerFeuille(w, r, e, true)
+}
+
+// ---------------------------------------------------------------- montée de niveau
+
+// pjAvecFeuille : la fiche d'un PJ (id du chemin) et sa feuille, qui doit déjà exister.
+func (s *Serveur) pjAvecFeuille(w http.ResponseWriter, r *http.Request) (store.Entite, *fiches.Feuille, bool) {
+	e, ok := s.pjDe(w, r)
+	if !ok {
+		return e, nil, false
+	}
+	f, _, existe, err := s.feuilleDe(e)
+	if err != nil {
+		erreurFiche(w, err)
+		return e, nil, false
+	}
+	if !existe {
+		erreur(w, 422, "Ce PJ n'a pas encore de feuille : remplissez-la d'abord.")
+		return e, nil, false
+	}
+	return e, f, true
+}
+
+// formulePv : la formule des PV gagnés à une montée, lue dans les règles : un dé de vie (celui de la
+// feuille), le modificateur de CON, le nouveau niveau, une valeur fixe.
+func formulePv(m *regles.Montee, f *fiches.Feuille, niveau int) (string, error) {
+	formule, fixe := "", m.PvFixe
+	for _, t := range m.Pv {
+		switch t {
+		case "dv":
+			if f.Dv == "" {
+				return "", store.ErrValidation{Msg: "La feuille n'a pas de dé de vie : choisissez-le d'abord."}
+			}
+			formule += "+1" + f.Dv
+		case "con":
+			fixe += f.Carac.CON
+		case "niveau":
+			fixe += niveau
+		}
+	}
+	if fixe != 0 || formule == "" {
+		formule += fmt.Sprintf("%+d", fixe)
+	}
+	return strings.TrimPrefix(formule, "+"), nil
+}
+
+// monterNiveau : le PJ passe au niveau suivant (MJ seulement). Les PV gagnés sont lancés si les
+// règles en donnent la formule (le jet part au lanceur de la table, caché si "cache"), sinon saisis
+// ("pv") ; "rangs" : les rangs pris dans les voies de la feuille.
+func (s *Serveur) monterNiveau(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Rangs   []fiches.ChoixRang `json:"rangs"`
+		Pv      *int               `json:"pv"`
+		Cache   bool               `json:"cache"`
+		Modifie float64            `json:"modifie"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	e, f, ok := s.pjAvecFeuille(w, r)
+	if !ok {
+		return
+	}
+	rg := orVide(s.lireRegles().Personnage)
+	avant := niveauDe(e)
+	niveau := avant + 1
+	if rg.NiveauMax > 0 && niveau > rg.NiveauMax {
+		erreur(w, 422, "Niveau : "+strconv.Itoa(rg.NiveauMax)+" au plus.")
+		return
+	}
+	var lance *des.Resultat
+	pv := 0
+	if rg.Montee.Lancee() {
+		formule, err := formulePv(rg.Montee, f, niveau)
+		if err != nil {
+			erreurStore(w, err)
+			return
+		}
+		res, err := des.Lancer(formule)
+		if err != nil {
+			erreur(w, 422, "PV gagnés : "+err.Error())
+			return
+		}
+		lance, pv = &res, max(0, res.Total, rg.Montee.PvMin)
+	} else if in.Pv == nil {
+		erreur(w, 422, "PV gagnés : à saisir (les règles de l'univers n'en donnent pas la formule).")
+		return
+	} else {
+		pv = *in.Pv
+	}
+	jetTexte := ""
+	if lance != nil {
+		jetTexte = lance.Detail
+	}
+	ligne, err := f.Monter(niveau, pv, jetTexte, in.Cache, in.Rangs, rg, float64(time.Now().UnixMilli())/1000)
+	if err != nil {
+		erreurFiche(w, err)
+		return
+	}
+	f.PrendreEffets(s.effetsDe(f.Voies))
+	f.Deriver(niveau, rg)
+	detail := fmt.Sprintf("niveau %d → %d ; %+d PV", avant, niveau, pv)
+	if jetTexte != "" {
+		detail += " (" + jetTexte + ")"
+	}
+	for _, x := range ligne.Rangs {
+		detail += fmt.Sprintf(" ; %s rang %d → %d", x.Voie, x.De, x.A)
+	}
+	modifie, err := s.store.ChangerNiveau(e.ID, niveau, f.Stockage(), in.Modifie, "montée de niveau", detail, auteurDe(r))
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	if e.Data == nil {
+		e.Data = map[string]any{}
+	}
+	e.Data["niveau"] = float64(niveau)
+	out := s.vueFeuille(e, *f, modifie, true)
+	out["montee"] = ligne
+	if lance != nil && s.store.Active("des") {
+		out["jet"] = s.annoncerJet(jet{Qui: "MJ", MJ: true, Cache: in.Cache, Libelle: libelleJet(fmt.Sprintf("%s : PV du niveau %d", e.Nom, niveau)), Resultat: *lance})
+	}
+	s.joueurs.fiche(e.ID)
+	repondre(w, 200, out)
+}
+
+// annulerNiveau défait la dernière montée de niveau (MJ seulement) : la seule façon de baisser un
+// niveau autrement qu'à la main.
+func (s *Serveur) annulerNiveau(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Modifie float64 `json:"modifie"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	e, f, ok := s.pjAvecFeuille(w, r)
+	if !ok {
+		return
+	}
+	avant := niveauDe(e)
+	ligne, err := f.Annuler(avant)
+	if err != nil {
+		erreurFiche(w, err)
+		return
+	}
+	niveau := max(1, ligne.Niveau-1)
+	rg := orVide(s.lireRegles().Personnage)
+	f.PrendreEffets(s.effetsDe(f.Voies))
+	f.Deriver(niveau, rg)
+	detail := fmt.Sprintf("niveau %d → %d ; %+d PV", avant, niveau, -ligne.Pv)
+	for _, x := range ligne.Rangs {
+		detail += fmt.Sprintf(" ; %s rang %d → %d", x.Voie, x.A, x.De)
+	}
+	modifie, err := s.store.ChangerNiveau(e.ID, niveau, f.Stockage(), in.Modifie, "montée de niveau annulée", detail, auteurDe(r))
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	if e.Data == nil {
+		e.Data = map[string]any{}
+	}
+	e.Data["niveau"] = float64(niveau)
+	out := s.vueFeuille(e, *f, modifie, true)
+	out["annulee"] = ligne
+	s.joueurs.fiche(e.ID)
+	repondre(w, 200, out)
 }

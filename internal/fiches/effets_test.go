@@ -56,3 +56,29 @@ func TestEffetsCapacites(t *testing.T) {
 		t.Fatalf("relue : PV %d, PM %d", *h.PvActuel, h.Pm)
 	}
 }
+
+// L'historique des niveaux et les points gardés se rangent avec la feuille et se relisent tels quels
+// (synchronisation, restauration).
+func TestNiveauxRanges(t *testing.T) {
+	raw := []byte(`{"pv":14,"points_capacite":2,"niveaux":[{"niveau":2,"quand":1,"pv":4,"jet":"1d6[3] + 1","cache":true,
+		"rangs":[{"voie":"Voie du gué","de":0,"a":1,"capacites":["Pas sûr"]}],"points":1}]}`)
+	f, err := RelireFeuille(raw, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := RelireFeuille(f.Stockage(), 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.PointsCapacite != 2 || len(g.Niveaux) != 1 || g.Niveaux[0].Jet != "1d6[3] + 1" || g.Niveaux[0].Rangs[0].Capacites[0] != "Pas sûr" {
+		t.Fatalf("historique relu : %+v", g)
+	}
+	if j := g.PourJoueur(); j.Niveaux[0].Jet != "" || g.Niveaux[0].Jet == "" {
+		t.Fatal("le jet caché d'une montée est montré au joueur, ou retiré de la feuille du MJ")
+	}
+	for _, mauvais := range []string{`{"points_capacite":-1}`, `{"niveaux":[{"niveau":0}]}`, `{"niveaux":[{"niveau":2,"rangs":[{"de":3,"a":1}]}]}`} {
+		if _, err := NormaliserFeuille([]byte(mauvais), 1, nil); err == nil {
+			t.Fatalf("historique invalide accepté : %s", mauvais)
+		}
+	}
+}
