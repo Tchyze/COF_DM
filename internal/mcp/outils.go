@@ -655,13 +655,14 @@ func outils() []outil {
 		},
 		{
 			Nom: "monter_niveau", Fonction: "feuilles", Titre: "Faire monter un PJ de niveau",
-			Description: "Le PJ passe au niveau suivant (un seul à la fois) : le niveau de sa fiche augmente, ses PV max gagnent ce que donne la formule des règles (lancée par l'application, jet montré à la table sauf « cache ») ou, sans formule, les « pv » donnés ; « rangs » : les rangs pris dans les voies déjà sur sa feuille ({\"voie\": indice de la voie dans la feuille, \"rang\": rang atteint}), au prix en points de capacité que fixent les règles. La montée est notée dans l'historique des niveaux de la feuille.",
+			Description: "Le PJ passe au niveau suivant (un seul à la fois) : le niveau de sa fiche augmente ; ses PV max gagnent ce que donne la formule des règles avec les « des » (résultats des dés de vie lancés en vrai) ou, sans formule, les « pv » donnés ; ses PM max, ce que les règles donnent à son profil ; « rangs » : les rangs pris dans les voies déjà sur sa feuille ({\"voie\": indice de la voie dans la feuille, \"rang\": rang atteint}), au prix en points de capacité que fixent les règles ; « etapes » : ce qui est noté aux étapes en plus que les règles prévoient à ce niveau ({\"<clé>\": \"texte\"}). La montée est notée dans l'historique des niveaux de la feuille.",
 			Proprietes: map[string]any{
-				"id": entier("Identifiant du PJ"),
+				"id":  entier("Identifiant du PJ"),
+				"des": map[string]any{"type": "array", "items": map[string]any{"type": "integer"}, "description": "Résultats des dés de vie lancés en vrai"},
 				"rangs": map[string]any{"type": "array", "description": "Rangs pris : indice de la voie sur la feuille (à partir de 0) et rang atteint",
 					"items": map[string]any{"type": "object", "properties": map[string]any{"voie": entier("Indice de la voie"), "rang": entier("Rang atteint")}, "required": []string{"voie", "rang"}}},
-				"pv":    entier("PV gagnés, seulement si les règles n'en donnent pas la formule"),
-				"cache": booleen("Jet des PV caché aux joueurs"),
+				"pv":     entier("PV gagnés, seulement si les règles n'en donnent pas la formule"),
+				"etapes": objet("Ce qui est noté aux étapes en plus, par clé d'étape"),
 			},
 			Requis: []string{"id"},
 			Faire: func(c *Client, a arguments) (any, error) {
@@ -669,12 +670,12 @@ func outils() []outil {
 				if err != nil {
 					return nil, err
 				}
-				return c.appel("POST", chemin("/api/feuilles/%d/niveau", id), nil, a.copier("rangs", "pv", "cache"))
+				return c.appel("POST", chemin("/api/feuilles/%d/niveau", id), nil, a.copier("des", "rangs", "pv", "etapes"))
 			},
 		},
 		{
 			Nom: "accorder_niveau", Fonction: "feuilles", Titre: "Accorder un niveau à un PJ",
-			Description: "Accorde au PJ le niveau suivant : son joueur fera lui-même ses choix (PV lancés, rangs de voie) depuis sa page de joueur. « accorde » false retire l'accord. Pour faire la montée soi-même, utiliser monter_niveau.",
+			Description: "Accorde au PJ le niveau suivant : son joueur fera lui-même ses choix (dés de vie, rangs de voie) depuis sa page de joueur. « accorde » false retire l'accord. Pour faire la montée soi-même, utiliser monter_niveau.",
 			Proprietes:  map[string]any{"id": entier("Identifiant du PJ"), "accorde": booleen("true : accorder (défaut) ; false : retirer l'accord")},
 			Requis:      []string{"id"},
 			Faire: func(c *Client, a arguments) (any, error) {

@@ -7,12 +7,12 @@ import (
 	"testing"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
-	"github.com/Tchyze/cof_dm/internal/des"
 )
 
 // Règles d'essai pour la montée de niveau, inventées : aucune valeur ne vient d'un livre.
 const reglesMontee = `{"format":"cof-dm-regles","personnage":{"niveau_max":7,"rang_max":4,
-	"montee":{"pv":["dv","con"],"pv_fixe":1,"points":3,"couts":[1,2],"niveau_min":[0,0,0,6],"report":true}}}`
+	"montee":{"pv":["dv","con"],"pv_fixe":1,"points":3,"couts":[1,2],"couts_origine":{"sang":[3]},"niveau_min":[0,0,0,6],"report":true,
+		"pm":[{"profils":["Sourcier"],"gain":2}],"etapes":[{"cle":"don","libelle":"Don rare","niveaux":[6]}]}}}`
 
 func niveauFiche(b *banc, id string) any {
 	_, v := b.local("GET", "/api/entites/"+id, nil)
@@ -92,64 +92,71 @@ func TestMonteeLibre(t *testing.T) {
 	}
 }
 
-// Avec des règles : PV lancés (jet à la table, caché si demandé), points de capacité, coût et
-// niveau minimal des rangs, report des points, niveau maximum.
+// Avec des règles : dés de vie saisis (dans les bornes du dé), points de capacité, coût et niveau
+// minimal des rangs (par origine), report des points, PM du profil, étapes en plus, niveau maximum.
 func TestMonteeRegles(t *testing.T) {
 	b := nouveau(t)
-	ancien := des.De
-	des.De = func(faces int) int { return faces } // le dé donne toujours son maximum
-	t.Cleanup(func() { des.De = ancien })
 	b.local("POST", "/api/regles/import", reglesMontee)
-	id := strconv.Itoa(int(b.fiche("pj", "Bérénice", map[string]any{"niveau": 4})))
+	id := strconv.Itoa(int(b.fiche("pj", "Bérénice", map[string]any{"niveau": 4, "profil": "sourcier"})))
 	u := "/api/feuilles/" + id + "/niveau"
-	b.local("PUT", "/api/entites/"+id+"/feuille", map[string]any{"pv": 20, "dv": "",
+	b.local("PUT", "/api/entites/"+id+"/feuille", map[string]any{"pv": 20, "pm": 3, "pm_max": 5, "capacites": "Nage",
 		"valeurs": map[string]any{"FOR": 10, "DEX": 10, "CON": 14, "INT": 10, "SAG": 10, "CHA": 10},
-		"voies":   []any{map[string]any{"nom": "Voie du gué", "rang": 0}, map[string]any{"nom": "Voie libre", "rang": 2}}})
-	if c, v := b.local("POST", u, map[string]any{}); c != 422 || !strings.Contains(toJSON(v), "dé de vie") {
+		"voies":   []any{map[string]any{"nom": "Voie du gué", "rang": 0}, map[string]any{"nom": "Voie libre", "rang": 2}, map[string]any{"nom": "Voie du sang", "origine": "sang", "rang": 0}}})
+	if c, v := b.local("POST", u, map[string]any{"des": []int{4}}); c != 422 || !strings.Contains(toJSON(v), "dé de vie") {
 		t.Fatalf("montée sans dé de vie : %d %v", c, v)
 	}
 	_, f := b.local("GET", "/api/entites/"+id+"/feuille", nil)
+	if f["montee_pm"] != float64(2) {
+		t.Fatalf("PM du profil annoncés : %v", f["montee_pm"])
+	}
 	f["dv"] = "d9"
 	b.local("PUT", "/api/entites/"+id+"/feuille", f)
 	con := int(f["carac"].(map[string]any)["CON"].(float64))
-	for nom, rangs := range map[string][]any{
-		"trop de points":         {map[string]any{"voie": 0, "rang": 2}, map[string]any{"voie": 1, "rang": 3}}, // 1 + 2 + 2
-		"rang au-delà du niveau": {map[string]any{"voie": 1, "rang": 4}},
-		"rang au-delà du max":    {map[string]any{"voie": 0, "rang": 5}},
+	for nom, corps := range map[string]map[string]any{
+		"dé absent":              {},
+		"dé trop haut":           {"des": []int{10}},
+		"dé nul":                 {"des": []int{0}},
+		"trop de points":         {"des": []int{4}, "rangs": []any{map[string]any{"voie": 0, "rang": 2}, map[string]any{"voie": 1, "rang": 3}}}, // 1 + 2 + 2
+		"rang au-delà du niveau": {"des": []int{4}, "rangs": []any{map[string]any{"voie": 1, "rang": 4}}},
+		"rang au-delà du max":    {"des": []int{4}, "rangs": []any{map[string]any{"voie": 0, "rang": 5}}},
+		"origine plus chère":     {"des": []int{4}, "rangs": []any{map[string]any{"voie": 2, "rang": 2}}}, // 3 + 3
 	} {
-		if c, _ := b.local("POST", u, map[string]any{"rangs": rangs}); c != 422 {
+		if c, _ := b.local("POST", u, corps); c != 422 {
 			t.Fatalf("%s accepté : %d", nom, c)
 		}
 	}
-	if _, j := b.local("GET", "/api/des", nil); len(j["jets"].([]any)) != 0 {
-		t.Fatalf("une montée refusée a lancé les PV : %v", j)
-	}
 	// les PV saisis sont ignorés quand les règles donnent la formule
-	c, v := b.local("POST", u, map[string]any{"pv": 99, "rangs": []any{map[string]any{"voie": 0, "rang": 1}}})
-	gain := 9 + con + 1
-	if c != 200 || v["niveau"] != float64(5) || v["pv"] != float64(20+gain) || v["points_capacite"] != float64(2) {
+	c, v := b.local("POST", u, map[string]any{"des": []int{4}, "pv": 99, "rangs": []any{map[string]any{"voie": 0, "rang": 1}}})
+	gain := 4 + con + 1
+	if c != 200 || v["niveau"] != float64(5) || v["pv"] != float64(20+gain) || v["points_capacite"] != float64(2) || v["pm_max"] != float64(7) || v["pm"] != float64(5) {
 		t.Fatalf("montée avec les règles : %d %v", c, v)
 	}
 	m := v["montee"].(map[string]any)
-	if m["pv"] != float64(gain) || !strings.Contains(m["jet"].(string), "1d9[9]") || m["points"] != float64(1) {
+	if m["pv"] != float64(gain) || !strings.HasPrefix(m["jet"].(string), "d9[4] + ") || m["points"] != float64(1) || m["pm"] != float64(2) || v["jet"] != nil {
 		t.Fatalf("ligne de l'historique : %v", m)
 	}
-	j := v["jet"].(map[string]any)
-	if j["total"] != float64(gain) || j["cache"] != nil || !strings.Contains(j["libelle"].(string), "Bérénice") {
-		t.Fatalf("jet des PV à la table : %v", j)
+	if _, j := b.local("GET", "/api/des", nil); len(j["jets"].([]any)) != 0 {
+		t.Fatalf("le dé saisi est annoncé à la table : %v", j)
 	}
-	// les points gardés s'ajoutent à ceux du niveau : 2 + 3 = 5, dont 2 + 2 dépensés
-	c, v = b.local("POST", u, map[string]any{"cache": true, "rangs": []any{map[string]any{"voie": 0, "rang": 2}, map[string]any{"voie": 1, "rang": 3}}})
-	if c != 200 || v["niveau"] != float64(6) || v["points_capacite"] != float64(1) || v["jet"].(map[string]any)["cache"] != true {
-		t.Fatalf("seconde montée, jet caché : %d %v", c, v)
+	// niveau 6 : l'étape en plus est due ; les points gardés s'ajoutent : 2 + 3 = 5, dont 2 + 2 dépensés
+	rangs := []any{map[string]any{"voie": 0, "rang": 2}, map[string]any{"voie": 1, "rang": 3}}
+	if c, _ := b.local("POST", u, map[string]any{"des": []int{9}, "rangs": rangs}); c != 422 {
+		t.Fatalf("étape en plus oubliée : %d", c)
 	}
-	// annuler rend les points gardés avant la montée
-	if _, v = b.local("POST", u+"/annuler", map[string]any{}); v["points_capacite"] != float64(2) || v["niveau"] != float64(5) {
+	c, v = b.local("POST", u, map[string]any{"des": []int{9}, "rangs": rangs, "etapes": map[string]any{"don": "Vue perçante"}})
+	if c != 200 || v["niveau"] != float64(6) || v["points_capacite"] != float64(1) || v["capacites"] != "Nage\nDon rare (niveau 6) : Vue perçante" {
+		t.Fatalf("seconde montée, étape en plus : %d %v", c, v)
+	}
+	// annuler rend les points gardés, les PM et les capacités d'avant
+	if _, v = b.local("POST", u+"/annuler", map[string]any{}); v["points_capacite"] != float64(2) || v["niveau"] != float64(5) || v["capacites"] != "Nage" || v["pm_max"] != float64(7) {
 		t.Fatalf("annulation : %v", v)
+	}
+	if _, v = b.local("POST", u+"/annuler", map[string]any{}); v["pm_max"] != float64(5) || v["pm"] != float64(3) {
+		t.Fatalf("annulation des PM : %v", v)
 	}
 	// le niveau maximum des règles
 	b.local("PATCH", "/api/entites/"+id, map[string]any{"data": map[string]any{"niveau": 7}})
-	if c, _ := b.local("POST", u, map[string]any{}); c != 422 {
+	if c, _ := b.local("POST", u, map[string]any{"des": []int{1}}); c != 422 {
 		t.Fatalf("montée au-delà du niveau maximum : %d", c)
 	}
 	// fonctionnalité « feuilles » coupée : plus de montée
@@ -159,8 +166,7 @@ func TestMonteeRegles(t *testing.T) {
 	}
 }
 
-// Seul le MJ fait monter un PJ de niveau ; le joueur voit l'historique sans le détail d'un jet
-// caché, et ne peut pas le réécrire.
+// Seul le MJ fait monter un PJ de niveau ; le joueur voit l'historique et ne peut pas le réécrire.
 func TestMonteeRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
@@ -178,15 +184,11 @@ func TestMonteeRoles(t *testing.T) {
 			t.Fatalf("montée par le %s : %d", nom, c)
 		}
 	}
-	if c, _, _ := b.proxy("POST", "/api/feuilles/"+id+"/niveau", map[string]any{"pv": 3, "cache": true, "rangs": []any{map[string]any{"voie": 0, "rang": 1}}}, mj); c != 200 {
+	if c, _, _ := b.proxy("POST", "/api/feuilles/"+id+"/niveau", map[string]any{"pv": 3, "rangs": []any{map[string]any{"voie": 0, "rang": 1}}}, mj); c != 200 {
 		t.Fatalf("montée par le MJ : %d", c)
 	}
-	// sans formule, pas de jet : rien de caché ; on en fabrique un pour vérifier le filtre
-	_, f, _ := b.proxy("GET", u, nil, mj)
-	f["niveaux"].([]any)[0].(map[string]any)["jet"], f["niveaux"].([]any)[0].(map[string]any)["cache"] = "JET-CACHE", true
-	b.proxy("PUT", u, f, mj)
 	c, v, _ := b.proxy("GET", u, nil, joueuse)
-	if c != 200 || len(v["niveaux"].([]any)) != 1 || strings.Contains(toJSON(v), "JET-CACHE") {
+	if c != 200 || len(v["niveaux"].([]any)) != 1 {
 		t.Fatalf("historique vu par le joueur : %d %v", c, v)
 	}
 	// le joueur réécrit sa feuille : l'historique et les points restent ceux du MJ
@@ -194,7 +196,7 @@ func TestMonteeRoles(t *testing.T) {
 	if c, v, _ = b.proxy("PUT", u, v, joueuse); c != 200 || len(v["niveaux"].([]any)) != 1 || v["points_capacite"] != nil {
 		t.Fatalf("historique réécrit par le joueur : %d %v", c, v)
 	}
-	if _, v, _ = b.proxy("GET", u, nil, mj); v["niveaux"].([]any)[0].(map[string]any)["jet"] != "JET-CACHE" {
+	if _, v, _ = b.proxy("GET", u, nil, mj); v["niveaux"].([]any)[0].(map[string]any)["pv"] != float64(3) {
 		t.Fatalf("historique après l'écriture du joueur : %v", v)
 	}
 }
@@ -214,7 +216,7 @@ func TestMonteeAccordee(t *testing.T) {
 	b.proxy("POST", "/api/entites/"+id+"/partage", map[string]any{"partage": true}, mj)
 	u, uj := "/api/entites/"+id+"/feuille", "/api/joueur/pj/"+id+"/niveau"
 	b.proxy("PUT", u, map[string]any{"pv": 8, "notes": "SECRET-MJ", "voies": []any{map[string]any{"nom": "Voie du gué", "rang": 1, "capacites": []string{"Pied sûr", "Passeur"}}}}, mj)
-	monter := map[string]any{"pv": 3, "cache": true, "rangs": []any{map[string]any{"voie": 0, "rang": 2}}}
+	monter := map[string]any{"pv": 3, "rangs": []any{map[string]any{"voie": 0, "rang": 2}}}
 	if c, _, _ := b.proxy("POST", uj, monter, joueuse); c != 403 {
 		t.Fatalf("montée sans accord du MJ : %d", c)
 	}
@@ -238,10 +240,9 @@ func TestMonteeAccordee(t *testing.T) {
 	if c, _, _ := b.proxy("POST", uj, monter, autre); c != 404 {
 		t.Fatalf("montée prise par un autre joueur : %d", c)
 	}
-	// feuilles verrouillées : l'accord suffit ; le jet du joueur n'est jamais caché, les notes restent au MJ
+	// feuilles verrouillées : l'accord suffit ; les notes restent au MJ
 	c, v, _ := b.proxy("POST", uj, monter, joueuse)
-	if c != 200 || v["niveau"] != float64(3) || v["pv"] != float64(11) || v["niveau_accorde"] != nil || strings.Contains(toJSON(v), "SECRET-MJ") ||
-		v["montee"].(map[string]any)["cache"] != nil {
+	if c != 200 || v["niveau"] != float64(3) || v["pv"] != float64(11) || v["niveau_accorde"] != nil || strings.Contains(toJSON(v), "SECRET-MJ") {
 		t.Fatalf("montée par le joueur : %d %v", c, v)
 	}
 	if c, _, _ := b.proxy("POST", uj, monter, joueuse); c != 403 {

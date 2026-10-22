@@ -139,34 +139,74 @@ type Feuille struct {
 	Textes       map[string]string `json:"textes,omitempty"`
 }
 
-// Montee : ce que gagne un PJ qui passe un niveau. Les PV gagnés sont lancés (somme de Pv et de
-// PvFixe) ; sans formule, ils se saisissent. Points : les points de capacité gagnés, que coûtent les
-// rangs de voie (Couts : le coût de chaque rang, le dernier valant pour les suivants ; vide : 1) ;
+// Montee : ce que gagne un PJ qui passe un niveau. PV gagnés : somme de Pv et de PvFixe, chaque dé
+// de vie étant lancé en vrai et saisi ; sans formule, les PV se saisissent. Points : les points de
+// capacité gagnés, que coûtent les rangs de voie (Couts : le coût de chaque rang, le dernier valant
+// pour les suivants ; vide : 1 ; CoutsOrigine : de même pour les voies d'une origine donnée) ;
 // NiveauMin : le niveau qu'il faut pour prendre chaque rang (0 : aucun). Sans points, les rangs se
-// prennent librement.
+// prennent librement. Pm : les PM max gagnés selon le profil du PJ. Etapes : ce que le joueur note
+// en plus à certains niveaux.
 type Montee struct {
-	Pv        []string `json:"pv,omitempty"` // somme de « dv » (un dé de vie lancé), « con » (mod. CON), « niveau » (le nouveau)
-	PvFixe    int      `json:"pv_fixe,omitempty"`
-	PvMin     int      `json:"pv_min,omitempty"` // PV gagnés au moins
-	Points    int      `json:"points,omitempty"`
-	Couts     []int    `json:"couts,omitempty"`
-	NiveauMin []int    `json:"niveau_min,omitempty"`
-	Report    bool     `json:"report,omitempty"` // les points non dépensés se gardent pour le niveau suivant
-	Aide      string   `json:"aide,omitempty"`
+	Pv           []string         `json:"pv,omitempty"` // somme de « dv » (un dé de vie, saisi), « con » (mod. CON), « niveau » (le nouveau)
+	PvFixe       int              `json:"pv_fixe,omitempty"`
+	PvMin        int              `json:"pv_min,omitempty"` // PV gagnés au moins
+	Points       int              `json:"points,omitempty"`
+	Couts        []int            `json:"couts,omitempty"`
+	CoutsOrigine map[string][]int `json:"couts_origine,omitempty"`
+	NiveauMin    []int            `json:"niveau_min,omitempty"`
+	Report       bool             `json:"report,omitempty"` // les points non dépensés se gardent pour le niveau suivant
+	Pm           []GainPm         `json:"pm,omitempty"`
+	Etapes       []Etape          `json:"etapes,omitempty"`
+	Aide         string           `json:"aide,omitempty"`
 }
 
-// Lancee : les PV gagnés se lancent (sinon, ils se saisissent).
-func (m *Montee) Lancee() bool { return m != nil && (len(m.Pv) > 0 || m.PvFixe != 0) }
+// GainPm : les PM max que gagne à chaque niveau un PJ de l'un de ces profils.
+type GainPm struct {
+	Profils []string `json:"profils"`
+	Gain    int      `json:"gain"`
+}
 
-// Cout : ce que coûte le rang r (à partir de 1) d'une voie.
-func (m *Montee) Cout(r int) int {
-	switch {
-	case m == nil || len(m.Couts) == 0:
-		return 1
-	case r <= len(m.Couts):
-		return m.Couts[r-1]
+// Etape : un écran de plus de la montée, aux niveaux donnés : le joueur y note un choix (une
+// capacité…), ajouté aux capacités de sa feuille.
+type Etape struct {
+	Cle     string `json:"cle"`
+	Libelle string `json:"libelle"`
+	Aide    string `json:"aide,omitempty"`
+	Niveaux []int  `json:"niveaux"`
+}
+
+// Formule : les PV gagnés se calculent (dés saisis compris) ; sinon, ils se saisissent.
+func (m *Montee) Formule() bool { return m != nil && (len(m.Pv) > 0 || m.PvFixe != 0) }
+
+// NbDes : le nombre de dés de vie à saisir.
+func (m *Montee) NbDes() int {
+	n := 0
+	if m != nil {
+		for _, t := range m.Pv {
+			if t == "dv" {
+				n++
+			}
+		}
 	}
-	return m.Couts[len(m.Couts)-1]
+	return n
+}
+
+// Cout : ce que coûte le rang r (à partir de 1) d'une voie de cette origine.
+func (m *Montee) Cout(origine string, r int) int {
+	if m == nil {
+		return 1
+	}
+	couts := m.Couts
+	if c, ok := m.CoutsOrigine[origine]; ok && len(c) > 0 {
+		couts = c
+	}
+	switch {
+	case len(couts) == 0:
+		return 1
+	case r <= len(couts):
+		return couts[r-1]
+	}
+	return couts[len(couts)-1]
 }
 
 // NiveauPour : le niveau qu'il faut pour prendre le rang r (0 : aucun).
@@ -175,6 +215,34 @@ func (m *Montee) NiveauPour(r int) int {
 		return 0
 	}
 	return m.NiveauMin[r-1]
+}
+
+// GainPmDe : les PM max gagnés par niveau par un PJ de ce profil (0 : aucun).
+func (m *Montee) GainPmDe(profil string) int {
+	if m == nil || strings.TrimSpace(profil) == "" {
+		return 0
+	}
+	for _, g := range m.Pm {
+		for _, p := range g.Profils {
+			if strings.EqualFold(strings.TrimSpace(p), strings.TrimSpace(profil)) {
+				return g.Gain
+			}
+		}
+	}
+	return 0
+}
+
+// EtapesDu : les étapes en plus d'une montée à ce niveau.
+func (m *Montee) EtapesDu(niveau int) []Etape {
+	var out []Etape
+	if m != nil {
+		for _, e := range m.Etapes {
+			if slices.Contains(e.Niveaux, niveau) {
+				out = append(out, e)
+			}
+		}
+	}
+	return out
 }
 
 // termePv : un terme d'une formule de PV (repos, montée de niveau).
@@ -279,12 +347,31 @@ func (r *Regles) Normaliser() error {
 					return fmt.Errorf("personnage.montee.pv : dv, con ou niveau")
 				}
 			}
-			if len(m.Pv) > 6 || len(m.Couts) > 20 || len(m.NiveauMin) > 20 || len([]rune(m.Aide)) > 400 {
+			if len(m.Pv) > 6 || len(m.Couts) > 20 || len(m.NiveauMin) > 20 || len(m.CoutsOrigine) > 12 || len(m.Pm) > 20 || len(m.Etapes) > 12 || len([]rune(m.Aide)) > 400 {
 				return fmt.Errorf("personnage.montee : trop long")
 			}
-			if m.PvMin < 0 || m.Points < 0 || slices.ContainsFunc(m.Couts, func(c int) bool { return c < 1 || c > 99 }) ||
-				slices.ContainsFunc(m.NiveauMin, func(n int) bool { return n < 0 }) {
+			coutMauvais := func(c int) bool { return c < 1 || c > 99 }
+			if m.PvMin < 0 || m.Points < 0 || slices.ContainsFunc(m.Couts, coutMauvais) || slices.ContainsFunc(m.NiveauMin, func(n int) bool { return n < 0 }) {
 				return fmt.Errorf("personnage.montee : PV minimum et points positifs, coûts de 1 à 99, niveaux positifs")
+			}
+			for o, c := range m.CoutsOrigine {
+				if strings.TrimSpace(o) == "" || len(c) > 20 || slices.ContainsFunc(c, coutMauvais) {
+					return fmt.Errorf("personnage.montee.couts_origine.%s : coûts de 1 à 99", o)
+				}
+			}
+			for i, g := range m.Pm {
+				if g.Gain < 0 || g.Gain > 99 || len(g.Profils) == 0 {
+					return fmt.Errorf("personnage.montee.pm.%d : des profils et un gain de 0 à 99", i)
+				}
+			}
+			vues := map[string]bool{}
+			for i := range m.Etapes {
+				e := &m.Etapes[i]
+				e.Cle, e.Libelle = strings.TrimSpace(e.Cle), strings.TrimSpace(e.Libelle)
+				if e.Cle == "" || e.Libelle == "" || vues[e.Cle] || len(e.Niveaux) == 0 || len([]rune(e.Aide)) > 400 {
+					return fmt.Errorf("personnage.montee.etapes.%d : clé unique, libellé et niveaux attendus", i)
+				}
+				vues[e.Cle] = true
 			}
 		}
 		if f.NiveauMax < 0 || f.ValeurMax < 0 || f.RangMax < 0 || f.PcMax < 0 || f.PrMax < 0 || (f.ValeurMax > 0 && f.ValeurMin > f.ValeurMax) {

@@ -227,22 +227,25 @@ func TestCombat(t *testing.T) {
 	}
 }
 
-// La partie « montee » du fichier de règles (valeurs inventées) : coût des rangs, niveau minimal,
-// formule des PV ; les formes qui ne tiennent pas debout sont refusées.
+// La partie « montee » du fichier de règles (valeurs inventées) : coût des rangs (par origine),
+// niveau minimal, formule des PV, PM par profil, étapes ; les formes bancales sont refusées.
 func TestMontee(t *testing.T) {
-	r, err := Lire([]byte(`{"format":"cof-dm-regles","personnage":{"montee":{"pv":["dv","con"],"points":2,"couts":[1,3],"niveau_min":[0,4]}}}`))
+	r, err := Lire([]byte(`{"format":"cof-dm-regles","personnage":{"montee":{"pv":["dv","con","dv"],"points":2,"couts":[1,3],
+		"couts_origine":{"sang":[4]},"niveau_min":[0,4],"pm":[{"profils":["Sourcier"],"gain":3}],"etapes":[{"cle":"don","libelle":"Don","niveaux":[3,6]}]}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	m := r.Personnage.Montee
-	if !m.Lancee() || m.Cout(1) != 1 || m.Cout(2) != 3 || m.Cout(5) != 3 || m.NiveauPour(2) != 4 || m.NiveauPour(3) != 0 {
+	if !m.Formule() || m.NbDes() != 2 || m.Cout("", 1) != 1 || m.Cout("métier", 2) != 3 || m.Cout("", 5) != 3 || m.Cout("sang", 1) != 4 ||
+		m.NiveauPour(2) != 4 || m.NiveauPour(3) != 0 || m.GainPmDe(" sourcier") != 3 || m.GainPmDe("Autre") != 0 || len(m.EtapesDu(6)) != 1 || len(m.EtapesDu(4)) != 0 {
 		t.Fatalf("montée : %+v", m)
 	}
 	var rien *Montee
-	if rien.Lancee() || rien.Cout(4) != 1 || rien.NiveauPour(1) != 0 {
+	if rien.Formule() || rien.Cout("", 4) != 1 || rien.NiveauPour(1) != 0 || rien.GainPmDe("x") != 0 || rien.EtapesDu(2) != nil {
 		t.Fatal("sans partie « montee » : saisie libre, rangs à 1 point")
 	}
-	for _, mauvais := range []string{`{"pv":["cha"]}`, `{"couts":[0]}`, `{"points":-1}`, `{"niveau_min":[-2]}`} {
+	for _, mauvais := range []string{`{"pv":["cha"]}`, `{"couts":[0]}`, `{"points":-1}`, `{"niveau_min":[-2]}`, `{"couts_origine":{"sang":[0]}}`,
+		`{"pm":[{"profils":[],"gain":1}]}`, `{"etapes":[{"cle":"a","libelle":"A","niveaux":[2]},{"cle":"a","libelle":"B","niveaux":[3]}]}`, `{"etapes":[{"cle":"a","libelle":"A"}]}`} {
 		if _, err := Lire([]byte(`{"format":"cof-dm-regles","personnage":{"montee":` + mauvais + `}}`)); err == nil {
 			t.Fatalf("montée invalide acceptée : %s", mauvais)
 		}
