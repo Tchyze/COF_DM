@@ -4,7 +4,7 @@
 // jointes à la feuille (f.regles).
 import { $, $$, esc, api, toast, armer, dateHeure } from "../ui.js";
 import { lignesEffets, libellePar, cle, voieLiee } from "../capacites.js";
-import { monterNiveau, annulerMontee, texteMontee } from "../niveau.js";
+import { monterNiveau, annulerMontee, accorderNiveau, texteMontee } from "../niveau.js";
 
 export const CARACS = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"];
 const TYPES = { C: "Contact", D: "Distance", M: "Magique" };
@@ -145,9 +145,12 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
     const compteur = (k, nom) => (maxDe(k) || F[k]) ? `<span class="fp-res" data-res="${k}"><b>${nom}</b> ${peutEcrire ? `<button class="ghost petit" data-d="-1" aria-label="${nom} −1">−</button>` : ""}<span>${F[k]}/${AB(k, F[k + "_max"])}</span>${peutEcrire ? `<button class="ghost petit" data-d="1" aria-label="${nom} +1">+</button>` : ""}</span>` : "";
     const identite = [["Sexe", F.sexe], ["Âge", F.age], ["Taille", F.taille_physique], ["Poids", F.poids], ["Divinité", F.divinite], ["Langues", F.langues]].filter(x => x[1]);
     const bourse = ["po", "pa", "pc"].filter(k => F.bourse?.[k]).map(k => `${F.bourse[k]} ${k}`).join(", ");
-    box.innerHTML = `<h3>Feuille de personnage <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">niveau ${esc(F.niveau)}</span>
+    box.innerHTML = `<h3 style="flex-wrap:wrap;row-gap:6px">Feuille de personnage <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">niveau ${esc(F.niveau)}</span>
+        ${accorde() && !joueur ? `<span class="badge" title="Le joueur fera ses choix depuis sa page">⏳ niveau ${F.niveau + 1} accordé</span>${mj ? `<button class="ghost petit" id="fp-retirer-accord" title="Retirer l'accord" aria-label="Retirer l'accord du niveau ${F.niveau + 1}">✕</button>` : ""}` : ""}
+        ${accorde() && joueur ? `<button class="petit primary" id="fp-prendre">⬆ Passer au niveau ${F.niveau + 1}</button>` : ""}
         ${mj && F.existe && !(R().niveau_max && F.niveau >= R().niveau_max) ? `<button class="petit" id="fp-niveau" title="Passer au niveau ${F.niveau + 1} : PV gagnés, rangs de voie">⬆ Niveau ${F.niveau + 1}</button>` : ""}
         ${peutEcrire ? `<button class="petit" id="fp-modifier">✎ Modifier</button>` : ""}</h3>
+      ${accorde() && joueur ? `<p class="alerte">Le MJ vous accorde le niveau ${F.niveau + 1} : lancez vos PV et choisissez vos rangs de voie.</p>` : ""}
       ${F.existe ? "" : `<p class="vide">Feuille vierge${peutEcrire ? " : cliquez sur « Modifier » pour la remplir" : ""}.</p>`}
       <div class="bloc-combat">
         <div class="ligne" style="gap:6px 14px">
@@ -171,10 +174,14 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
       ${identite.length ? `<dl class="proprietes" style="margin-top:12px">${identite.map(([n, v]) => `<div><dt>${n}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
       ${!joueur && F.notes ? `<h3 style="margin-top:12px">Notes du MJ</h3><div class="bst-texte">${esc(F.notes)}</div>` : ""}`;
     armerBulles(F.voies);
-    if (!peutEcrire) return;
-    $("#fp-modifier", box).onclick = editer;
     // montée de niveau et annulation : le niveau de la fiche change, toute la fiche se repeint
     const change = r => { F = r; if (apres) apres(); else lire(); };
+    const prendre = $("#fp-prendre", box);
+    if (prendre) prendre.onclick = () => monterNiveau(fiche.id, fiche.nom, change, { joueur: true });
+    if (!peutEcrire) return;
+    $("#fp-modifier", box).onclick = editer;
+    const retirer = $("#fp-retirer-accord", box);
+    if (retirer) retirer.onclick = () => accorderNiveau(fiche.id, fiche.nom, false, F.modifie, change);
     const niv = $("#fp-niveau", box);
     if (niv) niv.onclick = () => monterNiveau(fiche.id, fiche.nom, change);
     const defaire = $("#fp-annuler-niveau", box);
@@ -206,6 +213,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
 
   // historique des montées de niveau, la plus récente d'abord ; le MJ peut annuler la dernière
   const mj = peutEcrire && !joueur;
+  const accorde = () => F.niveau_accorde === F.niveau + 1; // un niveau accordé par le MJ, que le joueur n'a pas pris
   function niveauxHTML() {
     const l = F.niveaux || [];
     if (!l.length) return "";

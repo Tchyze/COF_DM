@@ -86,6 +86,9 @@ type Feuille struct {
 	// capacité gardés pour le niveau suivant, quand les règles le permettent.
 	Niveaux        []Montee `json:"niveaux,omitempty"`
 	PointsCapacite int      `json:"points_capacite,omitempty"`
+	// NiveauAccorde : le niveau que le MJ a accordé au PJ et que le joueur n'a pas encore pris
+	// (0 : aucun) ; le joueur fait alors lui-même ses choix (PV, rangs) depuis sa page.
+	NiveauAccorde int `json:"niveau_accorde,omitempty"`
 	// Effets : ce que les capacités atteintes ajoutent (« A + b »), calculé à la lecture, jamais
 	// rangé (Stockage).
 	Effets *Effets `json:"effets,omitempty"`

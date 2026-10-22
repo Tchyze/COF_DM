@@ -38,6 +38,7 @@ func (s *Serveur) routesJoueur() {
 	m.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireJoueur)
 	m.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireJoueur)
 	m.HandleFunc("PATCH /api/joueur/pj/{id}", s.modifierJoueur)
+	m.HandleFunc("POST /api/joueur/pj/{id}/niveau", s.monterNiveauJoueur(s.monPJ)) // le niveau accordé par le MJ
 	m.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 403, "Un compte joueur n'a accès qu'à sa page de joueur.")
 	})

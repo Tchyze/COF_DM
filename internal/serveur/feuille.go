@@ -27,6 +27,7 @@ func (s *Serveur) routesFeuille() {
 	s.mux.HandleFunc("POST /api/feuilles/nouveau-jour", s.nouveauJour)
 	s.mux.HandleFunc("POST /api/feuilles/{id}/niveau", s.monterNiveau)
 	s.mux.HandleFunc("POST /api/feuilles/{id}/niveau/annuler", s.annulerNiveau)
+	s.mux.HandleFunc("POST /api/feuilles/{id}/niveau/accorder", s.accorderNiveau)
 }
 
 // niveauDe : le niveau du PJ, lu sur sa fiche (1 s'il n'est pas renseigné).
@@ -283,11 +284,12 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 		return
 	}
 	if garderNotes {
-		// ni les notes du MJ, ni l'historique des niveaux (que seul le MJ fait avancer)
-		f.Notes, f.Niveaux, f.PointsCapacite = "", nil, 0
+		// ni les notes du MJ, ni l'historique des niveaux, ni le niveau accordé (qui passent par les
+		// routes de la montée de niveau)
+		f.Notes, f.Niveaux, f.PointsCapacite, f.NiveauAccorde = "", nil, 0, 0
 		ancienne, _, existe, err := s.feuilleDe(e)
 		if err == nil && existe {
-			f.Notes, f.Niveaux, f.PointsCapacite = ancienne.Notes, ancienne.Niveaux, ancienne.PointsCapacite
+			f.Notes, f.Niveaux, f.PointsCapacite, f.NiveauAccorde = ancienne.Notes, ancienne.Niveaux, ancienne.PointsCapacite, ancienne.NiveauAccorde
 		}
 		if err == nil {
 			if nom := s.voieAjoutee(ancienne.Voies, f.Voies); nom != "" {
@@ -399,24 +401,57 @@ func formulePv(m *regles.Montee, f *fiches.Feuille, niveau int) (string, error) 
 	return strings.TrimPrefix(formule, "+"), nil
 }
 
-// monterNiveau : le PJ passe au niveau suivant (MJ seulement). Les PV gagnés sont lancés si les
-// règles en donnent la formule (le jet part au lanceur de la table, caché si "cache"), sinon saisis
-// ("pv") ; "rangs" : les rangs pris dans les voies de la feuille.
+// demandeMontee : ce qu'envoie l'écran de la montée de niveau.
+type demandeMontee struct {
+	Rangs   []fiches.ChoixRang `json:"rangs"`
+	Pv      *int               `json:"pv"`
+	Cache   bool               `json:"cache"`
+	Modifie float64            `json:"modifie"`
+}
+
+// monterNiveau : le MJ fait passer le PJ au niveau suivant. Les PV gagnés sont lancés si les règles
+// en donnent la formule (le jet part au lanceur de la table, caché si "cache"), sinon saisis ("pv") ;
+// "rangs" : les rangs pris dans les voies de la feuille.
 func (s *Serveur) monterNiveau(w http.ResponseWriter, r *http.Request) {
-	var in struct {
-		Rangs   []fiches.ChoixRang `json:"rangs"`
-		Pv      *int               `json:"pv"`
-		Cache   bool               `json:"cache"`
-		Modifie float64            `json:"modifie"`
-	}
+	var in demandeMontee
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
 		return
 	}
-	e, f, ok := s.pjAvecFeuille(w, r)
-	if !ok {
-		return
+	if e, f, ok := s.pjAvecFeuille(w, r); ok {
+		s.monter(w, r, e, f, in, false)
 	}
+}
+
+// monterNiveauJoueur : le joueur prend le niveau que le MJ lui a accordé, en faisant lui-même ses
+// choix. Son jet n'est jamais caché. pj : le PJ visé et le droit de le jouer (compte, ou page libre).
+func (s *Serveur) monterNiveauJoueur(pj func(http.ResponseWriter, *http.Request) (store.Entite, bool)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var in demandeMontee
+		if err := lireJSON(r, &in); err != nil {
+			erreurStore(w, err)
+			return
+		}
+		e, ok := pj(w, r)
+		if !ok {
+			return
+		}
+		f, _, existe, err := s.feuilleDe(e)
+		if err != nil {
+			erreurFiche(w, err)
+			return
+		}
+		if !existe || f.NiveauAccorde != niveauDe(e)+1 {
+			erreur(w, 403, "Le MJ ne vous a pas accordé de nouveau niveau.")
+			return
+		}
+		in.Cache = false
+		s.monter(w, r, e, f, in, true)
+	}
+}
+
+// monter : la montée elle-même, pour le MJ ou pour le joueur (réponse sans les notes du MJ).
+func (s *Serveur) monter(w http.ResponseWriter, r *http.Request, e store.Entite, f *fiches.Feuille, in demandeMontee, joueur bool) {
 	rg := orVide(s.lireRegles().Personnage)
 	avant := niveauDe(e)
 	niveau := avant + 1
@@ -471,13 +506,55 @@ func (s *Serveur) monterNiveau(w http.ResponseWriter, r *http.Request) {
 		e.Data = map[string]any{}
 	}
 	e.Data["niveau"] = float64(niveau)
-	out := s.vueFeuille(e, *f, modifie, true)
+	vue := *f
+	if joueur {
+		vue = f.PourJoueur()
+		ligne = &vue.Niveaux[len(vue.Niveaux)-1]
+	}
+	out := s.vueFeuille(e, vue, modifie, true)
 	out["montee"] = ligne
 	if lance != nil && s.store.Active("des") {
-		out["jet"] = s.annoncerJet(jet{Qui: "MJ", MJ: true, Cache: in.Cache, Libelle: libelleJet(fmt.Sprintf("%s : PV du niveau %d", e.Nom, niveau)), Resultat: *lance})
+		j := jet{Qui: "MJ", MJ: true, Cache: in.Cache, Libelle: libelleJet(fmt.Sprintf("%s : PV du niveau %d", e.Nom, niveau)), Resultat: *lance}
+		if joueur {
+			j = jet{Qui: e.Nom, Pj: e.ID, Libelle: libelleJet(fmt.Sprintf("PV du niveau %d", niveau)), Resultat: *lance}
+		}
+		out["jet"] = s.annoncerJet(j)
 	}
 	s.joueurs.fiche(e.ID)
 	repondre(w, 200, out)
+}
+
+// accorderNiveau : {"accorde": true} accorde au PJ le niveau suivant, que son joueur prendra
+// lui-même depuis sa page (PV, rangs) ; false retire l'accord.
+func (s *Serveur) accorderNiveau(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Accorde bool    `json:"accorde"`
+		Modifie float64 `json:"modifie"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	e, f, ok := s.pjAvecFeuille(w, r)
+	if !ok {
+		return
+	}
+	rg := orVide(s.lireRegles().Personnage)
+	f.NiveauAccorde = 0
+	if in.Accorde {
+		f.NiveauAccorde = niveauDe(e) + 1
+		if rg.NiveauMax > 0 && f.NiveauAccorde > rg.NiveauMax {
+			erreur(w, 422, "Niveau : "+strconv.Itoa(rg.NiveauMax)+" au plus.")
+			return
+		}
+	}
+	modifie, err := s.store.EcrireFeuille(e.ID, f.Stockage(), in.Modifie, auteurDe(r))
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	s.joueurs.fiche(e.ID)
+	s.repondreFeuille(w, e, *f, modifie, true)
 }
 
 // annulerNiveau défait la dernière montée de niveau (MJ seulement) : la seule façon de baisser un

@@ -246,6 +246,12 @@ func TestParcours(t *testing.T) {
 		t.Fatalf("annuler_montee : %v", m)
 	}
 	b.outil("annuler_montee", map[string]any{"id": idPj}, true)
+	if m := b.json("accorder_niveau", map[string]any{"id": idPj}); m["niveau_accorde"] != float64(3) {
+		t.Fatalf("accorder_niveau : %v", m)
+	}
+	if m := b.json("accorder_niveau", map[string]any{"id": idPj, "accorde": false}); m["niveau_accorde"] != nil {
+		t.Fatalf("accorder_niveau retiré : %v", m)
+	}
 
 	// archiver, puis restaurer
 	b.json("archiver_fiche", map[string]any{"id": idLieu})

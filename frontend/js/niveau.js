@@ -1,5 +1,6 @@
-// Montée de niveau d'un PJ (MJ seulement) : PV gagnés, rangs pris dans les voies de la feuille,
-// capacités débloquées rappelées. Les PV se lancent côté serveur quand les règles de l'univers en
+// Montée de niveau d'un PJ : PV gagnés, rangs pris dans les voies de la feuille, capacités
+// débloquées rappelées. Le MJ la lance : il la fait lui-même, ou l'accorde et le joueur la prend
+// depuis sa page (mêmes choix, son jet n'est jamais caché). Les PV se lancent côté serveur quand les règles de l'univers en
 // donnent la formule (personnage.montee), sinon ils se saisissent ; sans points dans les règles,
 // les rangs se prennent librement. Le serveur vérifie tout : ce dialogue ne fait que préparer.
 import { $, $$, esc, api, toast, dialogue } from "./ui.js";
@@ -31,9 +32,10 @@ export function texteMontee(m) {
 
 /**
  * Ouvre le dialogue de montée de niveau du PJ `id` (nom : pour le titre). `apres(feuille)` est
- * appelé une fois la montée faite, avec la feuille renvoyée par le serveur.
+ * appelé une fois la montée faite (ou accordée), avec la feuille renvoyée par le serveur. `joueur` :
+ * le joueur prend le niveau que le MJ lui a accordé.
  */
-export async function monterNiveau(id, nom, apres) {
+export async function monterNiveau(id, nom, apres, { joueur = false } = {}) {
   let F, REF;
   try { [F, REF] = await Promise.all([api("GET", `/api/entites/${id}/feuille`), api("GET", `/api/reference?pj=${id}`).catch(() => ({ voies: [] }))]); }
   catch (e) { toast(e.message, true); return; }
@@ -48,11 +50,18 @@ export async function monterNiveau(id, nom, apres) {
   const lignePv = lancee(M)
     ? `<p>PV gagnés : <b>${esc(formulePv(M, F, niveau))}</b>, lancés à la validation.</p>
        ${!F.dv && (M.pv || []).includes("dv") ? `<p class="alerte">La feuille n'a pas de dé de vie : choisissez-le d'abord en la modifiant.</p>` : ""}
-       ${actif("des") ? `<label class="mn-case"><input type="checkbox" id="mn-cache"> Jet caché aux joueurs</label>` : `<p class="hint">Dés virtuels coupés : le jet n'apparaîtra que dans l'historique.</p>`}`
+       ${joueur ? "" : actif("des") ? `<label class="mn-case"><input type="checkbox" id="mn-cache"> Jet caché aux joueurs</label>` : `<p class="hint">Dés virtuels coupés : le jet n'apparaîtra que dans l'historique.</p>`}`
     : `<label class="champ"><span>PV gagnés</span><input type="number" id="mn-pv" min="0" max="999" required inputmode="numeric"></label>
        <p class="hint">Les règles de l'univers ne donnent pas la formule des PV : saisissez-les.</p>`;
-  const { voile, fermer } = dialogue(`${nom} passe au niveau ${niveau}`, `
+  // le MJ peut laisser le joueur faire ses choix depuis sa page
+  const accorde = F.niveau_accorde === niveau;
+  const accord = joueur || !actif("page_joueurs") ? "" : `<div class="mn-accord">
+      <p>${accorde ? `Niveau ${niveau} accordé : le joueur fait ses choix depuis sa page.` : "Laissez le joueur faire ses choix (PV, rangs) depuis sa page :"}</p>
+      <button type="button" id="mn-accorder"${accorde ? ` class="ghost"` : ""}>${accorde ? "Retirer l'accord" : `Accorder le niveau ${niveau}`}</button></div>
+    <p class="hint">Ou faites la montée vous-même :</p>`;
+  const { voile, fermer } = dialogue(joueur ? `Passer au niveau ${niveau}` : `${nom} passe au niveau ${niveau}`, `
     <form class="mn" id="mn">
+      ${accord}
       ${M?.aide ? `<p class="hint">${esc(M.aide)}</p>` : ""}
       ${lignePv}
       <h4>Rangs de voie${parPoints ? ` <span class="sp"></span><span class="hint" id="mn-points"></span>` : ""}</h4>
@@ -86,6 +95,8 @@ export async function monterNiveau(id, nom, apres) {
   }
   $$("select[data-voie]", voile).forEach(s => s.onchange = () => { vise[+s.dataset.voie] = +s.value; peindre(); });
   $("#mn-non", voile).onclick = fermer;
+  const bAccord = $("#mn-accorder", voile);
+  if (bAccord) bAccord.onclick = async () => { if (await accorderNiveau(id, nom, !accorde, F.modifie, apres)) fermer(); };
   form.onsubmit = async e => {
     e.preventDefault();
     const corps = { rangs: F.voies.map((v, i) => ({ voie: i, rang: vise[i] })).filter((x, i) => x.rang > F.voies[i].rang), modifie: F.modifie || undefined };
@@ -93,9 +104,9 @@ export async function monterNiveau(id, nom, apres) {
     if ($("#mn-cache", voile)) corps.cache = $("#mn-cache", voile).checked;
     $("#mn-oui", voile).disabled = true;
     try {
-      const r = await api("POST", `/api/feuilles/${id}/niveau`, corps);
+      const r = await api("POST", joueur ? `/api/joueur/pj/${id}/niveau` : `/api/feuilles/${id}/niveau`, corps);
       fermer();
-      toast(`${nom} passe au niveau ${r.niveau} : ${texteMontee(r.montee)}.`);
+      toast(`${joueur ? "Vous passez" : `${nom} passe`} au niveau ${r.niveau} : ${texteMontee(r.montee)}.`);
       apres?.(r);
     } catch (x) {
       err.textContent = x.status === 409 ? "La feuille a été modifiée ailleurs : fermez et recommencez." : x.message;
@@ -105,6 +116,16 @@ export async function monterNiveau(id, nom, apres) {
   };
   peindre();
   ($("#mn-pv", voile) || $("select", voile) || $("#mn-oui", voile))?.focus();
+}
+
+/** Accorde au PJ `id` le niveau suivant (`oui`), ou retire l'accord ; `apres(feuille)` une fois fait. */
+export async function accorderNiveau(id, nom, oui, modifie, apres) {
+  try {
+    const r = await api("POST", `/api/feuilles/${id}/niveau/accorder`, { accorde: oui, modifie: modifie || undefined });
+    toast(oui ? `Niveau ${r.niveau_accorde} accordé : ${nom} fera ses choix depuis sa page.` : "Accord retiré.");
+    apres?.(r);
+    return true;
+  } catch (e) { toast(e.message, true); return false; }
 }
 
 /** Annule la dernière montée du PJ `id` ; `apres(feuille)` une fois faite. */

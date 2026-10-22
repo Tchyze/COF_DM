@@ -584,6 +584,8 @@ a.version-app[href]:hover{color:var(--muted)}
 .mn p{margin:0}
 .mn h4{display:flex;align-items:baseline;gap:8px;margin:6px 0 0;font:600 .8rem var(--f-body);text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .mn-case{display:flex;align-items:center;gap:8px}
+.mn-accord{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.mn-accord p{flex:1 1 220px}
 .mn-voies{display:flex;flex-direction:column;gap:8px}
 .mn-voie{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface2)}
 .mn-voie label{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px}
