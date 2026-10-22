@@ -48,6 +48,7 @@ func (s *Serveur) routesPageJoueurs() {
 	// à la maison : le verrou des feuilles et l'ouverture de la page se règlent ici
 	s.mux.HandleFunc("PUT /api/joueurs/edition", s.reglerEditionJoueurs)
 	s.mux.HandleFunc("POST /api/acces/joueurs", s.changerPageJoueurs)
+	s.mux.HandleFunc("POST /api/joueur/pj/{id}/niveau", s.monterNiveauJoueur(s.pjLibre))
 	l := http.NewServeMux()
 	l.HandleFunc("GET /api/joueur/etat", s.joueurEtat)
 	l.HandleFunc("GET /api/joueur/pj", s.joueurPJ)
@@ -58,7 +59,8 @@ func (s *Serveur) routesPageJoueurs() {
 	s.routesDesJoueurs(l) // la seule écriture hors de la feuille : un jet, qui ne touche pas à l'univers
 	l.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireLibre)
 	l.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireLibre)
-	l.HandleFunc("GET /api/reference", s.referenceJoueur(s.pjLibre)) // ?pj= : les voies, le profil et le peuple de ce PJ
+	l.HandleFunc("POST /api/joueur/pj/{id}/niveau", s.monterNiveauJoueur(s.pjLibre)) // le niveau accordé par le MJ
+	l.HandleFunc("GET /api/reference", s.referenceJoueur(s.pjLibre))                 // ?pj= : les voies, le profil et le peuple de ce PJ
 	l.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 401, "Accès réservé au MJ : connectez-vous avec le mot de passe MJ, ou utilisez un jeton d'API.")
 	})

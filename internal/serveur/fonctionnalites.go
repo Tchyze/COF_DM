@@ -77,7 +77,7 @@ func fonctionsDeRoute(r *http.Request) []string {
 		f = append(f, "des")
 	case debut("/api/aides", "/api/joueur/documents"):
 		f = append(f, "aides")
-	case fiche("feuille"), debut("/api/feuilles"):
+	case fiche("feuille"), debut("/api/feuilles"), strings.HasPrefix(p, "/api/joueur/pj/") && strings.HasSuffix(p, "/niveau"):
 		f = append(f, "feuilles")
 	case debut("/api/combats", "/api/joueur/hauts-faits"):
 		f = append(f, "combat")

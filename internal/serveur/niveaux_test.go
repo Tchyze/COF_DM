@@ -198,3 +198,80 @@ func TestMonteeRoles(t *testing.T) {
 		t.Fatalf("historique après l'écriture du joueur : %v", v)
 	}
 }
+
+// Le MJ accorde un niveau ; le joueur le prend lui-même (PV, rangs), une seule fois, même feuilles
+// verrouillées. Il ne peut ni s'accorder un niveau, ni prendre celui d'un autre.
+func TestMonteeAccordee(t *testing.T) {
+	b, reg := bancServeur(t)
+	for _, nom := range []string{"joueuse", "autre"} {
+		reg.Creer(nom, "mot-de-passe-"+nom, false)
+		reg.Modifier(nom, func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	}
+	chef, mj, joueuse, autre := b.connecter("chef"), b.connecter("meneur"), b.connecter("joueuse"), b.connecter("autre")
+	_, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": "pj", "nom": "Aldric", "data": map[string]any{"niveau": 2}}, mj)
+	id := strconv.Itoa(int(v["id"].(float64)))
+	b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": v["id"]}, chef)
+	b.proxy("POST", "/api/entites/"+id+"/partage", map[string]any{"partage": true}, mj)
+	u, uj := "/api/entites/"+id+"/feuille", "/api/joueur/pj/"+id+"/niveau"
+	b.proxy("PUT", u, map[string]any{"pv": 8, "notes": "SECRET-MJ", "voies": []any{map[string]any{"nom": "Voie du gué", "rang": 1, "capacites": []string{"Pied sûr", "Passeur"}}}}, mj)
+	monter := map[string]any{"pv": 3, "cache": true, "rangs": []any{map[string]any{"voie": 0, "rang": 2}}}
+	if c, _, _ := b.proxy("POST", uj, monter, joueuse); c != 403 {
+		t.Fatalf("montée sans accord du MJ : %d", c)
+	}
+	if c, _, _ := b.proxy("POST", "/api/feuilles/"+id+"/niveau/accorder", map[string]any{"accorde": true}, joueuse); c != 403 {
+		t.Fatalf("niveau accordé par le joueur lui-même : %d", c)
+	}
+	if c, v, _ := b.proxy("POST", "/api/feuilles/"+id+"/niveau/accorder", map[string]any{"accorde": true}, mj); c != 200 || v["niveau_accorde"] != float64(3) || v["niveau"] != float64(2) {
+		t.Fatalf("niveau accordé : %d %v", c, v)
+	}
+	// le joueur ne peut pas réécrire l'accord par sa feuille
+	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, chef)
+	_, f, _ := b.proxy("GET", u, nil, joueuse)
+	if f["niveau_accorde"] != float64(3) {
+		t.Fatalf("accord vu par le joueur : %v", f)
+	}
+	f["niveau_accorde"] = 9
+	if _, f, _ = b.proxy("PUT", u, f, joueuse); f["niveau_accorde"] != float64(3) {
+		t.Fatalf("accord réécrit par le joueur : %v", f)
+	}
+	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, chef)
+	if c, _, _ := b.proxy("POST", uj, monter, autre); c != 404 {
+		t.Fatalf("montée prise par un autre joueur : %d", c)
+	}
+	// feuilles verrouillées : l'accord suffit ; le jet du joueur n'est jamais caché, les notes restent au MJ
+	c, v, _ := b.proxy("POST", uj, monter, joueuse)
+	if c != 200 || v["niveau"] != float64(3) || v["pv"] != float64(11) || v["niveau_accorde"] != nil || strings.Contains(toJSON(v), "SECRET-MJ") ||
+		v["montee"].(map[string]any)["cache"] != nil {
+		t.Fatalf("montée par le joueur : %d %v", c, v)
+	}
+	if c, _, _ := b.proxy("POST", uj, monter, joueuse); c != 403 {
+		t.Fatalf("niveau accordé pris deux fois : %d", c)
+	}
+	// le MJ peut retirer un accord qu'il a donné
+	b.proxy("POST", "/api/feuilles/"+id+"/niveau/accorder", map[string]any{"accorde": true}, mj)
+	if _, v, _ := b.proxy("POST", "/api/feuilles/"+id+"/niveau/accorder", map[string]any{"accorde": false}, mj); v["niveau_accorde"] != nil {
+		t.Fatalf("accord retiré : %v", v)
+	}
+	if c, _, _ := b.proxy("POST", uj, monter, joueuse); c != 403 {
+		t.Fatalf("montée après le retrait de l'accord : %d", c)
+	}
+}
+
+// À la maison, la page des joueurs ouverte : le joueur prend le niveau accordé, et rien d'autre.
+func TestMonteeAccordeeMaison(t *testing.T) {
+	b, _ := bancReseau(t)
+	id := strconv.Itoa(int(b.fiche("pj", "Bérénice", map[string]any{"niveau": 1})))
+	b.local("PUT", "/api/entites/"+id+"/feuille", map[string]any{"pv": 6})
+	b.local("POST", "/api/acces/joueurs", map[string]any{"active": true})
+	uj := "/api/joueur/pj/" + id + "/niveau"
+	if c, _ := b.joueurLibre("POST", uj, map[string]any{"pv": 2}, true); c != 403 {
+		t.Fatalf("montée libre sans accord : %d", c)
+	}
+	if c, _ := b.joueurLibre("POST", "/api/feuilles/"+id+"/niveau/accorder", map[string]any{"accorde": true}, true); c != 401 {
+		t.Fatalf("accord depuis la page libre : %d", c)
+	}
+	b.local("POST", "/api/feuilles/"+id+"/niveau/accorder", map[string]any{"accorde": true})
+	if c, corps := b.joueurLibre("POST", uj, map[string]any{"pv": 2}, true); c != 200 || !strings.Contains(corps, `"niveau":2`) {
+		t.Fatalf("montée libre : %d %s", c, corps)
+	}
+}

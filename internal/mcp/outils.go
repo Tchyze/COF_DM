@@ -673,6 +673,20 @@ func outils() []outil {
 			},
 		},
 		{
+			Nom: "accorder_niveau", Fonction: "feuilles", Titre: "Accorder un niveau à un PJ",
+			Description: "Accorde au PJ le niveau suivant : son joueur fera lui-même ses choix (PV lancés, rangs de voie) depuis sa page de joueur. « accorde » false retire l'accord. Pour faire la montée soi-même, utiliser monter_niveau.",
+			Proprietes:  map[string]any{"id": entier("Identifiant du PJ"), "accorde": booleen("true : accorder (défaut) ; false : retirer l'accord")},
+			Requis:      []string{"id"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("id")
+				if err != nil {
+					return nil, err
+				}
+				oui, donne := a.booleen("accorde")
+				return c.appel("POST", chemin("/api/feuilles/%d/niveau/accorder", id), nil, map[string]any{"accorde": oui || !donne})
+			},
+		},
+		{
 			Nom: "annuler_montee", Fonction: "feuilles", Titre: "Annuler la dernière montée de niveau", Destructif: true,
 			Description: "Défait la dernière montée de niveau d'un PJ : niveau, PV max et rangs reviennent à ce qu'ils étaient, la ligne quitte l'historique. Refusé si la fiche ou les voies ont changé depuis.",
 			Proprietes:  map[string]any{"id": entier("Identifiant du PJ")},

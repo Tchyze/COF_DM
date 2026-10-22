@@ -107,6 +107,7 @@ func (f *Feuille) Monter(niveau, pv int, jet string, cache bool, choix []ChoixRa
 		*f.PvActuel += pv
 	}
 	f.Niveaux = append(f.Niveaux, *ligne)
+	f.NiveauAccorde = 0
 	return ligne, nil
 }
 
@@ -156,6 +157,9 @@ func (f *Feuille) Annuler(niveau int) (*Montee, error) {
 func (f *Feuille) verifierNiveaux() error {
 	if f.PointsCapacite < 0 || f.PointsCapacite > 999 {
 		return invalide("points_capacite : entre 0 et 999.")
+	}
+	if f.NiveauAccorde < 0 || f.NiveauAccorde > 999 {
+		return invalide("niveau_accorde : entre 0 et 999.")
 	}
 	if len(f.Niveaux) > 100 {
 		return invalide("niveaux : cent montées au plus.")
