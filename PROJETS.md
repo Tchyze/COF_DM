@@ -14,8 +14,8 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Où on en est
 
-- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités utilisables), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public). Le détail, PR par PR, est dans `SUIVI.md`.
-- **Prochain chantier** : projet 12, montée de niveau guidée.
+- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités utilisables), projet 12 (montée de niveau guidée, version 1.2.4), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public). Le détail, PR par PR, est dans `SUIVI.md`.
+- **Prochain chantier** : projet 11, inventaire structuré (puis 14, le butin).
 - **Au fil de l'eau** : projet 6, les essais qui ne se font qu'à la main.
 
 ## Vue d'ensemble
@@ -30,8 +30,8 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 6 | Restes à vérifier à la main | P1 | S | ★★ | — | en cours |
 | 9 | Aides de jeu poussées aux joueurs | P2 | M | ★★★ | — | lot 1 fait |
 | 10 | Voies et capacités utilisables | P2 | L | ★★★ | 5 | fait |
-| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | |
-| 12 | Montée de niveau guidée | P2 | M | ★★ | 10 | **prochain** |
+| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | **prochain** |
+| 12 | Montée de niveau guidée | P2 | M | ★★ | 10 | fait |
 | 13 | Impression et export PDF | P2 | M | ★★ | — | |
 | 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | |
 | 15 | Afficheur de table (télé) | P2 | S | ★★ | — | |
@@ -67,12 +67,11 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Ordre conseillé
 
-1. **Projet 12** (montée de niveau) : il s'appuie sur les voies et capacités qui viennent d'arriver, et sert à chaque fin de séance.
-2. **Projets 11 puis 14** (inventaire, puis butin) : l'arme et l'armure portées comptent dans la feuille ; le butin se répartit à la fin du combat.
-3. Les petits lots visibles à la table, au choix : **15** (afficheur), **18** (notes rapides), **9** (suite des aides de jeu).
-4. **13** (impression), puis **16** et **17** (tables aléatoires, PNJ express).
-5. Le P3 par valeur, puis le P4 à la demande.
-6. **Projet 6** au fil de l'eau, avant chaque version stable.
+1. **Projets 11 puis 14** (inventaire, puis butin) : l'arme et l'armure portées comptent dans la feuille ; le butin se répartit à la fin du combat.
+2. Les petits lots visibles à la table, au choix : **15** (afficheur), **18** (notes rapides), **9** (suite des aides de jeu).
+3. **13** (impression), puis **16** et **17** (tables aléatoires, PNJ express).
+4. Le P3 par valeur, puis le P4 à la demande.
+5. **Projet 6** au fil de l'eau, avant chaque version stable.
 
 ---
 
@@ -112,8 +111,8 @@ Voies, capacités, profils et peuples saisis ou importés par le MJ, un par un ;
 ### 11. Inventaire structuré
 `Équipement` est un texte libre. Une liste d'objets (quantité, porté ou non), pouvant pointer vers une fiche « Objet » : le champ « Détenteur » de l'objet se tient alors seul, et une arme ou une armure portée compte dans les attaques et la DEF.
 
-### 12. Montée de niveau guidée — prochain chantier
-Passer un niveau depuis la feuille : PV gagnés (dé de vie), rang de voie à choisir, capacités débloquées rappelées, historique des niveaux. Le niveau reste lu sur la fiche (pas de doublon). Les valeurs du jeu viennent du fichier de règles et des profils saisis par le MJ ; sans eux, saisie libre.
+### 12. Montée de niveau guidée — fait
+Le MJ lance la montée (feuille du PJ, onglet Joueurs de l'écran du MJ) : il l'accorde et un assistant s'ouvre sur la page du joueur, ou il la fait lui-même. Fenêtres : dés de vie saisis, rangs dans le tableau des voies (coût et niveau minimal des règles), PM du profil, étapes en plus, récapitulatif. Historique des niveaux sur la feuille, annulation de la dernière montée. Tout vient de la partie `personnage.montee` du fichier de règles ; sans elle, saisie libre.
 
 ### 13. Impression et export PDF
 Mise en page imprimable (feuille de style `@media print`, sans dépendance) : feuille de personnage, fiche, préparation de séance, rencontre, bloc d'un monstre, aide de jeu.

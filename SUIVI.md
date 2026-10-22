@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 22 octobre 2026.
+Dernière mise à jour : 22 octobre 2026 (version 1.2.4).
 
 ## Où on en est
 
-- **Version stable : 1.2.3** (21 octobre 2026). **`main`** : la 1.2.3 plus la PR 17 (Paramètres en accordéon), publiée en préversion `1.2.4-test.22` (canal Test), pas encore en stable.
-- **Numéros d'échange** : `VersionModele` 4 (5 avec les PR 19 et 20), `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `main`, et le projet 12 en essai : PR 19 (`montee-niveau`, serveur), PR 20 (`montee-ecrans`, écrans) empilée sur la 19, PR 21 (`montee-joueurs`, le joueur fait ses choix) empilée sur la 20, PR 22 (`montee-assistant`, l'assistant en fenêtres) empilée sur la 21. Préversion d'essai lancée sur `montee-assistant` (les quatre lots).
-- **Chantier en cours** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Décisions prises le 22 octobre 2026 (ci-dessous) ; lots 1 à 4 en essai (PR 19 à 22).
+- **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
+- **Numéros d'échange** : `VersionModele` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : `main` seule ; aucune PR ouverte.
+- **Prochain chantier** : projet 11 de `PROJETS.md`, l'inventaire structuré (puis 14, le butin). Questions de fond à poser au MJ avant de coder.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -28,7 +28,7 @@ Dernière mise à jour : 22 octobre 2026.
 
 - `Tchyze/COF_DM` est **public** depuis le 18 octobre 2026, reparti d'un commit unique. L'ancien dépôt, avec tout l'historique et ses PR 1 à 54, est **`Tchyze/COF_DM-historique`**, privé (remote `historique` du dépôt local). Les numéros de PR de ce fichier renvoient au dépôt public, sauf dans la section « Avant le dépôt public ».
 - **Clé de publication** : `~/Outil/cle-publication-cof-dm.pem` (hors dépôt), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
-- **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4).
+- **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4) ; 1.2.4 (22 octobre 2026 : PR 17, 19 à 22, modèle 5).
 - **Version affichée** : en petit à côté de « Thème » (une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
 
 ## Pour reprendre sur un autre poste
@@ -154,11 +154,11 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 7 à 9 | **Versions** : numéros de protocole et de modèle ; échange selon les numéros (serveur plus récent : bloqué ; plus ancien : réception seule) ; deux pertes de données corrigées ; écrans (zone en bas à gauche, Paramètres → Version du serveur). |
 | 10 à 15 | **Voies et capacités** (projet 10) : rangement un par un (modèle 2) ; grille des voies sur la feuille ; éditeur « Voies et profils » ; bonus « A + b » ; capacités en combat et utilisations, « Nouveau jour » (modèle 3) ; « Mes voies » sur la page des joueurs. |
 | 16 | **Comptes joueurs** : un compte joueur n'a que sa page (récit du PJ, date en jeu, onglet Compte, choix d'univers) ; case « Édition par les joueurs » dans les options de l'écran du MJ, réglée par le MJ, synchronisée (modèle 4). |
-| 17 | **Paramètres en accordéon** : quatre groupes, titres seuls, un bloc ouvert à la fois, lien direct par bloc. En préversion `1.2.4-test.22`. |
-| 19 | **Montée de niveau, serveur** (projet 12, lot 1, en essai) : partie `personnage.montee` des règles ; `POST /api/feuilles/{id}/niveau` et `…/niveau/annuler` (MJ) ; niveau de la fiche et feuille en une écriture ; PV lancés au lanceur de la table ; historique `niveaux` et `points_capacite` dans la feuille ; outils MCP ; modèle 5. |
-| 20 | **Montée de niveau, écrans** (lot 2, empilée sur la 19, en essai) : dialogue « ⬆ Niveau » (feuille, onglet Joueurs de l'écran du MJ), historique et annulation sur la feuille, historique en lecture sur la page des joueurs. |
-| 22 | **Montée de niveau en assistant** (lot 4, empilée sur la 21, en essai) : fenêtres dés saisis → rangs → PM → étapes → récapitulatif ; ouverture automatique sur la page des joueurs ; règles `couts_origine`, `pm`, `etapes` ; plus de jet à la table. |
-| 21 | **Montée de niveau accordée** (lot 3, empilée sur la 20, en essai) : le MJ accorde le niveau (`…/niveau/accorder`, `niveau_accorde`), le joueur le prend depuis sa page (`POST /api/joueur/pj/{id}/niveau`) ; badge et retrait côté MJ ; outil MCP `accorder_niveau`. |
+| 17 | **Paramètres en accordéon** : quatre groupes, titres seuls, un bloc ouvert à la fois, lien direct par bloc. |
+| 19 | **Montée de niveau, serveur** (projet 12, lot 1) : partie `personnage.montee` des règles ; `POST /api/feuilles/{id}/niveau` et `…/niveau/annuler` (MJ) ; niveau de la fiche et feuille en une écriture ; PV lancés au lanceur de la table ; historique `niveaux` et `points_capacite` dans la feuille ; outils MCP ; modèle 5. |
+| 20 | **Montée de niveau, écrans** (lot 2) : dialogue « ⬆ Niveau » (feuille, onglet Joueurs de l'écran du MJ), historique et annulation sur la feuille, historique en lecture sur la page des joueurs. |
+| 21 | **Montée de niveau accordée** (lot 3) : le MJ accorde le niveau (`…/niveau/accorder`, `niveau_accorde`), le joueur le prend depuis sa page (`POST /api/joueur/pj/{id}/niveau`) ; badge et retrait côté MJ ; outil MCP `accorder_niveau`. |
+| 22 | **Montée de niveau en assistant** (lot 4) : fenêtres dés saisis → rangs → PM → étapes → récapitulatif ; ouverture automatique sur la page des joueurs ; règles `couts_origine`, `pm`, `etapes` ; plus de jet à la table. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
@@ -181,7 +181,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 12, montée de niveau guidée** (`PROJETS.md`), décisions dans « Montée de niveau » ci-dessus : PR 19 à 22 en essai chez le MJ. Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) a reçu sa partie `personnage.montee` ; à réimporter dans chaque univers (Paramètres → Bestiaire et règles). Après l'essai : fusionner de bas en haut (avant de fusionner la 19, reporter la 20 sur `main` ; avant la 20, la 21 ; avant la 21, la 22), puis marquer le projet 12 fait dans `PROJETS.md`.
+**Projet 11, inventaire structuré** (`PROJETS.md`) : questions de fond à poser au MJ avant de coder (lien avec les fiches « Objet », arme et armure portées dans la DEF et les attaques, édition par les joueurs). Le projet 12 (montée de niveau) est publié en 1.2.4 ; le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 

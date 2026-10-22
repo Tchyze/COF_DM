@@ -86,4 +86,4 @@ Avant de considérer une tâche terminée : `gofmt`, `go vet` et `go test` passe
 
 ## Feuille de route
 
-Les chantiers et leurs priorités sont dans `PROJETS.md` : P1 fait (sauf les essais à la main du projet 6), voies et capacités faites (projet 10) ; prochain chantier, la montée de niveau guidée (projet 12). Les cartes sont hors du projet (le MJ utilise un logiciel à part).
+Les chantiers et leurs priorités sont dans `PROJETS.md` : P1 fait (sauf les essais à la main du projet 6), voies et capacités (projet 10) et montée de niveau guidée (projet 12) faites ; prochain chantier, l'inventaire structuré (projet 11). Les cartes sont hors du projet (le MJ utilise un logiciel à part).
