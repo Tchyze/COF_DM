@@ -6,6 +6,7 @@
 import { $, $$, esc, api, toast, lien, universOnglet, choisirUniversOnglet } from "./ui.js";
 import { panneauCompte } from "./views/comptes.js";
 import { panneauFeuille, CARACS } from "./views/feuille.js";
+import { monterNiveau } from "./niveau.js";
 import { lignesEffets, libellePar, voieLiee } from "./capacites.js";
 import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
 import { ligneJet, DES_RAPIDES } from "./des.js";
@@ -47,6 +48,7 @@ function vueChoix() {
       etat.docs = []; chargerDocs();
       location.hash = "#/";
       route();
+      proposerMontee();
     };
   });
 }
@@ -101,6 +103,22 @@ function rafraichirFiche() {
   if (etat.vue === "voies" && etat.pj) vueVoies();
 }
 
+// Un niveau accordé par le MJ : l'assistant de montée s'ouvre seul. « Plus tard » le laisse fermé
+// jusqu'à la prochaine visite (le bouton « Passer au niveau » reste sur la fiche).
+const cleReport = (pj, n) => `cofdm-montee-${pj}-${n}`;
+async function proposerMontee() {
+  if (!etat.pj || !fonction("feuilles") || document.getElementById("mn")) return;
+  const pj = etat.pj;
+  let f;
+  try { f = await api("GET", `/api/entites/${pj.id}/feuille`); } catch { return; }
+  if (!f.existe || f.niveau_accorde !== f.niveau + 1) return;
+  try { if (sessionStorage.getItem(cleReport(pj.id, f.niveau_accorde))) return; } catch { /* sans stockage : on propose */ }
+  monterNiveau(pj.id, pj.nom, () => relirePJ(), {
+    joueur: true,
+    plusTard: () => { try { sessionStorage.setItem(cleReport(pj.id, f.niveau_accorde), "1"); } catch { /* rien à retenir */ } },
+  });
+}
+
 // La fiche du PJ a pu changer (niveau, date en jeu, récit écrit sur un autre appareil).
 async function relirePJ() {
   try { etat.pjs = await api("GET", "/api/joueur/pj"); } catch { return; }
@@ -109,6 +127,7 @@ async function relirePJ() {
   $("#pj-date").hidden = !etat.pj?.date;
   $("#pj-date").textContent = etat.pj?.date ? "📅 " + etat.pj.date : "";
   rafraichirFiche();
+  proposerMontee();
 }
 
 /* ---------------------------------------------------------- mon compte (serveur) */
@@ -505,6 +524,7 @@ async function demarrer() {
   $("#pj-changer").onclick = () => { location.hash = "#/choix"; };
   window.addEventListener("hashchange", route);
   connecter();
-  route();
+  await route();
+  proposerMontee();
 }
 demarrer();

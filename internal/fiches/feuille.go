@@ -460,18 +460,9 @@ func (f Feuille) Stockage() []byte {
 	return f.JSON()
 }
 
-// PourJoueur renvoie la feuille telle que le joueur la voit : sans les notes du MJ, ni le détail
-// des jets cachés de ses montées de niveau.
+// PourJoueur renvoie la feuille telle que le joueur la voit : sans les notes du MJ.
 func (f Feuille) PourJoueur() Feuille {
 	f.Notes = ""
-	if len(f.Niveaux) > 0 {
-		f.Niveaux = append([]Montee(nil), f.Niveaux...)
-		for i := range f.Niveaux {
-			if f.Niveaux[i].Cache {
-				f.Niveaux[i].Jet = ""
-			}
-		}
-	}
 	return f
 }
 

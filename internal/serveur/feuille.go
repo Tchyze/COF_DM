@@ -6,14 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/Tchyze/cof_dm/internal/combat"
-	"github.com/Tchyze/cof_dm/internal/des"
 	"github.com/Tchyze/cof_dm/internal/fiches"
 	"github.com/Tchyze/cof_dm/internal/reference"
-	"github.com/Tchyze/cof_dm/internal/regles"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
 
@@ -206,7 +203,12 @@ func (s *Serveur) vueFeuille(e store.Entite, f fiches.Feuille, modifie float64, 
 	var m map[string]any
 	_ = json.Unmarshal(f.JSON(), &m)
 	m["entite"], m["niveau"], m["modifie"], m["existe"] = e.ID, niveauDe(e), modifie, existe
-	m["regles"] = orVide(s.lireRegles().Personnage)
+	rg := orVide(s.lireRegles().Personnage)
+	m["regles"] = rg
+	// les PM max que ce PJ gagne à chaque niveau, selon son profil (montée de niveau)
+	if pm := rg.Montee.GainPmDe(profilDe(e)); pm > 0 {
+		m["montee_pm"] = pm
+	}
 	// les capacités atteintes dont les utilisations se comptent, avec ce qui en a servi
 	comptees := []combat.CapaciteActive{}
 	for _, a := range s.capacitesActives(&f) {
@@ -378,40 +380,14 @@ func (s *Serveur) pjAvecFeuille(w http.ResponseWriter, r *http.Request) (store.E
 	return e, f, true
 }
 
-// formulePv : la formule des PV gagnés à une montée, lue dans les règles : un dé de vie (celui de la
-// feuille), le modificateur de CON, le nouveau niveau, une valeur fixe.
-func formulePv(m *regles.Montee, f *fiches.Feuille, niveau int) (string, error) {
-	formule, fixe := "", m.PvFixe
-	for _, t := range m.Pv {
-		switch t {
-		case "dv":
-			if f.Dv == "" {
-				return "", store.ErrValidation{Msg: "La feuille n'a pas de dé de vie : choisissez-le d'abord."}
-			}
-			formule += "+1" + f.Dv
-		case "con":
-			fixe += f.Carac.CON
-		case "niveau":
-			fixe += niveau
-		}
-	}
-	if fixe != 0 || formule == "" {
-		formule += fmt.Sprintf("%+d", fixe)
-	}
-	return strings.TrimPrefix(formule, "+"), nil
-}
-
-// demandeMontee : ce qu'envoie l'écran de la montée de niveau.
+// demandeMontee : ce qu'envoie l'écran de la montée de niveau (les choix, et la date de la feuille).
 type demandeMontee struct {
-	Rangs   []fiches.ChoixRang `json:"rangs"`
-	Pv      *int               `json:"pv"`
-	Cache   bool               `json:"cache"`
-	Modifie float64            `json:"modifie"`
+	fiches.ChoixMontee
+	Modifie float64 `json:"modifie"`
 }
 
-// monterNiveau : le MJ fait passer le PJ au niveau suivant. Les PV gagnés sont lancés si les règles
-// en donnent la formule (le jet part au lanceur de la table, caché si "cache"), sinon saisis ("pv") ;
-// "rangs" : les rangs pris dans les voies de la feuille.
+// monterNiveau : le MJ fait passer le PJ au niveau suivant, avec les dés lancés en vrai (ou les PV
+// saisis) et les rangs choisis dans les voies de la feuille.
 func (s *Serveur) monterNiveau(w http.ResponseWriter, r *http.Request) {
 	var in demandeMontee
 	if err := lireJSON(r, &in); err != nil {
@@ -424,7 +400,7 @@ func (s *Serveur) monterNiveau(w http.ResponseWriter, r *http.Request) {
 }
 
 // monterNiveauJoueur : le joueur prend le niveau que le MJ lui a accordé, en faisant lui-même ses
-// choix. Son jet n'est jamais caché. pj : le PJ visé et le droit de le jouer (compte, ou page libre).
+// choix. pj : le PJ visé et le droit de le jouer (compte, ou page libre).
 func (s *Serveur) monterNiveauJoueur(pj func(http.ResponseWriter, *http.Request) (store.Entite, bool)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var in demandeMontee
@@ -445,9 +421,14 @@ func (s *Serveur) monterNiveauJoueur(pj func(http.ResponseWriter, *http.Request)
 			erreur(w, 403, "Le MJ ne vous a pas accordé de nouveau niveau.")
 			return
 		}
-		in.Cache = false
 		s.monter(w, r, e, f, in, true)
 	}
+}
+
+// profilDe : le profil du PJ, lu sur sa fiche.
+func profilDe(e store.Entite) string {
+	p, _ := e.Data["profil"].(string)
+	return p
 }
 
 // monter : la montée elle-même, pour le MJ ou pour le joueur (réponse sans les notes du MJ).
@@ -459,43 +440,25 @@ func (s *Serveur) monter(w http.ResponseWriter, r *http.Request, e store.Entite,
 		erreur(w, 422, "Niveau : "+strconv.Itoa(rg.NiveauMax)+" au plus.")
 		return
 	}
-	var lance *des.Resultat
-	pv := 0
-	if rg.Montee.Lancee() {
-		formule, err := formulePv(rg.Montee, f, niveau)
-		if err != nil {
-			erreurStore(w, err)
-			return
-		}
-		res, err := des.Lancer(formule)
-		if err != nil {
-			erreur(w, 422, "PV gagnés : "+err.Error())
-			return
-		}
-		lance, pv = &res, max(0, res.Total, rg.Montee.PvMin)
-	} else if in.Pv == nil {
-		erreur(w, 422, "PV gagnés : à saisir (les règles de l'univers n'en donnent pas la formule).")
-		return
-	} else {
-		pv = *in.Pv
-	}
-	jetTexte := ""
-	if lance != nil {
-		jetTexte = lance.Detail
-	}
-	ligne, err := f.Monter(niveau, pv, jetTexte, in.Cache, in.Rangs, rg, float64(time.Now().UnixMilli())/1000)
+	ligne, err := f.Monter(niveau, in.ChoixMontee, profilDe(e), rg, float64(time.Now().UnixMilli())/1000)
 	if err != nil {
 		erreurFiche(w, err)
 		return
 	}
 	f.PrendreEffets(s.effetsDe(f.Voies))
 	f.Deriver(niveau, rg)
-	detail := fmt.Sprintf("niveau %d → %d ; %+d PV", avant, niveau, pv)
-	if jetTexte != "" {
-		detail += " (" + jetTexte + ")"
+	detail := fmt.Sprintf("niveau %d → %d ; %+d PV", avant, niveau, ligne.Pv)
+	if ligne.Jet != "" {
+		detail += " (" + ligne.Jet + ")"
+	}
+	if ligne.Pm != 0 {
+		detail += fmt.Sprintf(" ; %+d PM", ligne.Pm)
 	}
 	for _, x := range ligne.Rangs {
 		detail += fmt.Sprintf(" ; %s rang %d → %d", x.Voie, x.De, x.A)
+	}
+	for _, x := range ligne.Etapes {
+		detail += fmt.Sprintf(" ; %s : %s", x.Libelle, x.Texte)
 	}
 	modifie, err := s.store.ChangerNiveau(e.ID, niveau, f.Stockage(), in.Modifie, "montée de niveau", detail, auteurDe(r))
 	if err != nil {
@@ -509,17 +472,9 @@ func (s *Serveur) monter(w http.ResponseWriter, r *http.Request, e store.Entite,
 	vue := *f
 	if joueur {
 		vue = f.PourJoueur()
-		ligne = &vue.Niveaux[len(vue.Niveaux)-1]
 	}
 	out := s.vueFeuille(e, vue, modifie, true)
 	out["montee"] = ligne
-	if lance != nil && s.store.Active("des") {
-		j := jet{Qui: "MJ", MJ: true, Cache: in.Cache, Libelle: libelleJet(fmt.Sprintf("%s : PV du niveau %d", e.Nom, niveau)), Resultat: *lance}
-		if joueur {
-			j = jet{Qui: e.Nom, Pj: e.ID, Libelle: libelleJet(fmt.Sprintf("PV du niveau %d", niveau)), Resultat: *lance}
-		}
-		out["jet"] = s.annoncerJet(j)
-	}
 	s.joueurs.fiche(e.ID)
 	repondre(w, 200, out)
 }
