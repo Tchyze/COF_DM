@@ -7,9 +7,9 @@ Dernière mise à jour : 22 octobre 2026.
 ## Où on en est
 
 - **Version stable : 1.2.3** (21 octobre 2026). **`main`** : la 1.2.3 plus la PR 17 (Paramètres en accordéon), publiée en préversion `1.2.4-test.22` (canal Test), pas encore en stable.
-- **Numéros d'échange** : `VersionModele` 4, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `main` seule ; aucune PR ouverte.
-- **Chantier en cours** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Décisions prises le 22 octobre 2026 (ci-dessous) ; lot 1 en préparation.
+- **Numéros d'échange** : `VersionModele` 4 (5 avec les PR 19 et 20), `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : `main`, et le projet 12 en essai : PR 19 (`montee-niveau`, serveur) et PR 20 (`montee-ecrans`, écrans), empilée sur la 19. Préversion d'essai lancée sur `montee-ecrans` (les deux lots).
+- **Chantier en cours** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Décisions prises le 22 octobre 2026 (ci-dessous) ; lots 1 et 2 en essai (PR 19 et 20).
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -153,6 +153,8 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 10 à 15 | **Voies et capacités** (projet 10) : rangement un par un (modèle 2) ; grille des voies sur la feuille ; éditeur « Voies et profils » ; bonus « A + b » ; capacités en combat et utilisations, « Nouveau jour » (modèle 3) ; « Mes voies » sur la page des joueurs. |
 | 16 | **Comptes joueurs** : un compte joueur n'a que sa page (récit du PJ, date en jeu, onglet Compte, choix d'univers) ; case « Édition par les joueurs » dans les options de l'écran du MJ, réglée par le MJ, synchronisée (modèle 4). |
 | 17 | **Paramètres en accordéon** : quatre groupes, titres seuls, un bloc ouvert à la fois, lien direct par bloc. En préversion `1.2.4-test.22`. |
+| 19 | **Montée de niveau, serveur** (projet 12, lot 1, en essai) : partie `personnage.montee` des règles ; `POST /api/feuilles/{id}/niveau` et `…/niveau/annuler` (MJ) ; niveau de la fiche et feuille en une écriture ; PV lancés au lanceur de la table ; historique `niveaux` et `points_capacite` dans la feuille ; outils MCP ; modèle 5. |
+| 20 | **Montée de niveau, écrans** (lot 2, empilée sur la 19, en essai) : dialogue « ⬆ Niveau » (feuille, onglet Joueurs de l'écran du MJ), historique et annulation sur la feuille, historique en lecture sur la page des joueurs. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
@@ -175,7 +177,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 12, montée de niveau guidée** (`PROJETS.md`), décisions dans « Montée de niveau » ci-dessus. Lots prévus : (1) partie `montee` du fichier de règles, historique dans la feuille, routes de montée et d'annulation (MJ), jet par le lanceur de la table, outil MCP, modèle 5 ; (2) écrans : assistant sur la feuille, bouton de l'onglet Joueurs, historique sur la page des joueurs.
+**Projet 12, montée de niveau guidée** (`PROJETS.md`), décisions dans « Montée de niveau » ci-dessus : PR 19 et 20 en essai chez le MJ. Pour en profiter, le fichier de règles du MJ (`Règles COF.json`, hors dépôt) doit gagner une partie `personnage.montee` (formule des PV, points, coûts des rangs, niveaux minimaux : voir `docs/API.md`) ; sans elle, PV saisis et rangs libres. Après l'essai : fusionner (reporter la 20 sur `main` avant de fusionner la 19), puis marquer le projet 12 fait dans `PROJETS.md`.
 
 ### Défauts connus
 
