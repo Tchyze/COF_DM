@@ -2,8 +2,9 @@
 // équipement. Le serveur calcule les valeurs dérivées (modificateurs, DEF, initiative, bonus
 // d'attaque) ; les bornes, les valeurs de départ et les repos viennent des règles de l'univers,
 // jointes à la feuille (f.regles).
-import { $, $$, esc, api, toast } from "../ui.js";
+import { $, $$, esc, api, toast, armer, dateHeure } from "../ui.js";
 import { lignesEffets, libellePar, cle, voieLiee } from "../capacites.js";
+import { monterNiveau, annulerMontee, texteMontee } from "../niveau.js";
 
 export const CARACS = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"];
 const TYPES = { C: "Contact", D: "Distance", M: "Magique" };
@@ -12,9 +13,10 @@ const nomCap = c => c.nom ? c.nom + (c.limitee ? " (L)" : "") + (c.sort ? "*" : 
 
 /**
  * Monte la feuille du PJ `fiche` dans `box`. `peutEcrire` : le MJ, ou le joueur de ce PJ quand
- * l'édition par les joueurs est ouverte. `joueur` : vue du joueur (pas de notes du MJ).
+ * l'édition par les joueurs est ouverte. `joueur` : vue du joueur (pas de notes du MJ). `apres` :
+ * appelé quand le niveau de la fiche change (montée de niveau, annulation), pour la repeindre.
  */
-export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
+export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) {
   let F, REF = { profils: [], peuples: [], voies: [] };
   const url = `/api/entites/${fiche.id}/feuille`;
   try { F = await api("GET", url); }
@@ -144,6 +146,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     const identite = [["Sexe", F.sexe], ["Âge", F.age], ["Taille", F.taille_physique], ["Poids", F.poids], ["Divinité", F.divinite], ["Langues", F.langues]].filter(x => x[1]);
     const bourse = ["po", "pa", "pc"].filter(k => F.bourse?.[k]).map(k => `${F.bourse[k]} ${k}`).join(", ");
     box.innerHTML = `<h3>Feuille de personnage <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">niveau ${esc(F.niveau)}</span>
+        ${mj && F.existe && !(R().niveau_max && F.niveau >= R().niveau_max) ? `<button class="petit" id="fp-niveau" title="Passer au niveau ${F.niveau + 1} : PV gagnés, rangs de voie">⬆ Niveau ${F.niveau + 1}</button>` : ""}
         ${peutEcrire ? `<button class="petit" id="fp-modifier">✎ Modifier</button>` : ""}</h3>
       ${F.existe ? "" : `<p class="vide">Feuille vierge${peutEcrire ? " : cliquez sur « Modifier » pour la remplir" : ""}.</p>`}
       <div class="bloc-combat">
@@ -160,6 +163,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
       </div>
       ${F.voies.length ? `<h3 style="margin-top:12px">Voies</h3>${grilleLecture()}` : ""}
       ${utilisationsHTML()}
+      ${niveauxHTML()}
       ${F.capacites ? `<h3 style="margin-top:12px">Capacités</h3><div class="bst-texte">${esc(F.capacites)}</div>` : ""}
       ${F.equipement || bourse || F.armure?.nom || F.bouclier?.nom ? `<h3 style="margin-top:12px">Équipement</h3>
         ${[F.armure?.nom && `${F.armure.nom} (${signe(F.armure.bonus)} DEF)`, F.bouclier?.nom && `${F.bouclier.nom} (${signe(F.bouclier.bonus)} DEF)`].filter(Boolean).map(x => `<div>${esc(x)}</div>`).join("")}
@@ -169,6 +173,12 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
     armerBulles(F.voies);
     if (!peutEcrire) return;
     $("#fp-modifier", box).onclick = editer;
+    // montée de niveau et annulation : le niveau de la fiche change, toute la fiche se repeint
+    const change = r => { F = r; if (apres) apres(); else lire(); };
+    const niv = $("#fp-niveau", box);
+    if (niv) niv.onclick = () => monterNiveau(fiche.id, fiche.nom, change);
+    const defaire = $("#fp-annuler-niveau", box);
+    if (defaire) armer(defaire, `Confirmer : retour au niveau ${F.niveau - 1}`, () => annulerMontee(fiche.id, F.modifie, change));
     // PV et ressources : un clic, enregistré aussitôt
     $$(".fp-res button", box).forEach(b => b.onclick = async () => {
       const k = b.closest(".fp-res").dataset.res, d = +b.dataset.d;
@@ -192,6 +202,17 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur }) {
       if (n > 0) f.utilisations[x.cle] = { par: x.par, n: Math.min(n, x.fois) }; else delete f.utilisations[x.cle];
       if (await enregistrer(f, b.dataset.util === "plus" ? `« ${x.nom} » utilisée.` : `« ${x.nom} » remise à zéro.`)) lire();
     });
+  }
+
+  // historique des montées de niveau, la plus récente d'abord ; le MJ peut annuler la dernière
+  const mj = peutEcrire && !joueur;
+  function niveauxHTML() {
+    const l = F.niveaux || [];
+    if (!l.length) return "";
+    const derniere = l.at(-1);
+    return `<h3 style="margin-top:12px">Niveaux${F.points_capacite ? ` <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">${F.points_capacite} point${F.points_capacite > 1 ? "s" : ""} de capacité gardé${F.points_capacite > 1 ? "s" : ""}</span>` : ""}</h3>
+      <ul class="fp-niveaux">${l.slice().reverse().map(m => `<li><b>Niveau ${m.niveau}</b> <span class="hint">${esc(dateHeure(m.quand))}</span> · ${esc(texteMontee(m))}</li>`).join("")}</ul>
+      ${mj && derniere.niveau === F.niveau ? `<div class="ligne"><button class="petit ghost" id="fp-annuler-niveau" title="Défait la montée au niveau ${derniere.niveau} : niveau, PV max et rangs reviennent à ce qu'ils étaient">↶ Annuler la montée au niveau ${derniere.niveau}</button></div>` : ""}`;
   }
 
   // capacités dont les utilisations se comptent (calculées par le serveur), et leur remise à zéro

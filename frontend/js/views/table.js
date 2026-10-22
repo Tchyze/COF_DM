@@ -8,6 +8,7 @@ import { ecran as ecranCombat, lancerCombat } from "./combat.js";
 import { lireMonstre, blocMonstre } from "../monstres.js";
 import { COURTS, RESUMES } from "./fiche.js";
 import { aideEditionJoueurs } from "./comptes.js";
+import { monterNiveau } from "../niveau.js";
 
 const PREFS = "cof-table";
 const SONDE = 5000; // relecture de ce qui bouge (PV des PJ, combat en cours)
@@ -116,16 +117,22 @@ export async function mount(el, arg) {
       vie = `<span class="t-pv ${ton}"><i style="width:${pct}%"></i><span>${e.pv <= 0 ? "à terre · " : ""}${e.pv} / ${e.pv_max} PV</span></span>
         <span class="t-stats"><span>DEF <b>${e.defense}</b></span><span>Init <b>${e.init}</b></span><span>PC <b>${e.pc}</b>/${e.pc_max}</span><span>PR <b>${e.pr}</b>/${e.pr_max}</span>${e.pm_max ? `<span>PM <b>${e.pm}</b>/${e.pm_max}</span>` : ""}</span>`;
     } else if (fonctionActive("feuilles")) vie = `<span class="t-stats">pas encore de feuille de personnage</span>`;
-    return `<a class="t-pj${p.statut === "absent" ? " absent" : ""}" href="#/f/${p.fiche.id}" data-type="pj">
+    const niv = +(carte.niveau || 1) + 1;
+    const monter = e && !lecture && fonctionActive("feuilles") ? `<button type="button" class="petit t-niveau" data-niveau="${p.fiche.id}" title="Passer au niveau ${niv} : PV gagnés, rangs de voie" aria-label="${esc(p.fiche.nom)} : passer au niveau ${niv}">⬆</button>` : "";
+    return `<div class="t-pj-l"><a class="t-pj${p.statut === "absent" ? " absent" : ""}" href="#/f/${p.fiche.id}" data-type="pj">
       ${vignette(p.fiche, 36)}
       <span class="c"><span class="n"><b>${esc(p.fiche.nom)}</b>${sous ? `<small>${esc(sous)}</small>` : ""}${p.statut === "absent" ? `<span class="badge">absent</span>` : ""}</span>
-        ${vie}</span></a>`;
+        ${vie}</span></a>${monter}</div>`;
   }
 
   function peindrePJ() {
     const jour = !lecture && fonctionActive("feuilles") && d.pj.length;
     maj($("#t-pj", el), `<h3>Joueurs${jour ? ` <span class="sp"></span><button type="button" class="petit ghost" id="t-jour" title="Les capacités « par jour » des PJ de la table redeviennent utilisables">☀ Nouveau jour</button>` : ""}</h3>
       <div class="t-defile t-pjs">${d.pj.length ? d.pj.map(cartePJ).join("") : `<p class="vide">Aucun PJ${d.campagne ? " dans cette campagne" : ""}. <a href="#/nouveau/pj${d.campagne ? "?campagne=" + d.campagne.id : ""}">Créer un PJ</a></p>`}</div>`);
+    $$("[data-niveau]", el).forEach(x => x.onclick = () => {
+      const p = d.pj.find(y => y.fiche.id === +x.dataset.niveau);
+      monterNiveau(p.fiche.id, p.fiche.nom, () => charger(d.quete?.id || 0));
+    });
     const b = $("#t-jour", el);
     if (b && !b.dataset.arme) {
       b.dataset.arme = "1";
