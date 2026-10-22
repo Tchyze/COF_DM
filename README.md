@@ -2,7 +2,7 @@
 
 Gestionnaire de monde et de campagnes pour **Chroniques Oubliées Fantasy** : PNJ, lieux, factions, objets, lore, quêtes, rencontres, séances, PJ, secrets et règles, reliés entre eux, avec recherche, graphe, chronologie, « qui sait quoi » et une API complète pour qu'un programme (ou Claude) puisse tenir le monde à jour.
 
-Application de bureau Windows / Linux, données locales, sans compte ni service payant. Le bestiaire, les feuilles de personnage, les rencontres et le combat sont dans l'application : elle a absorbé [tracker_COF](https://github.com/Tchyze/tracker_COF), dont elle n'a plus besoin.
+Application de bureau Windows / Linux, données locales, sans compte ni service payant. Le bestiaire, les feuilles de personnage, les voies et capacités, les rencontres et le combat sont dans l'application. Pour jouer à plusieurs, une **édition serveur** (image Docker) héberge les univers avec un compte par personne ; chaque joueur suit la partie sur son téléphone, et l'application de bureau du MJ s'y synchronise, même hors ligne.
 
 Le monde est **unique et persistant** : il n'y a pas d'état par campagne. Un PNJ tué dans une campagne reste mort partout ; chaque événement a des conséquences sur la suite.
 
@@ -10,11 +10,11 @@ Le monde est **unique et persistant** : il n'y a pas d'état par campagne. Un PN
 
 ### Fiches
 
-Treize types de fiches, chacun avec ses champs propres, ses images et ses tags :
+Quatorze types de fiches, chacun avec ses champs propres, ses images et ses tags :
 
 | Type | Principaux champs |
 |---|---|
-| 👤 PNJ | en une phrase, alias, statut (vivant, mort, disparu, inconnu), peuple et profil (listes officielles), allégeance apparente (une faction), où le trouver, campagnes, apparence, personnalité, rôle ; combat : un monstre du bestiaire qui lui sert de profil ; MJ : secrets, notes |
+| 👤 PNJ | en une phrase, alias, statut (vivant, mort, disparu, inconnu), peuple et profil (listes du fichier de règles), allégeance apparente (une faction), où le trouver, campagnes, apparence, personnalité, rôle ; combat : un monstre du bestiaire qui lui sert de profil ; MJ : secrets, notes |
 | 🏰 Lieu | impression, catégorie, fait partie de (hiérarchie), dirigeant, description, lieux notables, rumeurs ; MJ : secrets |
 | ⚑ Faction | but, catégorie, siège, dirigeant, attitude envers les PJ, description, ressources ; MJ : secrets |
 | 🗝 Objet | catégorie, rareté, prix (pc / pa / po), magique, détenteur, effets, histoire ; MJ : secrets / malédiction |
@@ -26,6 +26,7 @@ Treize types de fiches, chacun avec ses champs propres, ses images et ses tags :
 | 🎲 Séance | campagne, numéro, statut, date réelle, date en jeu, PJ présents, résumé ; ses combats et leur bilan ; MJ : préparation, notes |
 | 🛡 PJ | joueur, campagne, statut, peuple, profil, niveau, apparence, historique, objectifs ; sa feuille de personnage ; MJ : ce que le MJ sait |
 | 🔒 Secret | statut (caché, soupçonné, en partie révélé, révélé), importance, catégorie, campagne, fiches concernées, vérité, indices, conséquences, séance de la révélation |
+| ✉ Aide de jeu | forme (lettre, image, indice…), campagne, texte remis aux joueurs, images ; MJ : secret dont c'est l'indice, séance prévue, notes |
 | ⚖ Règle | officielle ou maison, domaine, livre et page, règle remplacée, texte |
 
 Les champs se valident à l'enregistrement (valeurs permises, fiches référencées du bon type, dates conformes au calendrier). Les sections réservées au MJ sont encadrées.
@@ -87,10 +88,12 @@ Pour jouer à distance, préférez un VPN (Tailscale, WireGuard…) à une redir
 Chaque joueur suit la partie sur son téléphone, à l'adresse `http://<adresse>:8100/joueur.html` :
 
 - **Ma fiche** : la feuille de son personnage, sans les notes du MJ, et son apparence, son historique et ses objectifs ; la date en jeu de sa campagne s'affiche en haut de la page. Pendant un combat, ses PV et ses points de chance y bougent en direct. Elle est en lecture seule tant que le MJ n'a pas déverrouillé les feuilles ; déverrouillée, le joueur la tient lui-même (PV, ressources, repos, attaques, voies, équipement ; ajouter une voie de la bibliothèque reste au MJ).
+- **Mes voies** : chaque voie de son personnage, rang par rang (texte, effets, utilisations), les rangs atteints en surbrillance.
 - **Combat** : le round, à qui c'est le tour, qui joue ensuite, l'ordre d'initiative et les états de chacun. Aucun PV, aucune DEF, aucune attaque, aucune statistique ; les adversaires hors de combat disparaissent de la liste. Un bandeau rappelle le tour sur sa fiche et annonce « C'est à vous ! ».
 - **Documents** : les aides de jeu que le MJ lui a envoyées (lettres, images, indices), avec une pastille pour celles qu'il n'a pas encore ouvertes ; une nouvelle s'annonce aussitôt.
 - **Dés** : des tests tout faits lus sur sa feuille (caractéristiques, attaques et leurs dégâts), avec dé bonus ou malus, une formule libre, et les jets de toute la table, en direct.
 - **Hauts faits** : le récapitulatif de chaque combat terminé et les records de chaque PJ (combats, victoires, adversaires abattus, critiques, meilleur coup, titres).
+- **Compte** (sur un serveur) : changer son mot de passe, se déconnecter.
 
 Les joueurs regardent le combat, ils n'y agissent pas. Tout se met à jour en temps réel.
 
@@ -221,13 +224,27 @@ Le **bestiaire** de l'univers (menu Combat) rassemble les monstres officiels et 
 |---|---|---|
 | Fichier de règles (`cof-dm-regles`) | Paramètres → Bestiaire et règles | Les choix proposés dans les fiches (peuples, profils, tailles, catégories) et les tables du créateur de monstre. |
 | Bestiaire (tableau de monstres) | Bestiaire → Importer des monstres | Les fiches officielles, verrouillées. |
-| Profils et voies | Paramètres → Bestiaire et règles | Profils, peuples et voies détaillés. |
+| Profils et voies | Paramètres → Bestiaire et règles | Profils, peuples et voies, avec leurs capacités. |
 
 Sans fichier de règles, tout fonctionne en saisie libre, et le créateur de monstre n'est pas proposé. Tout est rangé dans le fichier d'univers ; pour équiper un nouvel univers, reprenez la bibliothèque d'un autre depuis le même panneau. Le format du fichier de règles est décrit dans [docs/API.md](docs/API.md).
 
+### Voies, capacités, profils et peuples
+
+La page **Voies et profils** (menu, partie Règles) est la bibliothèque de l'univers : vous y saisissez ou importez vos voies (de 5 à 20 rangs selon vos règles), leurs capacités, vos profils et vos peuples, rangés un par un et étiquetés **officiel** ou **maison** pour les trier. Chaque capacité porte son texte et, si vous le décrivez :
+
+- ses **bonus permanents** (PV max, PM max, DEF, initiative, attaque, RD, caractéristique ; une valeur fixe, éventuellement × rang atteint, + niveau, + modificateur), ajoutés d'office à la feuille quand le PJ a le rang ;
+- son **action en combat** (attaque, sort, soin, état, coût en PM) ;
+- ses **utilisations** (x fois par combat, par jour, par repos, ou à remettre à la main).
+
+Renommer une voie est suivi par les feuilles et les profils ; retirer une voie en laisse une copie sur les feuilles qui s'en servent. Le dépôt ne contient aucune voie : elles viennent de vous.
+
 ### Feuille de personnage
 
-La fiche d'un PJ porte sa **feuille de personnage** : caractéristiques et modificateurs, PV, DEF, initiative, points de chance, de récupération et de mana, attaques, voies et rangs, équipement, bourse, notes du MJ. Rien n'est saisi deux fois : le nom, le peuple, le profil et le niveau restent ceux de la fiche. Les modificateurs, la DEF, l'initiative et les bonus d'attaque sont calculés ; les PV et les ressources se règlent d'un clic, et les boutons de repos appliquent ce que décrit votre fichier de règles. Si les profils et voies sont importés, « Appliquer le profil » ajoute ses voies à la feuille.
+La fiche d'un PJ porte sa **feuille de personnage** : caractéristiques et modificateurs, PV, DEF, initiative, points de chance, de récupération et de mana, attaques, voies et rangs, équipement, bourse, notes du MJ. Rien n'est saisi deux fois : le nom, le peuple, le profil et le niveau restent ceux de la fiche. Les modificateurs, la DEF, l'initiative et les bonus d'attaque sont calculés ; les PV et les ressources se règlent d'un clic, et les boutons de repos appliquent ce que décrit votre fichier de règles. « Appliquer le profil » ajoute les voies du profil à la feuille.
+
+- **Voies en grille**, comme sur la feuille papier : une colonne par voie, une ligne par rang, les rangs acquis en surbrillance ; une bulle au survol ou au toucher donne le texte et les effets de la capacité.
+- **« A + b »** : les bonus des capacités s'ajoutent aux valeurs saisies (A), affichés en vert (b), avec leur détail au survol. Les « divers » saisis à la main ne sont jamais modifiés d'office ; un avertissement les signale.
+- **Utilisations** : ce qu'il reste de chaque capacité limitée ; ＋1 et ↺ sur la feuille, **☀ Nouveau jour** (feuille ou écran du MJ) pour les capacités « par jour », et les repos de vos règles.
 
 Sur un serveur, un joueur voit la feuille de son PJ (sans les notes du MJ) sur sa page de joueur, et la tient lui-même quand le MJ a ouvert l'édition par les joueurs.
 
@@ -255,11 +272,11 @@ Tout le reste s'ouvre dans une fenêtre secondaire : la fiche d'un combattant (e
 
 **PJ et PNJ.** Un PJ entre en combat avec sa feuille de personnage ; ses PV, ses points de chance et ses points de mana y sont reportés à chaque action. Un PNJ du monde entre avec son profil de combat et garde son nom.
 
-**Sorts et capacités.** Un combattant qui a des points de mana les montre sur sa ligne ; un sort se lance comme une attaque, avec son **coût en PM**, payé qu'il touche ou non (refusé s'il n'en reste pas assez ; « Annuler » rend tout). Sa fiche permet de dépenser ou de récupérer des PM, et de marquer une **capacité à usage limité** comme utilisée dans ce combat : celles de ses voies sont proposées, une autre se note à la main.
+**Sorts et capacités.** Un combattant qui a des points de mana les montre sur sa ligne ; un sort se lance comme une attaque, avec son **coût en PM**, payé qu'il touche ou non (refusé s'il n'en reste pas assez ; « Annuler » rend tout). Un PJ entre en combat avec les capacités actives de ses voies : une capacité à jet d'attaque prépare l'attaque (PM, bonus, dégâts), les autres ouvrent une fenêtre préremplie (PM, dégâts ou soin, état) que le MJ valide ; chaque utilisation est comptée, « par combat » dans le combat, « par jour » ou « par repos » sur la feuille.
 
 **Fin de combat.** Quand un camp est à terre, l'écran propose de terminer : le récapitulatif (héros du combat, moments forts, bilan par PJ, courbe des PV du groupe) est gardé avec le combat et se copie en Markdown pour une note Obsidian. Le combat est rattaché à la séance de la campagne ; sa fiche liste ses combats, leur récapitulatif, et propose **Marquer mort** pour chaque PNJ du monde tombé. Rien n'est changé d'office sur la fiche d'un PNJ.
 
-Plusieurs appareils suivent le même combat en direct. Sur un serveur, le MJ joue, un auditeur regarde ; les joueurs auront leur page.
+Plusieurs appareils suivent le même combat en direct. Sur un serveur, le MJ joue, un auditeur regarde ; les joueurs suivent l'ordre et les états sur leur page.
 
 À la première ouverture d'un univers créé avec une version plus ancienne, les liens vers tracker_COF sont repris : les créatures des rencontres sont rattachées par leur nom aux monstres du bestiaire de l'univers ; celles qui ne s'y retrouvent pas et les profils de combat des PNJ sont retirés (notés au journal et, pour un PNJ, dans ses notes du MJ), à choisir de nouveau dans le bestiaire.
 
@@ -278,11 +295,12 @@ Fiches de règles officielles (résumés) et maison, par domaine. **Paramètres 
 - **Graphe** : les fiches et leurs liens autour d'une fiche (1 à 3 niveaux) ou du monde entier.
 - **Chronologie** : toutes les dates en jeu, par année, filtrables par campagne.
 - **Calendrier du monde** paramétrable : mois et durées, jours de la semaine, ère. Par défaut : douze mois de trente jours (noms républicains), une décade et cinq jours complémentaires.
-- **Images** : plusieurs par fiche (portraits, cartes), image principale, légendes, glisser-déposer.
+- **Images** : plusieurs par fiche (portraits, illustrations), image principale, légendes, glisser-déposer.
 - **Archivage** (masquer sans supprimer), **journal** de toutes les modifications avec leur auteur (MJ ou client de l'API).
 - **Un univers = un fichier** `.cofdm` (fiches, images, journal) : menu **Fichier** pour créer un univers, en ouvrir un autre, retrouver les récents, enregistrer une copie.
 - **Sauvegardes automatiques** de l'univers (à l'ouverture, toutes les demi-heures, à la fermeture), restauration en un clic ; **export JSON** complet, images comprises ; **export vers Obsidian** (voir plus bas).
-- Thème sombre et thème clair ; interface utilisable sur tablette.
+- **Paramètres**, en quatre groupes (Univers ; Sauvegardes et exports ; Joueurs et accès ; Application) : seuls les titres s'affichent, avec leur description au survol, et un clic étend le réglage sur place.
+- Thème sombre et thème clair ; interface utilisable sur tablette et sur téléphone.
 
 ### API
 
@@ -292,8 +310,8 @@ Tout ce que fait l'interface passe par une API REST documentée dans [docs/API.m
 
 `cof-dm -mcp` est un serveur [MCP](https://modelcontextprotocol.io) : Claude (Claude Desktop, Claude Code ou tout client MCP) lit et tient à jour l'univers ouvert dans l'application. Il passe par l'API, avec ses droits et sa validation ; ses écritures sont signées `claude` dans le journal.
 
-- **Lire** : schéma, recherche, fiche complète (par identifiant ou par nom), fiches liées, chronologie, qui sait quoi, organigramme, partie en cours (écran du MJ), feuille de personnage, bestiaire, difficulté d'une rencontre, combats, jets de dés, préparation d'une séance, aides de jeu, journal, liens morts.
-- **Écrire** : lancer des dés (cachés par défaut), clore une séance, envoyer une aide de jeu aux PJ, créer et modifier une fiche, l'archiver ou la restaurer, la partager avec les joueurs, créer, modifier et supprimer une relation, révéler un secret, modifier une feuille de personnage. Rien ne s'efface définitivement par ce chemin.
+- **Lire** : schéma, recherche, fiche complète (par identifiant ou par nom), fiches liées, chronologie, qui sait quoi, organigramme, partie en cours (écran du MJ), feuille de personnage, bestiaire, voies, profils et peuples, difficulté d'une rencontre, combats, jets de dés, préparation d'une séance, aides de jeu, journal, liens morts.
+- **Écrire** : lancer des dés (cachés par défaut), clore une séance, envoyer une aide de jeu aux PJ, créer et modifier une fiche, l'archiver ou la restaurer, la partager avec les joueurs, créer, modifier et supprimer une relation, révéler un secret, modifier une feuille de personnage, passer au jour suivant (« Nouveau jour »), créer et modifier une voie, un profil ou un peuple. Rien ne s'efface définitivement par ce chemin.
 
 **Le brancher** : **Paramètres → Claude**, dans l'application de bureau. Un bouton inscrit COF DM dans Claude Desktop (installation classique ou du Microsoft Store) et un autre dans Claude Code, avec le bon chemin du programme ; il ne reste qu'à relancer Claude. Le panneau dit où en est chaque client (non installé, pas branché, branché, programme déplacé : « Mettre à jour ») et donne aussi la commande à taper pour Claude Code. Seule l'entrée `cof-dm` du fichier de configuration est écrite ; le reste est gardé, et une copie du fichier d'avant (`….avant-cof-dm`) est faite la première fois.
 
@@ -383,35 +401,38 @@ Go 1.26 (1.26.9 au moins) et un compilateur C (SQLite). La recherche utilise le 
 go test -tags "sqlite_fts5 nogui" ./...                 # tests
 go run -tags "sqlite_fts5 nogui" . -data ./donnees      # lancer sans fenêtre
 go build -tags sqlite_fts5 -o cof-dm .                  # application de bureau
+go build -tags "sqlite_fts5 nogui serveur" -o cof-dm-serveur .   # édition serveur (celle de l'image Docker)
 ```
 
-La fenêtre native utilise WebView2 sous Windows, GTK 3 et WebKitGTK 4.1 sous Linux (comme tracker_COF).
+La fenêtre native utilise WebView2 sous Windows, GTK 3 et WebKitGTK 4.1 sous Linux.
 
 | Dossier | Contenu |
 |---|---|
-| `internal/modele` | Types de fiches, champs, relations, calendrier, validation : la seule source du schéma |
-| `internal/store` | Un univers = un fichier SQLite : fiches, relations, références, mentions, images, recherche FTS5, graphe, chronologie, journal, export |
-| `internal/serveur` | API HTTP, contrôle d'accès, univers (menu Fichier), sauvegardes, images, secrets, rencontres, combats, écran du MJ |
-| `internal/reglages` | Réglages de l'application sur cet ordinateur (univers ouvert, mot de passe MJ, jeton d'API) |
-| `internal/combat` | Moteur de combat : tours, attaques, états, tests, récapitulatif |
+| `internal/modele` | Types de fiches, champs, relations, calendrier, fonctionnalités, validation : la seule source du schéma |
+| `internal/store` | Un univers = un fichier SQLite : fiches, relations, références, mentions, images, recherche FTS5, graphe, chronologie, journal, export, bibliothèque, synchronisation, versions |
+| `internal/serveur` | API HTTP, contrôle d'accès, comptes et univers du serveur, menu Fichier, sauvegardes, secrets, aides de jeu, rencontres, combats, écran du MJ, page des joueurs |
+| `internal/comptes` | Comptes de l'édition serveur : mots de passe hachés, rôles par univers, jetons |
+| `internal/reglages` | Réglages de l'application sur cet ordinateur (univers ouvert, mot de passe MJ, jeton d'API, serveur relié) |
+| `internal/synchro` | Synchronisation du bureau avec un serveur, numéros de version |
+| `internal/fiches`, `internal/regles`, `internal/reference` | Monstres et feuilles de personnage, fichier de règles, profils, peuples et voies |
+| `internal/combat` | Moteur de combat : tours, attaques, états, tests, capacités, récapitulatif |
+| `internal/des` | Formules de dés hors combat |
+| `internal/obsidian` | Export vers un vault Obsidian |
+| `internal/majour` | Mises à jour signées du bureau |
 | `internal/mcp` | Serveur MCP (`cof-dm -mcp`) : outils pour Claude, traduits en appels de l'API |
-| `frontend` | Interface (HTML, CSS, JavaScript sans framework ni dépendance) |
+| `frontend` | Interface (HTML, CSS, JavaScript sans framework ni dépendance) : l'application (`index.html`) et la page des joueurs (`joueur.html`) |
 | `docs/API.md` | Documentation de l'API |
+| `outils/` | Scripts Python d'import depuis un vault Obsidian |
 
-Le dépôt ne contient aucun contenu des livres de règles (seulement les noms des peuples et des profils, pour les listes de choix).
+Le dépôt ne contient **aucune donnée des livres de règles** : ni liste de peuples ou de profils, ni table, ni voie, ni texte. Tout vient des fichiers importés ou saisis par le MJ, et l'application fonctionne en saisie libre sans eux.
 
-Une version publiée se fait en poussant un tag `vX.Y.Z` : le workflow *Release* compile l'exe Windows et l'AppImage et les joint à la Release.
+Une version se publie en poussant un tag `vX.Y.Z` : le workflow *Release* compile l'exe Windows et l'AppImage, signe la liste des empreintes et les joint à la Release. Lancé à la main avec le canal `test`, il publie une version d'essai d'une branche.
 
 ## Feuille de route
 
-1. ~~Fiches, liens, relations, recherche, graphe, chronologie, images, API~~ (fait).
-2. ~~Organigramme des factions, relations secrètes~~ (fait).
-3. ~~Rencontres, secrets et « qui sait quoi », règles, lanceurs Windows et Linux ; bestiaire, feuilles de personnage, difficulté des rencontres et combat, repris de tracker_COF~~ (fait).
-4. Cartes : plans du monde et des lieux, marqueurs liés aux fiches (reporté bien plus tard).
-5. ~~Préparation de séance générée (quêtes actives, indices non trouvés, PNJ probables) et routine d'après-séance~~ (fait).
-6. ~~Vue joueurs en mode serveur, et synchronisation entre un univers local et le serveur~~ (fait).
-7. ~~Serveur MCP pour Claude, au-dessus de l'API~~ (fait).
-8. ~~Export Markdown vers le vault Obsidian~~ (fait).
+Fait : fiches, liens, relations, recherche, graphe, chronologie, images, API ; organigrammes, secrets et « qui sait quoi » ; bestiaire, feuilles de personnage, rencontres et combat (repris de tracker_COF) ; préparation et après-séance ; mode serveur, page des joueurs et synchronisation ; serveur MCP pour Claude ; export vers Obsidian ; dés, aides de jeu, fonctionnalités optionnelles ; voies et capacités utilisables ; mises à jour signées.
+
+La suite, avec ses priorités, est dans [PROJETS.md](PROJETS.md) : d'abord la montée de niveau guidée, puis l'inventaire et le butin, l'afficheur de table, les notes rapides de séance, l'impression.
 
 ## Licence
 
