@@ -9,7 +9,7 @@ Dernière mise à jour : 22 octobre 2026.
 - **Version stable : 1.2.3** (21 octobre 2026). **`main`** : la 1.2.3 plus la PR 17 (Paramètres en accordéon), publiée en préversion `1.2.4-test.22` (canal Test), pas encore en stable.
 - **Numéros d'échange** : `VersionModele` 4, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main` seule ; aucune PR ouverte.
-- **Prochain chantier** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Questions de fond à poser au MJ avant de coder.
+- **Chantier en cours** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Décisions prises le 22 octobre 2026 (ci-dessous) ; lot 1 en préparation.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -108,6 +108,14 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Voie retirée** de la bibliothèque : les feuilles en gardent une copie (voie libre). Peuples : modificateurs affichés, jamais ajoutés d'office.
 - **Claude** : lire, créer et modifier voies, profils et peuples ; aucun outil pour les retirer.
 
+### Montée de niveau (22 octobre 2026)
+
+- **Le MJ seul** la lance : depuis la feuille du PJ et depuis l'onglet Joueurs de l'écran du MJ. Le joueur en voit le résultat sur sa page (niveau, PV, historique). Le niveau reste lu sur la fiche ; le saisir à la main sur la fiche reste permis, sans historique.
+- **Un niveau à la fois.** La seule baisse : « Annuler la dernière montée », qui défait exactement ce qu'elle avait fait (niveau, PV, rangs).
+- **PV gagnés** : une formule du fichier de règles (dé de vie, mod. CON, valeur fixe…), **toujours lancée** par le serveur, avec le dé de vie de la feuille (que le profil propose). Le jet part au lanceur de la table, **public par défaut**, le MJ peut le cacher ; dés coupés, il n'apparaît que dans la montée. Sans règles : PV saisis.
+- **Rangs** : des points par niveau, le coût de chaque rang et le niveau minimal d'un rang, décrits par le fichier de règles, répartis dans les voies **déjà sur la feuille** (ajouter une voie de la bibliothèque se fait avant, en édition). Sans règles : rangs libres, sans contrôle. Les capacités débloquées sont rappelées.
+- **Historique** rangé dans la feuille (synchronisé) : une ligne par niveau (date, PV gagnés et le jet, rangs pris).
+
 ### Aides de jeu (19 octobre 2026)
 
 - Un **type de fiche** ; l'envoi est une relation `recu` d'un PJ vers l'aide, avec la séance. Le joueur voit **la version à jour** ; le MJ peut **retirer** un envoi.
@@ -167,7 +175,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 12, montée de niveau guidée** (`PROJETS.md`) : PV gagnés, rang de voie à choisir, capacités débloquées rappelées, historique des niveaux, le niveau restant lu sur la fiche. Questions de fond à poser avant de coder : qui la lance (MJ, joueur), d'où viennent les PV gagnés, contraintes des rangs, historique et annulation, depuis quel écran.
+**Projet 12, montée de niveau guidée** (`PROJETS.md`), décisions dans « Montée de niveau » ci-dessus. Lots prévus : (1) partie `montee` du fichier de règles, historique dans la feuille, routes de montée et d'annulation (MJ), jet par le lanceur de la table, outil MCP, modèle 5 ; (2) écrans : assistant sur la feuille, bouton de l'onglet Joueurs, historique sur la page des joueurs.
 
 ### Défauts connus
 
