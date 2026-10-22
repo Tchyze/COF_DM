@@ -100,13 +100,8 @@ export async function monterNiveau(id, nom, apres, { joueur = false, plusTard } 
     rangs() {
       if (!F.voies.length) return `<p class="vide">Aucune voie sur la feuille${joueur ? " : demandez au MJ d'en ajouter." : " : ajoutez-en d'abord en la modifiant."}</p>`;
       return `${parPoints ? `<p>${M.points} point${pluriel(M.points)} de capacité à ce niveau${F.points_capacite ? `, plus ${F.points_capacite} gardé${pluriel(F.points_capacite)}` : ""}${M.report ? " ; ce qui n'est pas dépensé se garde." : "."} <b id="mn-points"></b></p>` : `<p class="hint">Les règles ne comptent pas de points : prenez les rangs librement.</p>`}
-        <div class="mn-voies">${F.voies.map((v, j) => `<div class="mn-voie" data-i="${j}">
-          <label><b>${esc(v.nom || "Voie sans nom")}</b> <span class="hint">${v.origine ? esc(v.origine) + " · " : ""}rang ${v.rang} →</span>
-            <select data-voie="${j}" aria-label="${esc(v.nom)} : rang atteint">${Array.from({ length: Math.max(1, rangMax(v) - v.rang + 1) }, (_, k) => v.rang + k).map(r => {
-              const bloque = [...Array(r - v.rang).keys()].map(k => v.rang + k + 1).find(x => niveauPour(M, x) > niveau);
-              return `<option value="${r}"${r === choix.vise[j] ? " selected" : ""}${bloque ? " disabled" : ""}>${r === v.rang ? "inchangé" : `rang ${r}`}${bloque ? ` (niveau ${niveauPour(M, bloque)})` : ""}</option>`;
-            }).join("")}</select></label>
-          <ul class="mn-caps hint"></ul></div>`).join("")}</div>`;
+        <p class="hint">Touchez une case pour prendre la capacité (et celles d'avant dans la voie) ; touchez-la de nouveau pour y renoncer.</p>
+        <div id="mn-grille"></div><p class="hint" id="mn-detail"></p>`;
     },
     pm: () => `<p>Votre profil vous donne <b>${signe(F.montee_pm)} PM max</b> à chaque niveau : ${F.pm_max} → ${F.pm_max + F.montee_pm}.</p>`,
     etape: e => `${e.aide ? `<p class="hint">${esc(e.aide)}</p>` : ""}
@@ -157,13 +152,51 @@ export async function monterNiveau(id, nom, apres, { joueur = false, plusTard } 
     const t = $("#mn-total", voile);
     if (t) { const pv = pvGagnes(); t.innerHTML = choix.des.every(v => v !== "") ? `PV gagnés : <b>${pv.total}</b> <span class="hint">(${esc(pv.detail)})</span>` : ""; }
   }
+  // le tableau des voies, comme sur la feuille : une colonne par voie, une ligne par rang ; les rangs
+  // acquis en surbrillance, ceux choisis à ce niveau marqués, ceux qu'interdit le niveau grisés
+  function grille() {
+    const parBloc = boite.clientWidth && boite.clientWidth < 520 ? 2 : 3;
+    const caps = F.voies.map(capacites);
+    let html = "";
+    for (let d = 0; d < F.voies.length; d += parBloc) {
+      const idx = [...Array(parBloc).keys()].map(k => d + k);
+      const nb = Math.max(...idx.filter(j => j < F.voies.length).map(j => rangMax(F.voies[j])));
+      const cellule = (j, r) => {
+        if (j >= F.voies.length) return `<div class="fp-vcase vide"></div>`;
+        const v = F.voies[j], c = caps[j][r] || {}, rang = r + 1;
+        if (rang > rangMax(v)) return `<div class="fp-vcase vide"></div>`;
+        const etat = rang <= v.rang ? "acquise" : rang <= choix.vise[j] ? "choisie" : niveauPour(M, rang) > niveau ? "bloquee" : "";
+        const aide = [c.nom || `Rang ${rang}`, c.texte, etat === "bloquee" ? `Demande le niveau ${niveauPour(M, rang)}.` : parPoints && etat !== "acquise" ? `${coutRang(M, v.origine, rang)} point${pluriel(coutRang(M, v.origine, rang))}` : ""].filter(Boolean).join("\n");
+        return `<button type="button" class="fp-vcase ${etat}" data-v="${j}" data-r="${r}" title="${esc(aide)}"${etat === "acquise" || etat === "bloquee" ? ` aria-disabled="true"` : ""}>${esc(c.nom || "")}</button>`;
+      };
+      html += `<div class="fp-vbloc" style="grid-template-columns:1.8em repeat(${idx.length},minmax(0,1fr))">
+        <div class="fp-vcoin"></div>${idx.map(j => `<div class="fp-vtete">${j < F.voies.length ? esc(F.voies[j].nom) : ""}</div>`).join("")}
+        <div class="fp-vcoin2"></div>${idx.map(j => `<div class="fp-vsous">${j < F.voies.length ? `rang ${F.voies[j].rang}${choix.vise[j] > F.voies[j].rang ? ` → <b>${choix.vise[j]}</b>` : ""}` : ""}</div>`).join("")}
+        ${[...Array(nb).keys()].map(r => `<div class="fp-vrang">${r + 1}</div>${idx.map(j => cellule(j, r)).join("")}`).join("")}
+      </div>`;
+    }
+    return `<div class="fp-voies">${html}</div>`;
+  }
   function majRangs() {
-    $$(".mn-voie", voile).forEach(el => {
-      const j = +el.dataset.i;
-      $(".mn-caps", el).innerHTML = nouvelles(j).map(({ r, c }) => `<li><b>${esc(c.nom || `Rang ${r}`)}</b>${parPoints ? ` <span>(${coutRang(M, F.voies[j].origine, r)} pt)</span>` : ""}${c.texte ? ` : ${esc(c.texte)}` : ""}</li>`).join("");
-    });
+    const g = $("#mn-grille", voile);
+    if (g) g.innerHTML = grille();
     const p = $("#mn-points", voile);
     if (p) { p.textContent = `${depense()} / ${dispo} point${pluriel(dispo)}`; p.classList.toggle("fp-epuise", depense() > dispo); }
+  }
+  // une case touchée : on prend ce rang (et ceux d'avant), ou on y renonce s'il était choisi
+  function toucher(j, r) {
+    const v = F.voies[j], rang = r + 1, c = capacites(v)[r] || {};
+    const d = $("#mn-detail", voile);
+    if (d) d.innerHTML = `<b>${esc(c.nom || `Rang ${rang}`)}</b>${c.texte ? ` : ${esc(c.texte)}` : ""}`;
+    if (rang <= v.rang) return;
+    if (rang <= choix.vise[j]) choix.vise[j] = rang - 1;
+    else {
+      const bloque = [...Array(rang - v.rang).keys()].map(k => v.rang + k + 1).find(x => niveauPour(M, x) > niveau);
+      if (bloque) { erreurDe(`Le rang ${bloque} demande le niveau ${niveauPour(M, bloque)}.`); return; }
+      choix.vise[j] = rang;
+    }
+    erreurDe("");
+    majRangs();
   }
   function peindre() {
     const e = etapes[i];
@@ -172,16 +205,17 @@ export async function monterNiveau(id, nom, apres, { joueur = false, plusTard } 
     $("#mn-prec", voile).hidden = i === 0;
     $("#mn-oui", voile).textContent = e.cle === "recap" ? `Valider le niveau ${niveau}` : "Suivant →";
     erreurDe("");
-    boite.oninput = boite.onchange = () => erreurDe(""); // une correction efface le message
+    boite.oninput = () => erreurDe(""); // une correction efface le message
     const bAccord = $("#mn-accorder", voile);
     if (bAccord) bAccord.onclick = async () => { if (await accorderNiveau(id, nom, !accorde, F.modifie, apres)) fermer(); };
     $$("[data-dv]", voile).forEach(x => x.oninput = () => { choix.des[+x.dataset.dv] = x.value; majDes(); });
     const pv = $("#mn-pv", voile);
     if (pv) pv.oninput = () => { choix.pv = pv.value; };
-    $$("select[data-voie]", voile).forEach(s => s.onchange = () => { choix.vise[+s.dataset.voie] = +s.value; majRangs(); });
+    const g = $("#mn-grille", voile);
+    if (g) g.onclick = ev => { const x = ev.target.closest("[data-v][data-r]"); if (x) toucher(+x.dataset.v, +x.dataset.r); };
     $$("[data-etape]", voile).forEach(x => x.oninput = () => { choix.etapes[x.dataset.etape] = x.value; });
     majDes(); majRangs();
-    ($("input, select, textarea", boite) || $("#mn-oui", voile)).focus();
+    ($("input, textarea", boite) || $("#mn-oui", voile)).focus();
   }
   $("#mn-prec", voile).onclick = () => { if (i > 0) { i--; peindre(); } };
   $("#mn", voile).onsubmit = async ev => {
