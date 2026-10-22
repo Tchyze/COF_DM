@@ -423,7 +423,7 @@ Le serveur MCP ne propose pas les outils d'une fonctionnalité coupée (il lit `
 
 ## Univers
 
-Un univers est un fichier `.cofdm` qui contient tout : fiches, relations, images, calendrier et journal. L'application en ouvre un à la fois ; toutes les autres routes portent sur l'univers ouvert. Le mot de passe MJ, le jeton d'API et l'adresse du tracker tiennent à l'ordinateur (`reglages.json` du dossier de l'application), pas à l'univers.
+Un univers est un fichier `.cofdm` qui contient tout : fiches, relations, images, calendrier et journal. L'application de bureau en ouvre un à la fois, et toutes les autres routes portent sur l'univers ouvert (un serveur les tient tous ouverts : voir « Plusieurs univers »). Le mot de passe MJ, le jeton d'API et le serveur relié tiennent à l'ordinateur (`reglages.json` du dossier de l'application), pas à l'univers.
 
 Ces routes touchent aux fichiers de l'ordinateur du MJ : elles ne répondent **qu'à lui** (`403` depuis le réseau, même avec le jeton ou une session).
 
