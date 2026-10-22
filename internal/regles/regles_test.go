@@ -226,3 +226,25 @@ func TestCombat(t *testing.T) {
 		t.Fatal("la fusion a retiré la partie combat")
 	}
 }
+
+// La partie « montee » du fichier de règles (valeurs inventées) : coût des rangs, niveau minimal,
+// formule des PV ; les formes qui ne tiennent pas debout sont refusées.
+func TestMontee(t *testing.T) {
+	r, err := Lire([]byte(`{"format":"cof-dm-regles","personnage":{"montee":{"pv":["dv","con"],"points":2,"couts":[1,3],"niveau_min":[0,4]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := r.Personnage.Montee
+	if !m.Lancee() || m.Cout(1) != 1 || m.Cout(2) != 3 || m.Cout(5) != 3 || m.NiveauPour(2) != 4 || m.NiveauPour(3) != 0 {
+		t.Fatalf("montée : %+v", m)
+	}
+	var rien *Montee
+	if rien.Lancee() || rien.Cout(4) != 1 || rien.NiveauPour(1) != 0 {
+		t.Fatal("sans partie « montee » : saisie libre, rangs à 1 point")
+	}
+	for _, mauvais := range []string{`{"pv":["cha"]}`, `{"couts":[0]}`, `{"points":-1}`, `{"niveau_min":[-2]}`} {
+		if _, err := Lire([]byte(`{"format":"cof-dm-regles","personnage":{"montee":` + mauvais + `}}`)); err == nil {
+			t.Fatalf("montée invalide acceptée : %s", mauvais)
+		}
+	}
+}

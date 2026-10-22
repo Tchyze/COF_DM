@@ -27,9 +27,13 @@ import "strconv"
 //
 // Modèle 4 : l'édition par les joueurs (réglage « edition_joueurs ») se synchronise, pour que le MJ
 // la règle depuis un bureau relié au serveur.
+//
+// Modèle 5 : la feuille garde l'historique des montées de niveau (« niveaux ») et les points de
+// capacité en réserve (« points_capacite ») ; le fichier de règles décrit la montée de niveau
+// (« personnage.montee »).
 const (
 	VersionProtocole = 1
-	VersionModele    = 4
+	VersionModele    = 5
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

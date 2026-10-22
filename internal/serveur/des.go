@@ -149,9 +149,14 @@ func (s *Serveur) desLancerJoueur(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Serveur) publierJet(w http.ResponseWriter, j jet) {
+	repondre(w, 201, s.annoncerJet(j))
+}
+
+// annoncerJet range un jet à la table et le montre aux joueurs, sauf s'il est caché.
+func (s *Serveur) annoncerJet(j jet) jet {
 	j = s.jets.ajouter(j)
 	if !j.Cache {
 		s.joueurs.envoyer(map[string]any{"type": "jet", "jet": j})
 	}
-	repondre(w, 201, j)
+	return j
 }

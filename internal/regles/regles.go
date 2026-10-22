@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -134,8 +135,50 @@ type Feuille struct {
 	RangMax      int               `json:"rang_max"`      // 0 : pas de limite
 	OriginesVoie []string          `json:"origines_voie"` // vide : texte libre
 	Repos        []Repos           `json:"repos,omitempty"`
+	Montee       *Montee           `json:"montee,omitempty"` // absente : montée de niveau en saisie libre
 	Textes       map[string]string `json:"textes,omitempty"`
 }
+
+// Montee : ce que gagne un PJ qui passe un niveau. Les PV gagnés sont lancés (somme de Pv et de
+// PvFixe) ; sans formule, ils se saisissent. Points : les points de capacité gagnés, que coûtent les
+// rangs de voie (Couts : le coût de chaque rang, le dernier valant pour les suivants ; vide : 1) ;
+// NiveauMin : le niveau qu'il faut pour prendre chaque rang (0 : aucun). Sans points, les rangs se
+// prennent librement.
+type Montee struct {
+	Pv        []string `json:"pv,omitempty"` // somme de « dv » (un dé de vie lancé), « con » (mod. CON), « niveau » (le nouveau)
+	PvFixe    int      `json:"pv_fixe,omitempty"`
+	PvMin     int      `json:"pv_min,omitempty"` // PV gagnés au moins
+	Points    int      `json:"points,omitempty"`
+	Couts     []int    `json:"couts,omitempty"`
+	NiveauMin []int    `json:"niveau_min,omitempty"`
+	Report    bool     `json:"report,omitempty"` // les points non dépensés se gardent pour le niveau suivant
+	Aide      string   `json:"aide,omitempty"`
+}
+
+// Lancee : les PV gagnés se lancent (sinon, ils se saisissent).
+func (m *Montee) Lancee() bool { return m != nil && (len(m.Pv) > 0 || m.PvFixe != 0) }
+
+// Cout : ce que coûte le rang r (à partir de 1) d'une voie.
+func (m *Montee) Cout(r int) int {
+	switch {
+	case m == nil || len(m.Couts) == 0:
+		return 1
+	case r <= len(m.Couts):
+		return m.Couts[r-1]
+	}
+	return m.Couts[len(m.Couts)-1]
+}
+
+// NiveauPour : le niveau qu'il faut pour prendre le rang r (0 : aucun).
+func (m *Montee) NiveauPour(r int) int {
+	if m == nil || r < 1 || r > len(m.NiveauMin) {
+		return 0
+	}
+	return m.NiveauMin[r-1]
+}
+
+// termePv : un terme d'une formule de PV (repos, montée de niveau).
+func termePv(t string) bool { return t == "dv" || t == "con" || t == "niveau" }
 
 // Repos : une façon de récupérer proposée sur la feuille (un bouton). Ce qu'elle coûte et ce
 // qu'elle rend est décrit ici, pas dans le code.
@@ -222,13 +265,27 @@ func (r *Regles) Normaliser() error {
 				return fmt.Errorf("personnage.repos.%d : libellé attendu, coût et gain positifs", i)
 			}
 			for _, t := range x.Pv {
-				if t != "dv" && t != "con" && t != "niveau" {
+				if !termePv(t) {
 					return fmt.Errorf("personnage.repos.%d.pv : dv, con ou niveau", i)
 				}
 			}
 		}
 		if len(f.Repos) > 12 {
 			return fmt.Errorf("personnage.repos : douze au plus")
+		}
+		if m := f.Montee; m != nil {
+			for _, t := range m.Pv {
+				if !termePv(t) {
+					return fmt.Errorf("personnage.montee.pv : dv, con ou niveau")
+				}
+			}
+			if len(m.Pv) > 6 || len(m.Couts) > 20 || len(m.NiveauMin) > 20 || len([]rune(m.Aide)) > 400 {
+				return fmt.Errorf("personnage.montee : trop long")
+			}
+			if m.PvMin < 0 || m.Points < 0 || slices.ContainsFunc(m.Couts, func(c int) bool { return c < 1 || c > 99 }) ||
+				slices.ContainsFunc(m.NiveauMin, func(n int) bool { return n < 0 }) {
+				return fmt.Errorf("personnage.montee : PV minimum et points positifs, coûts de 1 à 99, niveaux positifs")
+			}
 		}
 		if f.NiveauMax < 0 || f.ValeurMax < 0 || f.RangMax < 0 || f.PcMax < 0 || f.PrMax < 0 || (f.ValeurMax > 0 && f.ValeurMin > f.ValeurMax) {
 			return fmt.Errorf("personnage : bornes incohérentes")

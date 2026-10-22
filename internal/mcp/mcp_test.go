@@ -237,6 +237,15 @@ func TestParcours(t *testing.T) {
 		t.Fatalf("feuille : %v", f)
 	}
 	b.outil("modifier_feuille", map[string]any{"id": idPj, "champs": map[string]any{"niveau": 5}}, true)
+	// montée de niveau en saisie libre (pas de règles), puis son annulation
+	b.outil("monter_niveau", map[string]any{"id": idPj}, true)
+	if m := b.json("monter_niveau", map[string]any{"id": idPj, "pv": 3}); m["niveau"] != float64(3) || m["montee"].(map[string]any)["pv"] != float64(3) {
+		t.Fatalf("monter_niveau : %v", m)
+	}
+	if m := b.json("annuler_montee", map[string]any{"id": idPj}); m["niveau"] != float64(2) {
+		t.Fatalf("annuler_montee : %v", m)
+	}
+	b.outil("annuler_montee", map[string]any{"id": idPj}, true)
 
 	// archiver, puis restaurer
 	b.json("archiver_fiche", map[string]any{"id": idLieu})

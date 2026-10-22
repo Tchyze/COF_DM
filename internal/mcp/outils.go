@@ -653,6 +653,38 @@ func outils() []outil {
 			Requis: []string{"id", "champs"},
 			Faire:  modifierFeuille,
 		},
+		{
+			Nom: "monter_niveau", Fonction: "feuilles", Titre: "Faire monter un PJ de niveau",
+			Description: "Le PJ passe au niveau suivant (un seul à la fois) : le niveau de sa fiche augmente, ses PV max gagnent ce que donne la formule des règles (lancée par l'application, jet montré à la table sauf « cache ») ou, sans formule, les « pv » donnés ; « rangs » : les rangs pris dans les voies déjà sur sa feuille ({\"voie\": indice de la voie dans la feuille, \"rang\": rang atteint}), au prix en points de capacité que fixent les règles. La montée est notée dans l'historique des niveaux de la feuille.",
+			Proprietes: map[string]any{
+				"id": entier("Identifiant du PJ"),
+				"rangs": map[string]any{"type": "array", "description": "Rangs pris : indice de la voie sur la feuille (à partir de 0) et rang atteint",
+					"items": map[string]any{"type": "object", "properties": map[string]any{"voie": entier("Indice de la voie"), "rang": entier("Rang atteint")}, "required": []string{"voie", "rang"}}},
+				"pv":    entier("PV gagnés, seulement si les règles n'en donnent pas la formule"),
+				"cache": booleen("Jet des PV caché aux joueurs"),
+			},
+			Requis: []string{"id"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("id")
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("POST", chemin("/api/feuilles/%d/niveau", id), nil, a.copier("rangs", "pv", "cache"))
+			},
+		},
+		{
+			Nom: "annuler_montee", Fonction: "feuilles", Titre: "Annuler la dernière montée de niveau", Destructif: true,
+			Description: "Défait la dernière montée de niveau d'un PJ : niveau, PV max et rangs reviennent à ce qu'ils étaient, la ligne quitte l'historique. Refusé si la fiche ou les voies ont changé depuis.",
+			Proprietes:  map[string]any{"id": entier("Identifiant du PJ")},
+			Requis:      []string{"id"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("id")
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("POST", chemin("/api/feuilles/%d/niveau/annuler", id), nil, map[string]any{})
+			},
+		},
 	}
 }
 
