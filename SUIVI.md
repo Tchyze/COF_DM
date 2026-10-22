@@ -8,8 +8,8 @@ Dernière mise à jour : 22 octobre 2026.
 
 - **Version stable : 1.2.3** (21 octobre 2026). **`main`** : la 1.2.3 plus la PR 17 (Paramètres en accordéon), publiée en préversion `1.2.4-test.22` (canal Test), pas encore en stable.
 - **Numéros d'échange** : `VersionModele` 4 (5 avec les PR 19 et 20), `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `main`, et le projet 12 en essai : PR 19 (`montee-niveau`, serveur), PR 20 (`montee-ecrans`, écrans) empilée sur la 19, PR 21 (`montee-joueurs`, le joueur fait ses choix) empilée sur la 20. Préversion d'essai lancée sur `montee-joueurs` (les trois lots).
-- **Chantier en cours** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Décisions prises le 22 octobre 2026 (ci-dessous) ; lots 1 à 3 en essai (PR 19 à 21).
+- **Branches** : `main`, et le projet 12 en essai : PR 19 (`montee-niveau`, serveur), PR 20 (`montee-ecrans`, écrans) empilée sur la 19, PR 21 (`montee-joueurs`, le joueur fait ses choix) empilée sur la 20, PR 22 (`montee-assistant`, l'assistant en fenêtres) empilée sur la 21. Préversion d'essai lancée sur `montee-assistant` (les quatre lots).
+- **Chantier en cours** : projet 12 de `PROJETS.md`, la montée de niveau guidée. Décisions prises le 22 octobre 2026 (ci-dessous) ; lots 1 à 4 en essai (PR 19 à 22).
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -110,9 +110,11 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Montée de niveau (22 octobre 2026)
 
-- **Le MJ la lance** (depuis la feuille du PJ et l'onglet Joueurs de l'écran du MJ), **le joueur fait ses choix** (précisé le 22 octobre 2026) : le MJ accorde le niveau, le joueur le prend depuis sa page (PV lancés, rangs), même feuille verrouillée, une seule fois. Le MJ peut aussi faire la montée lui-même (joueur absent), ou retirer l'accord. Le niveau reste lu sur la fiche ; le saisir à la main sur la fiche reste permis, sans historique.
+- **Le MJ la lance** (depuis la feuille du PJ et l'onglet Joueurs de l'écran du MJ), **le joueur fait ses choix** (précisé le 22 octobre 2026) : le MJ accorde le niveau, et un **assistant s'ouvre seul** sur la page du joueur (et à chaque visite tant qu'il n'est pas pris ; « Plus tard » le referme pour la visite), même feuille verrouillée, une seule fois. Le MJ peut aussi faire la montée lui-même (joueur absent), avec le même assistant, ou retirer l'accord.
+- **Assistant, fenêtre par fenêtre** : dés de vie → rangs de voie → PM du profil (s'il en gagne) → étapes en plus prévues par les règles à ce niveau → récapitulatif à valider. Le niveau reste lu sur la fiche ; le saisir à la main sur la fiche reste permis, sans historique.
 - **Un niveau à la fois.** La seule baisse : « Annuler la dernière montée », qui défait exactement ce qu'elle avait fait (niveau, PV, rangs).
-- **PV gagnés** : une formule du fichier de règles (dé de vie, mod. CON, valeur fixe…), **toujours lancée** par le serveur, avec le dé de vie de la feuille (que le profil propose). Le jet part au lanceur de la table, **public par défaut**, le MJ peut cacher le sien (celui du joueur ne l'est jamais) ; dés coupés, il n'apparaît que dans la montée. Sans règles : PV saisis.
+- **PV gagnés** : une formule du fichier de règles (dé de vie, mod. CON, valeur fixe…) ; **le dé de vie est lancé en vrai et saisi** (MJ comme joueur), borné par le dé de la feuille, le reste s'ajoute seul. **Rien n'est annoncé à la table** : le détail n'est que dans l'historique. Sans règles : PV saisis.
+- **Règles officielles** (lues dans le livre de base le 22 octobre 2026, rangées dans `Règles COF.json`, hors dépôt ; copie d'avant : `Règles COF.avant-montee.json`) : dé de vie + mod. CON, 2 points (rangs 1-2 : 1 pt, 3-5 : 2 pts), pas de rang au-dessus du niveau, voie de prestige à 2 pts par rang, report des points, PM +1 ou +2 selon le profil, capacité épique (option) aux niveaux pairs dès 12. Écartés par le MJ : valeur moyenne du dé.
 - **Rangs** : des points par niveau, le coût de chaque rang et le niveau minimal d'un rang, décrits par le fichier de règles, répartis dans les voies **déjà sur la feuille** (ajouter une voie de la bibliothèque se fait avant, en édition). Sans règles : rangs libres, sans contrôle. Les capacités débloquées sont rappelées.
 - **Historique** rangé dans la feuille (synchronisé) : une ligne par niveau (date, PV gagnés et le jet, rangs pris).
 
@@ -155,6 +157,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 17 | **Paramètres en accordéon** : quatre groupes, titres seuls, un bloc ouvert à la fois, lien direct par bloc. En préversion `1.2.4-test.22`. |
 | 19 | **Montée de niveau, serveur** (projet 12, lot 1, en essai) : partie `personnage.montee` des règles ; `POST /api/feuilles/{id}/niveau` et `…/niveau/annuler` (MJ) ; niveau de la fiche et feuille en une écriture ; PV lancés au lanceur de la table ; historique `niveaux` et `points_capacite` dans la feuille ; outils MCP ; modèle 5. |
 | 20 | **Montée de niveau, écrans** (lot 2, empilée sur la 19, en essai) : dialogue « ⬆ Niveau » (feuille, onglet Joueurs de l'écran du MJ), historique et annulation sur la feuille, historique en lecture sur la page des joueurs. |
+| 22 | **Montée de niveau en assistant** (lot 4, empilée sur la 21, en essai) : fenêtres dés saisis → rangs → PM → étapes → récapitulatif ; ouverture automatique sur la page des joueurs ; règles `couts_origine`, `pm`, `etapes` ; plus de jet à la table. |
 | 21 | **Montée de niveau accordée** (lot 3, empilée sur la 20, en essai) : le MJ accorde le niveau (`…/niveau/accorder`, `niveau_accorde`), le joueur le prend depuis sa page (`POST /api/joueur/pj/{id}/niveau`) ; badge et retrait côté MJ ; outil MCP `accorder_niveau`. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
@@ -178,7 +181,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 12, montée de niveau guidée** (`PROJETS.md`), décisions dans « Montée de niveau » ci-dessus : PR 19 à 21 en essai chez le MJ. Pour en profiter, le fichier de règles du MJ (`Règles COF.json`, hors dépôt) doit gagner une partie `personnage.montee` (formule des PV, points, coûts des rangs, niveaux minimaux : voir `docs/API.md`) ; sans elle, PV saisis et rangs libres. Après l'essai : fusionner de bas en haut (avant de fusionner la 19, reporter la 20 sur `main` ; avant la 20, la 21), puis marquer le projet 12 fait dans `PROJETS.md`.
+**Projet 12, montée de niveau guidée** (`PROJETS.md`), décisions dans « Montée de niveau » ci-dessus : PR 19 à 22 en essai chez le MJ. Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) a reçu sa partie `personnage.montee` ; à réimporter dans chaque univers (Paramètres → Bestiaire et règles). Après l'essai : fusionner de bas en haut (avant de fusionner la 19, reporter la 20 sur `main` ; avant la 20, la 21 ; avant la 21, la 22), puis marquer le projet 12 fait dans `PROJETS.md`.
 
 ### Défauts connus
 
