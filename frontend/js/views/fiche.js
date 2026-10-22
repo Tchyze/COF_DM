@@ -123,7 +123,7 @@ function lecture(el, f) {
   relations(el, f);
   images(el, f);
   const rafraichir = () => recharger(el, f.id);
-  if (feuille) panneauFeuille($("#p-feuille", el), f, { peutEcrire: !window.cofAcces?.lecture_seule });
+  if (feuille) panneauFeuille($("#p-feuille", el), f, { peutEcrire: !window.cofAcces?.lecture_seule, apres: rafraichir });
   if (special) special($("#p-special", el), f, rafraichir);
   if ($("#p-secrets", el)) panneaux.secretsDe($("#p-secrets", el), f);
   const partager = $("#partager", el);
