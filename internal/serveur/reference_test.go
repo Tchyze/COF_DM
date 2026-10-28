@@ -331,6 +331,19 @@ func TestCapacitesEnCombat(t *testing.T) {
 	if _, f = b.local("GET", feuille, nil); f["utilisations"] != nil {
 		t.Fatalf("après un nouveau jour : %v", f["utilisations"])
 	}
+	// le combat en cours l'a appris : l'action suivante, ni une annulation, ne le défont
+	b.local("POST", u, map[string]any{"type": "attaque", "att": aldric, "cible": gob, "attaque": -1, "mode": "manuel", "nat": 15, "dm": "1", "act": "G"})
+	if _, f = b.local("GET", feuille, nil); f["utilisations"] != nil {
+		t.Fatalf("nouveau jour défait par l'action suivante : %v", f["utilisations"])
+	}
+	b.local("POST", u, map[string]any{"type": "annuler"})
+	b.local("POST", u, map[string]any{"type": "annuler"})
+	if _, f = b.local("GET", feuille, nil); f["utilisations"] != nil {
+		t.Fatalf("nouveau jour défait par une annulation : %v", f["utilisations"])
+	}
+	if c, v := b.local("POST", u, map[string]any{"type": "capacite", "id": aldric, "cible": aldric, "capacite": "voie du gue#2", "soin": "3"}); c != 200 {
+		t.Fatalf("« Halte » après un nouveau jour : %d %v", c, v)
+	}
 }
 
 // Feuille déverrouillée : le joueur monte de rang dans ses voies et écrit une voie libre ; ajouter

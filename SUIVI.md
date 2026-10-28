@@ -185,9 +185,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Défauts connus
 
-- « ☀ Nouveau jour » lancé pendant un combat est défait par l'action suivante de ce combat.
-- Une page du MJ restée ouverte sur un autre appareil continue de relire les dés (`404`) quand on les coupe ailleurs ; la case de Paramètres, elle, recharge la page.
-- En agrandissant la fenêtre avec le tiroir du menu ouvert (écran étroit), la mise en page reste celle du tiroir jusqu'au prochain clic sur ☰.
+Aucun. Les trois notés jusqu'au 22 octobre 2026 sont corrigés (PR des corrections rapides) : « ☀ Nouveau jour » (ou un repos) pendant un combat n'est plus défait par l'action suivante ni par une annulation (les combats en cours adoptent les utilisations de la feuille : `recaler`) ; une page qui relit les dés s'arrête et retire le bouton quand ils sont coupés ailleurs ; le tiroir du menu ouvert ne casse plus la mise en page en grand écran (la classe `menu` de `#app` touchait tous les boutons par la règle `.menu button` : renommée `menu-ouvert`).
 
 ### À vérifier à la main (projet 6)
 
