@@ -8,7 +8,7 @@ Dernière mise à jour : 22 octobre 2026 (version 1.2.4).
 
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
 - **Numéros d'échange** : `VersionModele` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `main` seule ; aucune PR ouverte.
+- **Branches** (28 octobre 2026) : PR 24 (corrections rapides), PR 25 et 26 (inventaire, lots 1 et 2, empilées), en attente de l'essai du MJ. La branche `preversion-inventaire` les réunit (un conflit réglé dans `enregistrerFeuille`) pour la **préversion 1.2.5-test.29** (canal Test, modèle 6). À la fusion des PR, cette branche se supprime.
 - **Prochain chantier** : projet 11 de `PROJETS.md`, l'inventaire structuré (puis 14, le butin). Questions de fond à poser au MJ avant de coder.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
