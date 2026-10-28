@@ -96,10 +96,15 @@ export function initDes({ lecture = false } = {}) {
         const j = autres[autres.length - 1];
         toast(`🎲 ${j.qui}${j.libelle ? " (" + j.libelle + ")" : ""} : ${j.total}`);
       }
-    } catch { /* hors ligne : on réessaie */ } finally { enCours = false; }
+    } catch (e) { if (e.status === 404) arreter(); /* 404 : dés coupés depuis un autre appareil ; sinon hors ligne, on réessaie */ } finally { enCours = false; }
+  };
+  const boucle = setInterval(relire, 3000);
+  const arreter = () => { // plus de boucle, plus de bouton : la page se refera au prochain chargement
+    clearInterval(boucle);
+    document.removeEventListener("visibilitychange", relire);
+    bouton.remove(); panneau.remove();
   };
   relire();
-  setInterval(relire, 3000);
   document.addEventListener("visibilitychange", relire);
 
   if (lecture) return;
