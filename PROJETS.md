@@ -15,7 +15,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 ## Où on en est
 
 - **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités utilisables), projet 12 (montée de niveau guidée, version 1.2.4), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public). Le détail, PR par PR, est dans `SUIVI.md`.
-- **Prochain chantier** : projet 11, inventaire structuré (puis 14, le butin).
+- **Chantier en cours** : projet 11, inventaire structuré (lot 1 en PR), puis 14, le butin.
 - **Au fil de l'eau** : projet 6, les essais qui ne se font qu'à la main.
 
 ## Vue d'ensemble
@@ -30,7 +30,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 6 | Restes à vérifier à la main | P1 | S | ★★ | — | en cours |
 | 9 | Aides de jeu poussées aux joueurs | P2 | M | ★★★ | — | lot 1 fait |
 | 10 | Voies et capacités utilisables | P2 | L | ★★★ | 5 | fait |
-| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | **prochain** |
+| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | **en cours** (lot 1) |
 | 12 | Montée de niveau guidée | P2 | M | ★★ | 10 | fait |
 | 13 | Impression et export PDF | P2 | M | ★★ | — | |
 | 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | |
@@ -108,8 +108,8 @@ Lettre, image, indice : envoyés en direct depuis la fiche ou l'écran du MJ, ra
 ### 10. Voies et capacités utilisables — fait
 Voies, capacités, profils et peuples saisis ou importés par le MJ, un par un ; bonus des capacités sur la feuille (« A + b ») ; capacités en combat et leurs utilisations (par combat, jour, repos) ; arbre des voies sur la page des joueurs. Aucune donnée des livres : le code n'a que le modèle.
 
-### 11. Inventaire structuré
-`Équipement` est un texte libre. Une liste d'objets (quantité, porté ou non), pouvant pointer vers une fiche « Objet » : le champ « Détenteur » de l'objet se tient alors seul, et une arme ou une armure portée compte dans les attaques et la DEF.
+### 11. Inventaire structuré — en cours
+Une liste d'objets (quantité, porté ou non, emplacement) au lieu du texte `Équipement`. Lot 1 : l'inventaire sur la feuille, un objet par emplacement, bonus et armes des objets portés comptés (en bleu, formule au survol), reprise de l'ancien équipement. Lot 2 : une ligne pointe vers une fiche « Objet », dont elle prend les chiffres, et le « Détenteur » suit dans les deux sens. Décisions dans `SUIVI.md`.
 
 ### 12. Montée de niveau guidée — fait
 Le MJ lance la montée (feuille du PJ, onglet Joueurs de l'écran du MJ) : il l'accorde et un assistant s'ouvre sur la page du joueur, ou il la fait lui-même. Fenêtres : dés de vie saisis, rangs dans le tableau des voies (coût et niveau minimal des règles), PM du profil, étapes en plus, récapitulatif. Historique des niveaux sur la feuille, annulation de la dernière montée. Tout vient de la partie `personnage.montee` du fichier de règles ; sans elle, saisie libre.

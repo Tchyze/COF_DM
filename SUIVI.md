@@ -9,7 +9,7 @@ Dernière mise à jour : 22 octobre 2026 (version 1.2.4).
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
 - **Numéros d'échange** : `VersionModele` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main` seule ; aucune PR ouverte.
-- **Prochain chantier** : projet 11 de `PROJETS.md`, l'inventaire structuré (puis 14, le butin). Questions de fond à poser au MJ avant de coder.
+- **Chantier en cours** : projet 11 de `PROJETS.md`, l'inventaire structuré, en deux lots (PR empilées) ; lot 1 (inventaire sur la feuille) en PR. Il passe le modèle à 6 et `versionDonnees` à 5 (reprise de l'ancien équipement). Puis 14, le butin.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -118,6 +118,15 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Rangs** : des points par niveau, le coût de chaque rang et le niveau minimal d'un rang, décrits par le fichier de règles, répartis dans les voies **déjà sur la feuille** (ajouter une voie de la bibliothèque se fait avant, en édition). Sans règles : rangs libres, sans contrôle. Les capacités débloquées sont rappelées.
 - **Historique** rangé dans la feuille (synchronisé) : une ligne par niveau (date, PV gagnés et le jet, rangs pris).
 
+### Inventaire (28 octobre 2026)
+
+- **Une ligne par objet** sur la feuille : nom, quantité, porté ou non, emplacement, notes ; les objets courants restent des lignes libres. Le texte « Équipement », l'armure et le bouclier des anciennes feuilles sont **repris à l'ouverture** (une ligne par ligne de texte ; armure et bouclier portés, avec leur bonus de DEF).
+- **Emplacements** : une liste générique dans le code (tête, cou, épaules, corps, mains, taille, pieds, deux anneaux, main principale, main secondaire, deux mains qui prend les deux), que le fichier de règles peut remplacer (`personnage.emplacements`). **Un seul objet porté par emplacement** (ou son nombre de places) : porter un second casque est refusé.
+- **Chiffres sur l'objet**, saisis par le MJ : des bonus (mêmes valeurs que les capacités : DEF, Init, RD, attaques, caractéristiques, PV, PM) et une arme (type, DM, bonus, portée). Ils ne comptent **que portés** ; une arme portée ajoute sa ligne d'attaque.
+- **Affichage** : une valeur changée par un objet a sa part **en bleu** (les capacités restent en vert), et **la formule au survol** : « DEF 12 = base 8 + 4 Casque du guerrier ».
+- **Joueurs** (édition ouverte) : ils cochent « porté », comptent leurs objets (−/+), ajoutent ou retirent des objets courants ; les chiffres d'un objet et son emplacement restent au MJ.
+- **Lot 2, à venir** : une ligne peut désigner une fiche « Objet » (ses chiffres sont alors ceux de la fiche) ; le **Détenteur** suit dans les deux sens (donné au PJ : dans son inventaire ; donné ailleurs : retiré de l'inventaire). Lier ou délier une fiche reste au MJ.
+
 ### Aides de jeu (19 octobre 2026)
 
 - Un **type de fiche** ; l'envoi est une relation `recu` d'un PJ vers l'aide, avec la séance. Le joueur voit **la version à jour** ; le MJ peut **retirer** un envoi.
@@ -181,7 +190,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 11, inventaire structuré** (`PROJETS.md`) : questions de fond à poser au MJ avant de coder (lien avec les fiches « Objet », arme et armure portées dans la DEF et les attaques, édition par les joueurs). Le projet 12 (montée de niveau) est publié en 1.2.4 ; le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+**Projet 11, inventaire structuré** (`PROJETS.md`) : décisions du MJ dans « Inventaire » plus haut. Lot 1 (inventaire sur la feuille) en PR ; lot 2 (lien avec les fiches « Objet », Détenteur dans les deux sens) ensuite, empilé dessus. Le projet 12 (montée de niveau) est publié en 1.2.4 ; le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 

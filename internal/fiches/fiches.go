@@ -27,8 +27,9 @@ type Attaque struct {
 	Bonus  int    `json:"bonus"`
 	Dm     string `json:"dm"`
 	Notes  string `json:"notes"`
-	Mod    int    `json:"mod"`    // bonus propre à l'arme (personnages)
-	Portee string `json:"portee"` // personnages
+	Mod    int    `json:"mod"`             // bonus propre à l'arme (personnages)
+	Portee string `json:"portee"`          // personnages
+	Objet  int    `json:"objet,omitempty"` // personnages : l'arme portée de l'inventaire qui donne cette ligne (calculée)
 }
 
 type Carac struct {

@@ -25,17 +25,27 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
   let enLecture = false; // la vue de lecture est affichée (et non le formulaire)
   api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; if (enLecture) lire(); }, () => {});
   const R = () => F.regles || {};
-  // bonus des capacités atteintes, calculés par le serveur : « A + b », b en vert, détail au survol
+  // bonus calculés par le serveur, des capacités atteintes (en vert) et des objets portés (en bleu) :
+  // « A + b », la formule au survol (« DEF 12 = base 8 + 4 Casque »)
   const E = () => F.effets || { base: {}, bonus: {}, detail: [] };
   const CLES = { att: ["att_C", "att_D", "att_M"], att_c: ["att_C"], att_d: ["att_D"], att_m: ["att_M"] };
-  function plus(k) {
+  const LIBELLES = { def: "DEF", init: "Init", rd: "RD", pv: "PV max", pm: "PM max", att_C: "Contact", att_D: "Distance", att_M: "Magique" };
+  const touche = k => d => (CLES[d.cible] || [d.cible]).includes(k);
+  function plus(k, base = E().base[k]) {
     const b = E().bonus[k];
     if (!b) return "";
-    const directs = E().detail.filter(d => (CLES[d.cible] || [d.cible]).includes(k));
-    const lignes = directs.map(d => `${d.capacite} (${d.voie}, rang ${d.rang}) : ${signe(d.valeur)}`);
+    const directs = E().detail.filter(touche(k));
+    const terme = n => `${n >= 0 ? "+" : "−"} ${Math.abs(n)}`;
+    const termes = directs.map(d => `${terme(d.valeur)} ${d.objet || `${d.capacite} (${d.voie}, rang ${d.rang})`}`);
+    // le reste vient d'une caractéristique augmentée, par un objet ou par une capacité
     const reste = b - directs.reduce((n, d) => n + d.valeur, 0);
-    if (reste) lignes.push(`${signe(reste)} par une caractéristique augmentée`);
-    return ` <span class="fp-bonus" title="${esc(lignes.join("\n"))}">${b > 0 ? "+" : "−"} ${Math.abs(b)}</span>`;
+    const parCarac = E().detail.filter(d => CARACS.includes(d.cible));
+    const resteObjet = parCarac.length > 0 && parCarac.every(d => d.objet);
+    if (reste) termes.push(`${terme(reste)} par une caractéristique augmentée`);
+    const titre = `${LIBELLES[k] || k} ${base + b} = base ${base} ${termes.join(" ")}`;
+    const objets = directs.filter(d => d.objet).reduce((n, d) => n + d.valeur, 0) + (resteObjet ? reste : 0);
+    const part = (n, cls) => n ? ` <span class="${cls}">${n > 0 ? "+" : "−"} ${Math.abs(n)}</span>` : "";
+    return `<span class="fp-avec" title="${esc(titre)}">${part(b - objets, "fp-bonus")}${part(objets, "fp-objet")}</span>`;
   }
   const AB = (k, total) => (E().bonus[k] ? `${esc(E().base[k])}${plus(k)}` : esc(total));
   const pvMax = () => F.pv + (E().bonus.pv || 0);
@@ -44,11 +54,11 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
   const pvActuel = () => F.pv_actuel ?? pvMax();
   // un bonus de capacité et un « divers » saisi à la main au même endroit : à vérifier
   function doublons() {
-    const b = E().bonus, d = [];
-    if (b.def && F.def_divers) d.push(`DEF, divers (${signe(F.def_divers)})`);
-    if (b.init && F.init_divers) d.push(`Init, divers (${signe(F.init_divers)})`);
+    const parCapacite = k => E().detail.some(x => !x.objet && touche(k)(x)), d = [];
+    if (parCapacite("def") && F.def_divers) d.push(`DEF, divers (${signe(F.def_divers)})`);
+    if (parCapacite("init") && F.init_divers) d.push(`Init, divers (${signe(F.init_divers)})`);
     for (const [t, nom] of [["C", "Contact"], ["D", "Distance"], ["M", "Magique"]]) {
-      const direct = E().detail.some(x => (CLES[x.cible] || []).includes("att_" + t));
+      const direct = parCapacite("att_" + t);
       if (direct && F.att_divers?.[t]) d.push(`${nom}, divers (${signe(F.att_divers[t])})`);
     }
     return d;
@@ -159,7 +169,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
           ${compteur("pc", "PC")}${compteur("pr", "PR")}${compteur("pm", "PM")}
         </div>
         <div class="carac">${CARACS.map(k => `<span><small>${k}</small>${AB(k, F.valeurs[k])} (${signe(F.carac[k])})</span>`).join("")}</div>
-        ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b> ${E().bonus["att_" + a.type] ? `${signe(a.bonus - E().bonus["att_" + a.type])}${plus("att_" + a.type)}` : signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b>${a.objet ? ` <span class="hint" title="Arme portée, dans l'inventaire">🗡</span>` : ""} ${E().bonus["att_" + a.type] ? `${signe(a.bonus - E().bonus["att_" + a.type])}${plus("att_" + a.type, a.bonus - E().bonus["att_" + a.type])}` : signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
         ${peutEcrire && doublons().length ? `<p class="hint fp-doublon">⚠ À vérifier : ${doublons().map(esc).join(", ")} s'ajoute${doublons().length > 1 ? "nt" : ""} aux bonus des capacités. Un bonus saisi à la main pour la même capacité compterait deux fois.</p>` : ""}
         ${peutEcrire && (R().repos?.length || comptees().length) ? `<div class="ligne">${(R().repos || []).map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}
           ${comptees().some(x => x.par === "jour") ? `<button class="petit" id="fp-jour" title="Les capacités « par jour » redeviennent utilisables">☀ Nouveau jour</button>` : ""}</div>` : ""}
@@ -168,9 +178,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
       ${utilisationsHTML()}
       ${niveauxHTML()}
       ${F.capacites ? `<h3 style="margin-top:12px">Capacités</h3><div class="bst-texte">${esc(F.capacites)}</div>` : ""}
-      ${F.equipement || bourse || F.armure?.nom || F.bouclier?.nom ? `<h3 style="margin-top:12px">Équipement</h3>
-        ${[F.armure?.nom && `${F.armure.nom} (${signe(F.armure.bonus)} DEF)`, F.bouclier?.nom && `${F.bouclier.nom} (${signe(F.bouclier.bonus)} DEF)`].filter(Boolean).map(x => `<div>${esc(x)}</div>`).join("")}
-        ${F.equipement ? `<div class="bst-texte">${esc(F.equipement)}</div>` : ""}${bourse ? `<p class="hint">Bourse : ${esc(bourse)}</p>` : ""}` : ""}
+      ${inventaire().length || bourse ? `<h3 style="margin-top:12px">Inventaire</h3>${inventaireHTML()}${bourse ? `<p class="hint">Bourse : ${esc(bourse)}</p>` : ""}` : ""}
       ${identite.length ? `<dl class="proprietes" style="margin-top:12px">${identite.map(([n, v]) => `<div><dt>${n}</dt><dd>${esc(v)}</dd></div>`).join("")}</dl>` : ""}
       ${!joueur && F.notes ? `<h3 style="margin-top:12px">Notes du MJ</h3><div class="bst-texte">${esc(F.notes)}</div>` : ""}`;
     armerBulles(F.voies);
@@ -209,6 +217,46 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
       if (n > 0) f.utilisations[x.cle] = { par: x.par, n: Math.min(n, x.fois) }; else delete f.utilisations[x.cle];
       if (await enregistrer(f, b.dataset.util === "plus" ? `« ${x.nom} » utilisée.` : `« ${x.nom} » remise à zéro.`)) lire();
     });
+    // l'inventaire : porter ou ôter un objet, en compter un de plus ou de moins, d'un clic
+    $$("[data-porte]", box).forEach(c => c.onchange = async () => {
+      const f = structuredClone(F), o = f.inventaire.find(x => x.id === +c.dataset.porte);
+      o.porte = c.checked;
+      await enregistrer(f, `« ${o.nom} » ${o.porte ? "porté" : "ôté"}.`);
+      lire(); // refusé (emplacement pris) : la case revient
+    });
+    $$("[data-qte]", box).forEach(b => {
+      const changer = async () => {
+        const f = structuredClone(F), i = f.inventaire.findIndex(x => x.id === +b.dataset.qte), o = f.inventaire[i];
+        o.quantite += +b.dataset.d;
+        if (o.quantite < 1) f.inventaire.splice(i, 1);
+        if (await enregistrer(f, o.quantite < 1 ? `« ${o.nom} » retiré de l'inventaire.` : "")) lire();
+      };
+      // le dernier exemplaire : deux clics, il quitte l'inventaire
+      if (b.dataset.d === "-1" && F.inventaire.find(x => x.id === +b.dataset.qte)?.quantite === 1) armer(b, "Retirer ?", changer);
+      else b.onclick = changer;
+    });
+  }
+
+  // ---------------------------------------------------------------- inventaire
+  const inventaire = () => F.inventaire || [];
+  const emplacements = () => F.emplacements || [];
+  const nomEmplacement = c => emplacements().find(e => e.cle === c)?.nom || c;
+  const CIBLES = [...Object.keys(LIBELLES).filter(k => !k.startsWith("att_")), "att", "att_c", "att_d", "att_m", ...CARACS];
+  const libCible = c => ({ att: "Attaque", att_c: "Contact", att_d: "Distance", att_m: "Magique" })[c] || LIBELLES[c] || c;
+  const chiffres = o => [...(o.bonus || []).map(b => `${libCible(b.cible)} ${signe(b.valeur)}`),
+    o.arme && `${TYPES[o.arme.type] || o.arme.type}${o.arme.dm ? ` ${o.arme.dm}` : ""}${o.arme.mod ? ` ${signe(o.arme.mod)}` : ""}${o.arme.portee ? ` · ${o.arme.portee}` : ""}`].filter(Boolean).join(", ");
+  function inventaireHTML() {
+    // ce qui est porté d'abord, dans l'ordre des emplacements ; puis le reste, dans l'ordre saisi
+    const rang = o => (o.porte ? 0 : 1) * 1000 + Math.max(0, emplacements().findIndex(e => e.cle === o.emplacement));
+    const l = inventaire().map((o, i) => [o, i]).sort((a, b) => rang(a[0]) - rang(b[0]) || a[1] - b[1]).map(x => x[0]);
+    return `<ul class="fp-inv">${l.map(o => `<li class="${o.porte ? "porte" : ""}">
+        ${o.emplacement && peutEcrire ? `<label class="fp-porte" title="${o.porte ? "Ôter" : "Porter"} (${esc(nomEmplacement(o.emplacement))})"><input type="checkbox" data-porte="${o.id}"${o.porte ? " checked" : ""} aria-label="Porter « ${esc(o.nom)} »"></label>` : `<span class="fp-porte">${o.porte ? "✔" : ""}</span>`}
+        <span class="fp-inv-nom"><b>${esc(o.nom)}</b>${o.quantite > 1 ? ` <span class="num">×${o.quantite}</span>` : ""}
+          ${o.emplacement ? `<span class="hint">${esc(nomEmplacement(o.emplacement))}</span>` : ""}
+          ${chiffres(o) ? `<span class="${o.porte ? "fp-objet" : "hint"}">${esc(chiffres(o))}</span>` : ""}
+          ${o.notes ? `<span class="hint">${esc(o.notes)}</span>` : ""}</span>
+        ${peutEcrire ? `<span class="fp-qte"><button class="ghost petit" data-qte="${o.id}" data-d="-1" aria-label="« ${esc(o.nom)} » −1">−</button><button class="ghost petit" data-qte="${o.id}" data-d="1" aria-label="« ${esc(o.nom)} » +1">+</button></span>` : ""}
+      </li>`).join("")}</ul>`;
   }
 
   // historique des montées de niveau, la plus récente d'abord ; le MJ peut annuler la dernière
@@ -272,8 +320,13 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
     enLecture = false;
     bulle().hidden = true;
     const f = structuredClone(F), rg = R();
-    // à côté d'un champ saisi, ce que les capacités y ajoutent
-    const nomB = (nom, ...cles) => { const b = cles.reduce((n, k) => n + (E().bonus[k] || 0), 0); return b && cles.some(k => E().detail.some(d => (CLES[d.cible] || [d.cible]).includes(k))) ? `${nom} <small class="fp-bonus">${signe(b)} capacités</small>` : nom; };
+    // à côté d'un champ saisi, ce que les capacités et les objets portés y ajoutent
+    const nomB = (nom, ...cles) => {
+      const b = cles.reduce((n, k) => n + (E().bonus[k] || 0), 0), d = E().detail.filter(x => cles.some(k => touche(k)(x)));
+      if (!b || !d.length) return nom;
+      const qui = [d.some(x => !x.objet) && "capacités", d.some(x => x.objet) && "objets"].filter(Boolean).join(" et ");
+      return `${nom} <small class="${d.every(x => x.objet) ? "fp-objet" : "fp-bonus"}">${signe(b)} ${qui}</small>`;
+    };
     const nombre = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input type="number" data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? 0)}" ${plus}></label>`;
     const texte = (nom, chemin, plus = "") => `<label class="champ"><span>${nom}</span><input data-p="${chemin}" value="${esc(chemin.split(".").reduce((x, k) => x?.[k], f) ?? "")}" ${plus}></label>`;
     const choix = (nom, chemin, liste, valeur) => liste?.length
@@ -290,14 +343,14 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
         </div>
         <h3>Défense et initiative</h3>
         <div class="bst-grille">
-          ${texte("Armure", "armure.nom")}${nombre("Bonus d'armure", "armure.bonus", 'min="0"')}${texte("Bouclier", "bouclier.nom")}${nombre("Bonus de bouclier", "bouclier.bonus", 'min="0"')}
           ${nombre(nomB("DEF, divers", "def"), "def_divers")}${nombre(nomB("Init, divers", "init"), "init_divers")}
         </div>
+        <p class="hint">L'armure, le bouclier et les objets qui protègent se portent dans l'inventaire : leurs bonus s'y saisissent.</p>
         <h3>Attaques</h3>
         <div class="bst-grille">${nombre(nomB("Contact, divers", "att_C"), "att_divers.C")}${nombre(nomB("Distance, divers", "att_D"), "att_divers.D")}${nombre(nomB("Magique, divers", "att_M"), "att_divers.M")}</div>
         <div class="colonne" style="gap:6px" id="fp-atks"></div>
         <div><button type="button" class="petit" id="fp-atk">＋ Attaque</button></div>
-        <p class="hint">Le bonus d'attaque est calculé : niveau + modificateur + divers + bonus propre à l'arme.</p>
+        <p class="hint">Le bonus d'attaque est calculé : niveau + modificateur + divers + bonus propre à l'arme. Une arme portée de l'inventaire ajoute sa ligne d'elle-même.</p>
         <h3>Voies</h3>
         <p class="hint">Une voie de la bibliothèque montre ses capacités : un clic sur une case fixe le rang. Une voie libre se remplit rang par rang.${joueur ? " Ajouter une voie de la bibliothèque reste au MJ." : ""}</p>
         <div id="fp-voies"></div>
@@ -305,13 +358,16 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
           ${REF.voies.length && !joueur ? `<select id="fp-voie-ref" aria-label="Voie de la bibliothèque"><option value="">＋ Voie de la bibliothèque…</option>${REF.voies.map((v, i) => `<option value="${i}">${esc(v.nom)}</option>`).join("")}</select>` : ""}
           ${profil && !joueur ? `<button type="button" class="petit" id="fp-profil">Appliquer le profil « ${esc(profil.nom)} »</button>` : ""}</div>
         <label class="champ"><span>Capacités <small>hors voies</small></span><textarea data-p="capacites" rows="3">${esc(f.capacites)}</textarea></label>
-        <label class="champ"><span>Équipement</span><textarea data-p="equipement" rows="4">${esc(f.equipement)}</textarea></label>
+        <h3>Inventaire</h3>
+        <p class="hint">Un objet porté occupe son emplacement (un seul casque, une seule armure…).${joueur ? " Ses chiffres (bonus, arme) sont ceux du MJ." : " Ses bonus et son arme ne comptent que s'il est porté."}</p>
+        <div class="colonne" style="gap:6px" id="fp-inv"></div>
+        <div><button type="button" class="petit" id="fp-objet">＋ Objet</button></div>
         <div class="bst-grille">${nombre("Pièces d'or", "bourse.po", 'min="0"')}${nombre("Pièces d'argent", "bourse.pa", 'min="0"')}${nombre("Pièces de cuivre", "bourse.pc", 'min="0"')}</div>
         <div class="bst-grille">${texte("Sexe", "sexe")}${texte("Âge", "age")}${texte("Taille", "taille_physique")}${texte("Poids", "poids")}${texte("Divinité", "divinite")}${texte("Langues", "langues")}</div>
         ${joueur ? "" : `<label class="champ"><span>Notes du MJ <small>jamais montrées au joueur</small></span><textarea data-p="notes" rows="3">${esc(f.notes)}</textarea></label>`}
         <div class="ligne"><button type="submit" class="primary">Enregistrer</button><button type="button" id="fp-annuler">Annuler</button></div>
       </form>`;
-    const atks = $("#fp-atks", box), voies = $("#fp-voies", box);
+    const atks = $("#fp-atks", box), voies = $("#fp-voies", box), inv = $("#fp-inv", box);
     const ligneAtk = a => `<div class="fp-atk">
         <input data-k="nom" value="${esc(a.nom)}" placeholder="Nom" aria-label="Nom de l'attaque">
         <select data-k="type" aria-label="Type">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${a.type === k ? " selected" : ""}>${v}</option>`).join("")}</select>
@@ -359,7 +415,49 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
       bulle().hidden = true;
       peindreVoies();
     };
-    atks.innerHTML = f.attaques.map(ligneAtk).join("");
+    atks.innerHTML = f.attaques.filter(a => !a.objet).map(ligneAtk).join(""); // celles des armes portées se recalculent
+
+    // l'inventaire : une ligne par objet ; ses chiffres (bonus, arme) dans un volet, pour le MJ
+    const optionsEmpl = c => `<option value="">— aucun —</option>${emplacements().map(e => `<option value="${esc(e.cle)}"${e.cle === c ? " selected" : ""}>${esc(e.nom)}</option>`).join("")}${c && !emplacements().some(e => e.cle === c) ? `<option value="${esc(c)}" selected>${esc(c)}</option>` : ""}`;
+    const ligneBonus = b => `<span class="fp-inv-bonus"><select data-b="cible" aria-label="Valeur augmentée">${CIBLES.map(c => `<option value="${c}"${c === b.cible ? " selected" : ""}>${esc(libCible(c))}</option>`).join("")}</select><input data-b="valeur" type="number" min="-20" max="20" value="${esc(b.valeur ?? 1)}" aria-label="Bonus"><button type="button" class="ghost petit" data-retirer-bonus aria-label="Retirer le bonus">✕</button></span>`;
+    const ligneObjet = o => `<div class="fp-inv-ed" data-id="${o.id || ""}">
+        <div class="fp-inv-ligne">
+          <input data-o="nom" value="${esc(o.nom)}" placeholder="Objet" aria-label="Objet">
+          <input data-o="quantite" type="number" min="1" value="${esc(o.quantite || 1)}" aria-label="Quantité" title="Quantité">
+          <select data-o="emplacement" aria-label="Emplacement" title="Emplacement"${joueur && o.id ? " disabled" : ""}>${optionsEmpl(o.emplacement)}</select>
+          <label class="t-coche"><input type="checkbox" data-o="porte"${o.porte ? " checked" : ""}> porté</label>
+          <button type="button" class="ghost petit" data-retirer-objet aria-label="Retirer l'objet">✕</button>
+        </div>
+        ${joueur ? (chiffres(o) ? `<p class="hint">${esc(chiffres(o))}</p>` : "") : `<details class="fp-inv-chiffres"><summary>Chiffres${chiffres(o) ? ` : ${esc(chiffres(o))}` : ""}</summary>
+          <div class="ligne" data-bonus>${(o.bonus || []).map(ligneBonus).join("")}<button type="button" class="petit" data-ajout-bonus>＋ Bonus</button></div>
+          <div class="ligne fp-inv-arme${o.arme ? " on" : ""}"><label class="t-coche"><input type="checkbox" data-a="arme"${o.arme ? " checked" : ""}> Arme</label>
+            <select data-a="type" aria-label="Type d'attaque">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${(o.arme?.type || "C") === k ? " selected" : ""}>${v}</option>`).join("")}</select>
+            <input data-a="dm" value="${esc(o.arme?.dm || "")}" placeholder="DM : 1d8" aria-label="Dégâts">
+            <input data-a="mod" type="number" value="${esc(o.arme?.mod || 0)}" aria-label="Bonus propre à l'arme" title="Bonus propre à l'arme">
+            <input data-a="portee" value="${esc(o.arme?.portee || "")}" placeholder="Portée" aria-label="Portée"></div>
+        </details>`}
+        <input data-o="notes" value="${esc(o.notes || "")}" placeholder="Notes" aria-label="Notes">
+      </div>`;
+    inv.innerHTML = (f.inventaire || []).map(ligneObjet).join("");
+    inv.onchange = e => { if (e.target.dataset.a === "arme") e.target.closest(".fp-inv-arme").classList.toggle("on", e.target.checked); };
+    inv.onclick = e => {
+      const t = e.target;
+      if (t.closest("[data-retirer-objet]")) t.closest(".fp-inv-ed").remove();
+      else if (t.closest("[data-retirer-bonus]")) t.closest(".fp-inv-bonus").remove();
+      else if (t.closest("[data-ajout-bonus]")) t.closest("[data-ajout-bonus]").insertAdjacentHTML("beforebegin", ligneBonus({ cible: "def", valeur: 1 }));
+    };
+    $("#fp-objet", box).onclick = () => { inv.insertAdjacentHTML("beforeend", ligneObjet({ nom: "", quantite: 1 })); $(".fp-inv-ed:last-child [data-o=nom]", inv).focus(); };
+    const lireInventaire = () => $$(".fp-inv-ed", inv).map(l => {
+      const v = k => $(`[data-o=${k}]`, l), a = k => $(`[data-a=${k}]`, l);
+      const ancien = (f.inventaire || []).find(o => String(o.id) === l.dataset.id) || {};
+      const o = { ...ancien, id: +l.dataset.id || 0, nom: v("nom").value.trim(), quantite: Math.max(1, +v("quantite").value || 1),
+        emplacement: v("emplacement").value, porte: v("porte").checked, notes: v("notes").value.trim() };
+      if (!joueur) {
+        o.bonus = $$(".fp-inv-bonus", l).map(b => ({ cible: $("[data-b=cible]", b).value, valeur: +$("[data-b=valeur]", b).value || 0 })).filter(b => b.valeur);
+        o.arme = a("arme").checked ? { type: a("type").value, dm: a("dm").value.trim(), mod: +a("mod").value || 0, portee: a("portee").value.trim() } : undefined;
+      }
+      return o;
+    }).filter(o => o.nom);
     peindreVoies();
     atks.onclick = e => { const b = e.target.closest("[data-retirer]"); if (b) b.closest(".fp-atk").remove(); };
     $("#fp-atk", box).onclick = () => atks.insertAdjacentHTML("beforeend", ligneAtk({ nom: "", type: "C", mod: 0, dm: "", portee: "", notes: "" }));
@@ -389,6 +487,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
       }
       f.attaques = $$(".fp-atk", atks).map(r => ({ nom: $("[data-k=nom]", r).value.trim(), type: $("[data-k=type]", r).value, mod: +$("[data-k=mod]", r).value || 0,
         dm: $("[data-k=dm]", r).value.trim(), portee: $("[data-k=portee]", r).value.trim(), notes: $("[data-k=notes]", r).value.trim() }));
+      f.inventaire = lireInventaire();
       // une voie liée garde une copie des noms de la bibliothèque, lisible sans elle
       f.voies = ed.filter(v => v.nom.trim()).map(v => {
         const lib = voieDeRef(v);

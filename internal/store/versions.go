@@ -31,9 +31,13 @@ import "strconv"
 // Modèle 5 : la feuille garde l'historique des montées de niveau (« niveaux ») et les points de
 // capacité en réserve (« points_capacite ») ; le fichier de règles décrit la montée de niveau
 // (« personnage.montee »).
+//
+// Modèle 6 : la feuille range son équipement dans un inventaire (« inventaire » : objets, quantités,
+// portés, bonus, armes ; versionDonnees 5) au lieu des champs « equipement », « armure » et
+// « bouclier » ; le fichier de règles décrit les emplacements (« personnage.emplacements »).
 const (
 	VersionProtocole = 1
-	VersionModele    = 5
+	VersionModele    = 6
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

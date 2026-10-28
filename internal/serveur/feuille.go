@@ -205,6 +205,7 @@ func (s *Serveur) vueFeuille(e store.Entite, f fiches.Feuille, modifie float64, 
 	m["entite"], m["niveau"], m["modifie"], m["existe"] = e.ID, niveauDe(e), modifie, existe
 	rg := orVide(s.lireRegles().Personnage)
 	m["regles"] = rg
+	m["emplacements"] = rg.LesEmplacements() // ceux des règles, sinon ceux par défaut
 	// les PM max que ce PJ gagne à chaque niveau, selon son profil (montée de niveau)
 	if pm := rg.Montee.GainPmDe(profilDe(e)); pm > 0 {
 		m["montee_pm"] = pm
@@ -298,6 +299,13 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 				erreur(w, 403, "Seul le MJ ajoute une voie de la bibliothèque à une feuille : « "+nom+" ».")
 				return
 			}
+			// les chiffres des objets restent ceux du MJ ; la feuille se revalide sans eux
+			f.GarderChiffres(ancienne, fiches.IDsRecus(corps))
+			if f, err = fiches.NormaliserFeuilleAvec(f.JSON(), niveauDe(e), s.lireRegles().Personnage, s.effetsDe(f.Voies)); err != nil {
+				erreurFiche(w, err)
+				return
+			}
+			f.Notes, f.Niveaux, f.PointsCapacite, f.NiveauAccorde = ancienne.Notes, ancienne.Niveaux, ancienne.PointsCapacite, ancienne.NiveauAccorde
 		}
 	}
 	modifie, err := s.store.EcrireFeuille(e.ID, f.Stockage(), attendu.Modifie, auteurDe(r))
