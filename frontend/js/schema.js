@@ -59,6 +59,7 @@ export function valeurCourte(type, cle, v, refs = {}) {
     case "choix": return `<span class="statut-${esc(String(v).replace(/ /g, "."))}">${esc(v)}</span>`;
     case "monstre": return `<a href="#/bestiaire/${esc(v)}">bestiaire n°${esc(v)}</a>`;
     case "adversaires": return esc((v || []).map(a => `${a.qte} × ${a.nom || "créature"}`).join(", "));
+    case "equipement": return esc([v.emplacement, ...(v.bonus || []).map(b => `${b.cible} ${b.valeur >= 0 ? "+" : "−"}${Math.abs(b.valeur)}`), v.arme && `arme ${v.arme.dm || ""}`.trim()].filter(Boolean).join(", "));
     default: return esc(v);
   }
 }

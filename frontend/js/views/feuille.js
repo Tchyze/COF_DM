@@ -4,6 +4,7 @@
 // jointes à la feuille (f.regles).
 import { $, $$, esc, api, toast, armer, dateHeure } from "../ui.js";
 import { lignesEffets, libellePar, cle, voieLiee } from "../capacites.js";
+import { selecteur } from "../composants.js";
 import { monterNiveau, annulerMontee, accorderNiveau, texteMontee } from "../niveau.js";
 
 export const CARACS = ["FOR", "DEX", "CON", "INT", "SAG", "CHA"];
@@ -251,7 +252,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
     const l = inventaire().map((o, i) => [o, i]).sort((a, b) => rang(a[0]) - rang(b[0]) || a[1] - b[1]).map(x => x[0]);
     return `<ul class="fp-inv">${l.map(o => `<li class="${o.porte ? "porte" : ""}">
         ${o.emplacement && peutEcrire ? `<label class="fp-porte" title="${o.porte ? "Ôter" : "Porter"} (${esc(nomEmplacement(o.emplacement))})"><input type="checkbox" data-porte="${o.id}"${o.porte ? " checked" : ""} aria-label="Porter « ${esc(o.nom)} »"></label>` : `<span class="fp-porte">${o.porte ? "✔" : ""}</span>`}
-        <span class="fp-inv-nom"><b>${esc(o.nom)}</b>${o.quantite > 1 ? ` <span class="num">×${o.quantite}</span>` : ""}
+        <span class="fp-inv-nom">${o.fiche && !joueur ? `<a href="#/f/${o.fiche}" title="Objet du monde : sa fiche"><b>${esc(o.nom)}</b> 🔗</a>` : `<b>${esc(o.nom)}</b>`}${o.quantite > 1 ? ` <span class="num">×${o.quantite}</span>` : ""}
           ${o.emplacement ? `<span class="hint">${esc(nomEmplacement(o.emplacement))}</span>` : ""}
           ${chiffres(o) ? `<span class="${o.porte ? "fp-objet" : "hint"}">${esc(chiffres(o))}</span>` : ""}
           ${o.notes ? `<span class="hint">${esc(o.notes)}</span>` : ""}</span>
@@ -361,7 +362,8 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
         <h3>Inventaire</h3>
         <p class="hint">Un objet porté occupe son emplacement (un seul casque, une seule armure…).${joueur ? " Ses chiffres (bonus, arme) sont ceux du MJ." : " Ses bonus et son arme ne comptent que s'il est porté."}</p>
         <div class="colonne" style="gap:6px" id="fp-inv"></div>
-        <div><button type="button" class="petit" id="fp-objet">＋ Objet</button></div>
+        <div class="ligne"><button type="button" class="petit" id="fp-objet">＋ Objet</button>
+          ${joueur ? "" : `<div id="fp-objet-monde" style="flex:1;min-width:220px" title="Une fiche « Objet » : le PJ en devient le détenteur"></div>`}</div>
         <div class="bst-grille">${nombre("Pièces d'or", "bourse.po", 'min="0"')}${nombre("Pièces d'argent", "bourse.pa", 'min="0"')}${nombre("Pièces de cuivre", "bourse.pc", 'min="0"')}</div>
         <div class="bst-grille">${texte("Sexe", "sexe")}${texte("Âge", "age")}${texte("Taille", "taille_physique")}${texte("Poids", "poids")}${texte("Divinité", "divinite")}${texte("Langues", "langues")}</div>
         ${joueur ? "" : `<label class="champ"><span>Notes du MJ <small>jamais montrées au joueur</small></span><textarea data-p="notes" rows="3">${esc(f.notes)}</textarea></label>`}
@@ -420,15 +422,18 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
     // l'inventaire : une ligne par objet ; ses chiffres (bonus, arme) dans un volet, pour le MJ
     const optionsEmpl = c => `<option value="">— aucun —</option>${emplacements().map(e => `<option value="${esc(e.cle)}"${e.cle === c ? " selected" : ""}>${esc(e.nom)}</option>`).join("")}${c && !emplacements().some(e => e.cle === c) ? `<option value="${esc(c)}" selected>${esc(c)}</option>` : ""}`;
     const ligneBonus = b => `<span class="fp-inv-bonus"><select data-b="cible" aria-label="Valeur augmentée">${CIBLES.map(c => `<option value="${c}"${c === b.cible ? " selected" : ""}>${esc(libCible(c))}</option>`).join("")}</select><input data-b="valeur" type="number" min="-20" max="20" value="${esc(b.valeur ?? 1)}" aria-label="Bonus"><button type="button" class="ghost petit" data-retirer-bonus aria-label="Retirer le bonus">✕</button></span>`;
-    const ligneObjet = o => `<div class="fp-inv-ed" data-id="${o.id || ""}">
+    // un objet du monde (lié à une fiche « Objet ») : son nom et ses chiffres sont ceux de la fiche ;
+    // l'ôter de l'inventaire lui retire son détenteur, ce qui reste au MJ
+    const ligneObjet = o => `<div class="fp-inv-ed" data-id="${o.id || ""}" data-fiche="${o.fiche || ""}">
         <div class="fp-inv-ligne">
-          <input data-o="nom" value="${esc(o.nom)}" placeholder="Objet" aria-label="Objet">
+          <input data-o="nom" value="${esc(o.nom)}" placeholder="Objet" aria-label="Objet"${o.fiche ? ` readonly title="Le nom de la fiche de l'objet"` : ""}>
           <input data-o="quantite" type="number" min="1" value="${esc(o.quantite || 1)}" aria-label="Quantité" title="Quantité">
-          <select data-o="emplacement" aria-label="Emplacement" title="Emplacement"${joueur && o.id ? " disabled" : ""}>${optionsEmpl(o.emplacement)}</select>
+          <select data-o="emplacement" aria-label="Emplacement" title="Emplacement"${(joueur && o.id) || o.fiche ? " disabled" : ""}>${optionsEmpl(o.emplacement)}</select>
           <label class="t-coche"><input type="checkbox" data-o="porte"${o.porte ? " checked" : ""}> porté</label>
-          <button type="button" class="ghost petit" data-retirer-objet aria-label="Retirer l'objet">✕</button>
+          ${joueur && o.fiche ? `<span></span>` : `<button type="button" class="ghost petit" data-retirer-objet aria-label="Retirer l'objet"${o.fiche ? ` title="Il n'aura plus de détenteur"` : ""}>✕</button>`}
         </div>
-        ${joueur ? (chiffres(o) ? `<p class="hint">${esc(chiffres(o))}</p>` : "") : `<details class="fp-inv-chiffres"><summary>Chiffres${chiffres(o) ? ` : ${esc(chiffres(o))}` : ""}</summary>
+        ${o.fiche ? `<p class="hint">🔗 Objet du monde${joueur ? "" : ` : chiffres de <a href="#/f/${o.fiche}">sa fiche</a>`}${chiffres(o) ? ` · ${esc(chiffres(o))}` : ""}</p>`
+        : joueur ? (chiffres(o) ? `<p class="hint">${esc(chiffres(o))}</p>` : "") : `<details class="fp-inv-chiffres"><summary>Chiffres${chiffres(o) ? ` : ${esc(chiffres(o))}` : ""}</summary>
           <div class="ligne" data-bonus>${(o.bonus || []).map(ligneBonus).join("")}<button type="button" class="petit" data-ajout-bonus>＋ Bonus</button></div>
           <div class="ligne fp-inv-arme${o.arme ? " on" : ""}"><label class="t-coche"><input type="checkbox" data-a="arme"${o.arme ? " checked" : ""}> Arme</label>
             <select data-a="type" aria-label="Type d'attaque">${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${(o.arme?.type || "C") === k ? " selected" : ""}>${v}</option>`).join("")}</select>
@@ -447,12 +452,30 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
       else if (t.closest("[data-ajout-bonus]")) t.closest("[data-ajout-bonus]").insertAdjacentHTML("beforebegin", ligneBonus({ cible: "def", valeur: 1 }));
     };
     $("#fp-objet", box).onclick = () => { inv.insertAdjacentHTML("beforeend", ligneObjet({ nom: "", quantite: 1 })); $(".fp-inv-ed:last-child [data-o=nom]", inv).focus(); };
+    // un objet du monde : choisi parmi les fiches « Objet » ; ses chiffres arrivent à l'enregistrement
+    const zoneMonde = $("#fp-objet-monde", box);
+    const armerMonde = () => { // un sélecteur vide, refait après chaque choix
+      const choix = selecteur(zoneMonde, { cibles: ["objet"], multiple: false, auChangement: async () => {
+        const id = choix.valeur();
+        if (!id) return;
+        if ($(`.fp-inv-ed[data-fiche="${id}"]`, inv)) toast("Cet objet est déjà dans l'inventaire.", true);
+        else {
+          try {
+            const o = await api("GET", `/api/entites/${id}`);
+            inv.insertAdjacentHTML("beforeend", ligneObjet({ fiche: o.id, nom: o.nom, quantite: 1, ...(o.data.equipement || {}) }));
+          } catch (e) { toast(e.message, true); }
+        }
+        armerMonde();
+      } });
+      $("input", zoneMonde).placeholder = "＋ Objet du monde…";
+    };
+    if (zoneMonde) armerMonde();
     const lireInventaire = () => $$(".fp-inv-ed", inv).map(l => {
       const v = k => $(`[data-o=${k}]`, l), a = k => $(`[data-a=${k}]`, l);
       const ancien = (f.inventaire || []).find(o => String(o.id) === l.dataset.id) || {};
-      const o = { ...ancien, id: +l.dataset.id || 0, nom: v("nom").value.trim(), quantite: Math.max(1, +v("quantite").value || 1),
+      const o = { ...ancien, id: +l.dataset.id || 0, fiche: +l.dataset.fiche || undefined, nom: v("nom").value.trim(), quantite: Math.max(1, +v("quantite").value || 1),
         emplacement: v("emplacement").value, porte: v("porte").checked, notes: v("notes").value.trim() };
-      if (!joueur) {
+      if (!joueur && !o.fiche) {
         o.bonus = $$(".fp-inv-bonus", l).map(b => ({ cible: $("[data-b=cible]", b).value, valeur: +$("[data-b=valeur]", b).value || 0 })).filter(b => b.valeur);
         o.arme = a("arme").checked ? { type: a("type").value, dm: a("dm").value.trim(), mod: +a("mod").value || 0, portee: a("portee").value.trim() } : undefined;
       }

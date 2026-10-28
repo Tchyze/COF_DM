@@ -9,7 +9,7 @@ Dernière mise à jour : 22 octobre 2026 (version 1.2.4).
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
 - **Numéros d'échange** : `VersionModele` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main` seule ; aucune PR ouverte.
-- **Chantier en cours** : projet 11 de `PROJETS.md`, l'inventaire structuré, en deux lots (PR empilées) ; lot 1 (inventaire sur la feuille) en PR. Il passe le modèle à 6 et `versionDonnees` à 5 (reprise de l'ancien équipement). Puis 14, le butin.
+- **Chantier en cours** : projet 11 de `PROJETS.md`, l'inventaire structuré, en deux lots (PR empilées, à essayer ensemble) : lot 1 (inventaire sur la feuille), lot 2 (objets du monde). Ensemble, ils passent le modèle à 6 et `versionDonnees` à 5 (reprise de l'ancien équipement) ; si le lot 1 était publié seul, le lot 2 demanderait le modèle 7. Puis 14, le butin.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -125,7 +125,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Chiffres sur l'objet**, saisis par le MJ : des bonus (mêmes valeurs que les capacités : DEF, Init, RD, attaques, caractéristiques, PV, PM) et une arme (type, DM, bonus, portée). Ils ne comptent **que portés** ; une arme portée ajoute sa ligne d'attaque.
 - **Affichage** : une valeur changée par un objet a sa part **en bleu** (les capacités restent en vert), et **la formule au survol** : « DEF 12 = base 8 + 4 Casque du guerrier ».
 - **Joueurs** (édition ouverte) : ils cochent « porté », comptent leurs objets (−/+), ajoutent ou retirent des objets courants ; les chiffres d'un objet et son emplacement restent au MJ.
-- **Lot 2, à venir** : une ligne peut désigner une fiche « Objet » (ses chiffres sont alors ceux de la fiche) ; le **Détenteur** suit dans les deux sens (donné au PJ : dans son inventaire ; donné ailleurs : retiré de l'inventaire). Lier ou délier une fiche reste au MJ.
+- **Objets du monde** (lot 2) : une ligne peut désigner une fiche « Objet », dont elle prend le nom et les chiffres (champ « Chiffres » de la fiche : emplacement, bonus, arme). Le **Détenteur suit dans les deux sens** : donné à un PJ, l'objet entre dans son inventaire (et quitte celui d'un autre PJ) ; donné ailleurs ou ôté de l'inventaire, il n'y est plus / n'a plus de détenteur. Fiche effacée : la ligne reste, en objet courant. Lier ou retirer un objet du monde reste au MJ. Rien ne suit quand les feuilles de personnage sont coupées.
 
 ### Aides de jeu (19 octobre 2026)
 
@@ -190,7 +190,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 11, inventaire structuré** (`PROJETS.md`) : décisions du MJ dans « Inventaire » plus haut. Lot 1 (inventaire sur la feuille) en PR ; lot 2 (lien avec les fiches « Objet », Détenteur dans les deux sens) ensuite, empilé dessus. Le projet 12 (montée de niveau) est publié en 1.2.4 ; le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+**Projet 11, inventaire structuré** (`PROJETS.md`) : décisions du MJ dans « Inventaire » plus haut. Lot 1 (inventaire sur la feuille) et lot 2 (objets du monde, empilé dessus) en PR, à essayer ensemble. Le projet 12 (montée de niveau) est publié en 1.2.4 ; le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 

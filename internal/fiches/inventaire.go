@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Tchyze/cof_dm/internal/modele"
 	"github.com/Tchyze/cof_dm/internal/reference"
 	"github.com/Tchyze/cof_dm/internal/regles"
 )
@@ -16,9 +17,12 @@ import (
 // le même détail (« DEF 12 = 8 + 4 Casque »), et une arme portée donne sa ligne d'attaque. Les
 // chiffres d'un objet sont saisis par le MJ : aucun ne vient d'un livre.
 
-// Objet : une ligne de l'inventaire. ID : propre à la feuille, donné à l'enregistrement.
+// Objet : une ligne de l'inventaire. ID : propre à la feuille, donné à l'enregistrement. Fiche : la
+// fiche « Objet » du monde qu'elle désigne (0 : un objet courant) ; la ligne garde alors une copie de
+// son nom et de ses chiffres, que le serveur tient à jour (internal/serveur/inventaire.go).
 type Objet struct {
 	ID          int          `json:"id"`
+	Fiche       int64        `json:"fiche,omitempty"`
 	Nom         string       `json:"nom"`
 	Quantite    int          `json:"quantite"`
 	Porte       bool         `json:"porte,omitempty"`
@@ -56,7 +60,7 @@ func (f *Feuille) verifierInventaire(emplacements []regles.Emplacement) error {
 	if len(f.Inventaire) > objetsMax {
 		return invalide("inventaire : %d objets au plus.", objetsMax)
 	}
-	vus, prochain := map[int]bool{}, 1
+	vus, fichesVues, prochain := map[int]bool{}, map[int64]bool{}, 1
 	for _, o := range f.Inventaire {
 		prochain = max(prochain, o.ID+1)
 	}
@@ -67,6 +71,10 @@ func (f *Feuille) verifierInventaire(emplacements []regles.Emplacement) error {
 			o.ID, prochain = prochain, prochain+1
 		}
 		vus[o.ID] = true
+		if o.Fiche < 0 || (o.Fiche > 0 && fichesVues[o.Fiche]) {
+			return invalide("inventaire.%d : la fiche n°%d est déjà dans l'inventaire.", i, o.Fiche)
+		}
+		fichesVues[o.Fiche] = true
 		o.Nom, o.Emplacement = strings.TrimSpace(o.Nom), strings.TrimSpace(o.Emplacement)
 		if o.Nom == "" || len([]rune(o.Nom)) > 120 || len([]rune(o.Notes)) > 2000 || len(o.Emplacement) > 40 {
 			return invalide("inventaire.%d : un nom de 1 à 120 caractères.", i)
@@ -168,26 +176,16 @@ func sansAttaquesObjets(l []Attaque) []Attaque {
 	return slices.DeleteFunc(l, func(a Attaque) bool { return a.Objet != 0 })
 }
 
-// IDsRecus : l'identifiant de chaque ligne de l'inventaire tel que le client l'a envoyé (0 : aucun),
-// avant que l'enregistrement en donne aux nouvelles.
-func IDsRecus(raw []byte) []int {
-	var x struct {
-		Inventaire []struct {
-			ID int `json:"id"`
-		} `json:"inventaire"`
+// GarderChiffres : ce qu'un joueur ne change pas dans l'inventaire de son PJ, appliqué à la feuille
+// qu'il envoie (raw), avant qu'elle soit validée. Une ligne qui existait (même id) garde sa fiche, ses
+// bonus, son arme et son emplacement (et le nom d'un objet du monde) ; une ligne qu'il ajoute n'a ni
+// fiche, ni bonus, ni arme, et recevra un nouvel identifiant.
+func GarderChiffres(raw []byte, ancienne *Feuille) []byte {
+	var champs map[string]json.RawMessage
+	var objets []Objet
+	if json.Unmarshal(raw, &champs) != nil || json.Unmarshal(champs["inventaire"], &objets) != nil {
+		return raw
 	}
-	_ = json.Unmarshal(raw, &x)
-	ids := make([]int, len(x.Inventaire))
-	for i, o := range x.Inventaire {
-		ids[i] = o.ID
-	}
-	return ids
-}
-
-// GarderChiffres : ce qu'un joueur ne change pas dans l'inventaire de son PJ. recus : les
-// identifiants qu'il a envoyés (IDsRecus). Une ligne qui existait garde ses bonus, son arme et son
-// emplacement ; une ligne qu'il ajoute n'a ni bonus ni arme, et reçoit un nouvel identifiant.
-func (f *Feuille) GarderChiffres(ancienne *Feuille, recus []int) {
 	avant := map[int]Objet{}
 	if ancienne != nil {
 		for _, o := range ancienne.Inventaire {
@@ -195,18 +193,62 @@ func (f *Feuille) GarderChiffres(ancienne *Feuille, recus []int) {
 		}
 	}
 	pris := map[int]bool{}
-	for i := range f.Inventaire {
-		o, id := &f.Inventaire[i], 0
-		if i < len(recus) {
-			id = recus[i]
-		}
-		if a, ok := avant[id]; ok && id > 0 && !pris[id] {
-			pris[id] = true
-			o.ID, o.Bonus, o.Arme, o.Emplacement = id, a.Bonus, a.Arme, a.Emplacement
+	for i := range objets {
+		o := &objets[i]
+		if a, ok := avant[o.ID]; ok && o.ID > 0 && !pris[o.ID] {
+			pris[o.ID] = true
+			o.Fiche, o.Bonus, o.Arme, o.Emplacement = a.Fiche, a.Bonus, a.Arme, a.Emplacement
+			if a.Fiche != 0 {
+				o.Nom = a.Nom // le nom d'un objet du monde est celui de sa fiche
+			}
 		} else {
-			o.ID, o.Bonus, o.Arme = 0, nil, nil
+			o.ID, o.Fiche, o.Bonus, o.Arme = 0, 0, nil, nil
 		}
 	}
+	champs["inventaire"], _ = json.Marshal(objets)
+	out, _ := json.Marshal(champs)
+	return out
+}
+
+// LiesRetires : les objets du monde (lignes liées à une fiche) de l'ancienne feuille qui ne sont plus
+// dans f. Un joueur ne les retire pas : leur détenteur change, c'est au MJ.
+func (f *Feuille) LiesRetires(ancienne *Feuille) []string {
+	garde := map[int64]bool{}
+	for _, o := range f.Inventaire {
+		garde[o.Fiche] = true
+	}
+	var out []string
+	if ancienne != nil {
+		for _, o := range ancienne.Inventaire {
+			if o.Fiche != 0 && !garde[o.Fiche] {
+				out = append(out, o.Nom)
+			}
+		}
+	}
+	return out
+}
+
+// PrendreFiche : la ligne prend le nom et les chiffres de la fiche « Objet » qu'elle désigne. Un
+// objet porté dont l'emplacement change est ôté : sa nouvelle place peut être prise.
+func (o *Objet) PrendreFiche(nom string, c modele.ChiffresObjet) {
+	if o.Porte && c.Emplacement != o.Emplacement {
+		o.Porte = false
+	}
+	o.Nom, o.Emplacement, o.Bonus, o.Arme = nom, c.Emplacement, nil, nil
+	for _, b := range c.Bonus {
+		o.Bonus = append(o.Bonus, BonusObjet{Cible: b.Cible, Valeur: b.Valeur})
+	}
+	if a := c.Arme; a != nil {
+		o.Arme = &Arme{Type: a.Type, Dm: a.Dm, Mod: a.Mod, Portee: a.Portee}
+	}
+}
+
+// ChiffresDe : les chiffres rangés dans le champ « equipement » d'une fiche « Objet ».
+func ChiffresDe(v any) modele.ChiffresObjet {
+	var c modele.ChiffresObjet
+	b, _ := json.Marshal(v)
+	_ = json.Unmarshal(b, &c)
+	return c
 }
 
 // ---------------------------------------------------------------- reprise de l'ancienne feuille

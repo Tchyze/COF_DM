@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Tchyze/cof_dm/internal/combat"
@@ -276,6 +277,14 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 		Modifie float64 `json:"modifie"`
 	}
 	_ = json.Unmarshal(corps, &attendu)
+	ancienne, _, _, errAncienne := s.feuilleDe(e)
+	if errAncienne != nil {
+		ancienne = nil
+	}
+	if garderNotes {
+		// les chiffres des objets et les objets du monde restent ceux du MJ
+		corps = fiches.GarderChiffres(corps, ancienne)
+	}
 	// les bonus des capacités dépendent des voies de la feuille reçue
 	var recue struct {
 		Voies []fiches.Voie `json:"voies"`
@@ -286,25 +295,30 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 		erreurFiche(w, err)
 		return
 	}
+	if garderNotes && ancienne != nil {
+		if nom := s.voieAjoutee(ancienne.Voies, f.Voies); nom != "" {
+			erreur(w, 403, "Seul le MJ ajoute une voie de la bibliothèque à une feuille : « "+nom+" ».")
+			return
+		}
+		if l := f.LiesRetires(ancienne); len(l) > 0 {
+			erreur(w, 403, "Seul le MJ retire un objet du monde de l'inventaire : « "+strings.Join(l, " », « ")+" ».")
+			return
+		}
+	}
+	// un objet du monde a le nom et les chiffres de sa fiche ; la feuille se revalide avec eux
+	if err := s.lierInventaire(f); err != nil {
+		erreur(w, 422, err.Error())
+		return
+	}
+	if f, err = fiches.NormaliserFeuilleAvec(f.JSON(), niveauDe(e), s.lireRegles().Personnage, s.effetsDe(f.Voies)); err != nil {
+		erreurFiche(w, err)
+		return
+	}
 	if garderNotes {
 		// ni les notes du MJ, ni l'historique des niveaux, ni le niveau accordé (qui passent par les
 		// routes de la montée de niveau)
 		f.Notes, f.Niveaux, f.PointsCapacite, f.NiveauAccorde = "", nil, 0, 0
-		ancienne, _, existe, err := s.feuilleDe(e)
-		if err == nil && existe {
-			f.Notes, f.Niveaux, f.PointsCapacite, f.NiveauAccorde = ancienne.Notes, ancienne.Niveaux, ancienne.PointsCapacite, ancienne.NiveauAccorde
-		}
-		if err == nil {
-			if nom := s.voieAjoutee(ancienne.Voies, f.Voies); nom != "" {
-				erreur(w, 403, "Seul le MJ ajoute une voie de la bibliothèque à une feuille : « "+nom+" ».")
-				return
-			}
-			// les chiffres des objets restent ceux du MJ ; la feuille se revalide sans eux
-			f.GarderChiffres(ancienne, fiches.IDsRecus(corps))
-			if f, err = fiches.NormaliserFeuilleAvec(f.JSON(), niveauDe(e), s.lireRegles().Personnage, s.effetsDe(f.Voies)); err != nil {
-				erreurFiche(w, err)
-				return
-			}
+		if ancienne != nil {
 			f.Notes, f.Niveaux, f.PointsCapacite, f.NiveauAccorde = ancienne.Notes, ancienne.Niveaux, ancienne.PointsCapacite, ancienne.NiveauAccorde
 		}
 	}
@@ -313,6 +327,11 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 		erreurStore(w, err)
 		return
 	}
+	var avant []fiches.Objet
+	if ancienne != nil {
+		avant = ancienne.Inventaire
+	}
+	s.suivreDetenteurs(e.ID, avant, f.Inventaire, auteurDe(r))
 	if garderNotes {
 		*f = f.PourJoueur()
 	}

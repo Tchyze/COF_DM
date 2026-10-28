@@ -519,6 +519,7 @@ func (s *Serveur) creer(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
+	s.suivreObjet(nil, e, auteurDe(r))
 	s.repondreFiche(w, 201, e.ID)
 }
 
@@ -550,10 +551,13 @@ func (s *Serveur) maj(w http.ResponseWriter, r *http.Request, remplacer bool) {
 			return
 		}
 	}
-	if _, err := s.store.Modifier(id, m, auteurDe(r)); err != nil {
+	avant, _ := s.store.Lire(id)
+	apres, err := s.store.Modifier(id, m, auteurDe(r))
+	if err != nil {
 		erreurStore(w, err)
 		return
 	}
+	s.suivreObjet(&avant, apres, auteurDe(r))
 	s.repondreFiche(w, 200, id)
 }
 
@@ -572,10 +576,12 @@ func (s *Serveur) supprimer(w http.ResponseWriter, r *http.Request) {
 		repondre(w, 200, map[string]any{"archive": true})
 		return
 	}
+	avant, _ := s.store.Lire(id)
 	if _, err := s.store.Supprimer(id, auteurDe(r)); err != nil {
 		erreurStore(w, err)
 		return
 	}
+	s.objetSupprime(avant, auteurDe(r))
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 

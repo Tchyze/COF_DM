@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -236,6 +237,8 @@ func normaliserValeur(ch *Champ, v any, cal Calendrier, f Fiches) (any, error) {
 			out = append(out, a)
 		}
 		return out, nil
+	case Equipement:
+		return equipement(v)
 	case Etapes:
 		liste, ok := v.([]any)
 		if !ok {
@@ -295,4 +298,81 @@ func reference(ch *Champ, v any, f Fiches) (int64, error) {
 		}
 	}
 	return 0, fmt.Errorf("la fiche n°%d est de type %s ; attendu : %s", id, typ, strings.Join(ch.Cibles, " ou "))
+}
+
+// ChiffresObjet : les chiffres d'un objet (genre Equipement), que l'inventaire d'un PJ reprend quand
+// il le porte (internal/fiches/inventaire.go).
+type ChiffresObjet struct {
+	Emplacement string       `json:"emplacement,omitempty"`
+	Bonus       []BonusObjet `json:"bonus,omitempty"`
+	Arme        *ArmeObjet   `json:"arme,omitempty"`
+}
+
+type BonusObjet struct {
+	Cible  string `json:"cible"`
+	Valeur int    `json:"valeur"`
+}
+
+type ArmeObjet struct {
+	Type   string `json:"type"`
+	Dm     string `json:"dm"`
+	Mod    int    `json:"mod"`
+	Portee string `json:"portee,omitempty"`
+}
+
+// CiblesBonus : ce qu'augmente le bonus d'un objet : les cibles des bonus des capacités
+// (reference.CiblesBonus) et les caractéristiques.
+var CiblesBonus = []string{"pv", "pm", "def", "init", "att", "att_c", "att_d", "att_m", "rd", "FOR", "DEX", "CON", "INT", "SAG", "CHA"}
+
+func equipement(v any) (any, error) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf(`chiffres attendus : {"emplacement":"tete","bonus":[{"cible":"def","valeur":2}],"arme":{"type":"C","dm":"1d8","mod":0}}`)
+	}
+	entier := func(x any, min, max int) (int, bool) {
+		if x == nil {
+			return 0, true
+		}
+		n, err := nombre(x)
+		return int(n), err == nil && n == math.Trunc(n) && n >= float64(min) && n <= float64(max)
+	}
+	var c ChiffresObjet
+	c.Emplacement, _ = m["emplacement"].(string)
+	if c.Emplacement = strings.TrimSpace(c.Emplacement); len(c.Emplacement) > 40 {
+		return nil, fmt.Errorf("emplacement : 40 caractères au plus")
+	}
+	bonus, _ := m["bonus"].([]any)
+	if len(bonus) > 10 {
+		return nil, fmt.Errorf("dix bonus au plus")
+	}
+	for _, x := range bonus {
+		b, _ := x.(map[string]any)
+		cible, _ := b["cible"].(string)
+		n, ok := entier(b["valeur"], -20, 20)
+		if !ok || !slices.Contains(CiblesBonus, cible) {
+			return nil, fmt.Errorf("bonus : de -20 à +20 sur %s", strings.Join(CiblesBonus, ", "))
+		}
+		if n != 0 {
+			c.Bonus = append(c.Bonus, BonusObjet{cible, n})
+		}
+	}
+	if a, ok := m["arme"].(map[string]any); ok {
+		x := ArmeObjet{Type: "C"}
+		if t, _ := a["type"].(string); t != "" {
+			x.Type = t
+		}
+		x.Dm, _ = a["dm"].(string)
+		x.Portee, _ = a["portee"].(string)
+		x.Dm, x.Portee = strings.TrimSpace(x.Dm), strings.TrimSpace(x.Portee)
+		mod, ok := entier(a["mod"], -20, 20)
+		if !ok || (x.Type != "C" && x.Type != "D" && x.Type != "M") || len(x.Dm) > 40 || len(x.Portee) > 40 {
+			return nil, fmt.Errorf("arme : type C, D ou M, DM et portée de 40 caractères au plus, bonus de -20 à +20")
+		}
+		x.Mod = mod
+		c.Arme = &x
+	}
+	if c.Emplacement == "" && c.Bonus == nil && c.Arme == nil {
+		return nil, nil
+	}
+	return c, nil
 }
