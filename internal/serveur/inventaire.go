@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/Tchyze/cof_dm/internal/fiches"
+	"github.com/Tchyze/cof_dm/internal/regles"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
 
@@ -29,6 +31,26 @@ func detenteurDe(e store.Entite) int64 {
 		return int64(v)
 	}
 	return 0
+}
+
+// verifierChiffres : l'emplacement des chiffres d'une fiche « Objet » (data, avant l'écriture) est
+// l'un de ceux de l'univers, désigné par sa clé ou par son nom (« Tête ») ; il se range par sa clé.
+func (s *Serveur) verifierChiffres(data map[string]any) error {
+	c, _ := data["equipement"].(map[string]any)
+	e, _ := c["emplacement"].(string)
+	if strings.TrimSpace(e) == "" {
+		return nil
+	}
+	l := s.lireRegles().Personnage.LesEmplacements()
+	if cle := regles.CleEmplacement(l, e); cle != "" {
+		c["emplacement"] = cle
+		return nil
+	}
+	noms := make([]string, len(l))
+	for i, x := range l {
+		noms[i] = x.Cle + " (" + x.Nom + ")"
+	}
+	return fmt.Errorf("Emplacement inconnu « %s ». Emplacements : %s.", e, strings.Join(noms, ", "))
 }
 
 // lierInventaire : chaque ligne liée prend le nom et les chiffres de sa fiche « Objet ».

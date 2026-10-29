@@ -26,29 +26,29 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
   let enLecture = false; // la vue de lecture est affichée (et non le formulaire)
   api("GET", `/api/reference?pj=${fiche.id}`).then(r => { REF = r; if (enLecture) lire(); }, () => {});
   const R = () => F.regles || {};
-  // bonus calculés par le serveur, des capacités atteintes (en vert) et des objets portés (en bleu) :
-  // « A + b », la formule au survol (« DEF 12 = base 8 + 4 Casque »)
+  // bonus calculés par le serveur, des capacités atteintes et des objets portés : la valeur totale, en
+  // bleu si un objet y est pour quelque chose (en vert sinon) ; au survol, la formule sur une ligne
+  // (« DEF 16 = 10 + 6 ») et ce qui la change sur la suivante (« + 1 Anneau, + 5 Casque »)
   const E = () => F.effets || { base: {}, bonus: {}, detail: [] };
   const CLES = { att: ["att_C", "att_D", "att_M"], att_c: ["att_C"], att_d: ["att_D"], att_m: ["att_M"] };
   const LIBELLES = { def: "DEF", init: "Init", rd: "RD", pv: "PV max", pm: "PM max", att_C: "Contact", att_D: "Distance", att_M: "Magique" };
   const touche = k => d => (CLES[d.cible] || [d.cible]).includes(k);
-  function plus(k, base = E().base[k]) {
+  const terme = n => `${n >= 0 ? "+" : "−"} ${Math.abs(n)}`;
+  function avecBonus(k, base = E().base[k], affiche = String) {
     const b = E().bonus[k];
-    if (!b) return "";
+    if (!b) return esc(affiche(base));
     const directs = E().detail.filter(touche(k));
-    const terme = n => `${n >= 0 ? "+" : "−"} ${Math.abs(n)}`;
-    const termes = directs.map(d => `${terme(d.valeur)} ${d.objet || `${d.capacite} (${d.voie}, rang ${d.rang})`}`);
-    // le reste vient d'une caractéristique augmentée, par un objet ou par une capacité
+    const sources = directs.map(d => `${terme(d.valeur)} ${d.objet || `${d.capacite} (${d.voie}, rang ${d.rang})`}`);
+    // le reste vient de la caractéristique dont la valeur dépend, augmentée par un objet ou une capacité
     const reste = b - directs.reduce((n, d) => n + d.valeur, 0);
-    const parCarac = E().detail.filter(d => CARACS.includes(d.cible));
-    const resteObjet = parCarac.length > 0 && parCarac.every(d => d.objet);
-    if (reste) termes.push(`${terme(reste)} par une caractéristique augmentée`);
-    const titre = `${LIBELLES[k] || k} ${base + b} = base ${base} ${termes.join(" ")}`;
-    const objets = directs.filter(d => d.objet).reduce((n, d) => n + d.valeur, 0) + (resteObjet ? reste : 0);
-    const part = (n, cls) => n ? ` <span class="${cls}">${n > 0 ? "+" : "−"} ${Math.abs(n)}</span>` : "";
-    return `<span class="fp-avec" title="${esc(titre)}">${part(b - objets, "fp-bonus")}${part(objets, "fp-objet")}</span>`;
+    const carac = { def: "DEX", init: "DEX", att_C: "FOR", att_D: "DEX", att_M: F.carac_magie }[k];
+    const parCarac = E().detail.filter(d => d.cible === carac);
+    if (reste) sources.push(`${terme(reste)} par ${carac || "une caractéristique"}${parCarac.length ? ` (${[...new Set(parCarac.map(d => d.objet || d.capacite))].join(", ")})` : ""}`);
+    const objet = directs.some(d => d.objet) || (reste && parCarac.some(d => d.objet));
+    const titre = `${LIBELLES[k] || k} ${affiche(base + b)} = ${affiche(base)} ${terme(b)}\n${sources.join(", ")}`;
+    return `<span class="fp-avec ${objet ? "fp-objet" : "fp-bonus"}" title="${esc(titre)}">${esc(affiche(base + b))}</span>`;
   }
-  const AB = (k, total) => (E().bonus[k] ? `${esc(E().base[k])}${plus(k)}` : esc(total));
+  const AB = (k, total) => (E().bonus[k] ? avecBonus(k) : esc(total));
   const pvMax = () => F.pv + (E().bonus.pv || 0);
   const pmMax = () => F.pm_max + (E().bonus.pm || 0);
   const maxDe = k => (k === "pm" ? pmMax() : F[k + "_max"]);
@@ -170,7 +170,7 @@ export async function panneauFeuille(box, fiche, { peutEcrire, joueur, apres }) 
           ${compteur("pc", "PC")}${compteur("pr", "PR")}${compteur("pm", "PM")}
         </div>
         <div class="carac">${CARACS.map(k => `<span><small>${k}</small>${AB(k, F.valeurs[k])} (${signe(F.carac[k])})</span>`).join("")}</div>
-        ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b>${a.objet ? ` <span class="hint" title="Arme portée, dans l'inventaire">🗡</span>` : ""} ${E().bonus["att_" + a.type] ? `${signe(a.bonus - E().bonus["att_" + a.type])}${plus("att_" + a.type, a.bonus - E().bonus["att_" + a.type])}` : signe(a.bonus)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+        ${F.attaques.length ? `<ul class="attaques">${F.attaques.map(a => `<li><b>${esc(a.nom)}</b>${a.objet ? ` <span class="hint" title="Arme portée, dans l'inventaire">🗡</span>` : ""} ${avecBonus("att_" + a.type, a.bonus - (E().bonus["att_" + a.type] || 0), signe)}${a.dm ? `, DM ${esc(a.dm)}` : ""}${a.portee ? ` · ${esc(a.portee)}` : ""}${a.notes ? ` <span class="hint">${esc(a.notes)}</span>` : ""}</li>`).join("")}</ul>` : ""}
         ${peutEcrire && doublons().length ? `<p class="hint fp-doublon">⚠ À vérifier : ${doublons().map(esc).join(", ")} s'ajoute${doublons().length > 1 ? "nt" : ""} aux bonus des capacités. Un bonus saisi à la main pour la même capacité compterait deux fois.</p>` : ""}
         ${peutEcrire && (R().repos?.length || comptees().length) ? `<div class="ligne">${(R().repos || []).map((r, i) => `<button class="petit" data-repos="${i}" title="${esc(r.aide || "")}">${esc(r.libelle)}</button>`).join("")}
           ${comptees().some(x => x.par === "jour") ? `<button class="petit" id="fp-jour" title="Les capacités « par jour » redeviennent utilisables">☀ Nouveau jour</button>` : ""}</div>` : ""}

@@ -35,6 +35,14 @@ func TestInventaireObjets(t *testing.T) {
 		return v["data"].(map[string]any)["detenteur"]
 	}
 
+	// l'emplacement d'une fiche se range par sa clé, qu'on donne la clé ou le nom ; inconnu : refusé
+	c, v := b.local("POST", "/api/entites", map[string]any{"type": "objet", "nom": "Heaume", "data": map[string]any{"equipement": map[string]any{"emplacement": "Tête"}}})
+	if c != 201 || v["data"].(map[string]any)["equipement"].(map[string]any)["emplacement"] != "tete" {
+		t.Fatalf("emplacement par son nom : %d %v", c, v)
+	}
+	if c, v := b.local("PATCH", fmt.Sprintf("/api/entites/%v", v["id"]), map[string]any{"data": map[string]any{"equipement": map[string]any{"emplacement": "dos"}}}); c != 422 || !strings.Contains(fmt.Sprint(v["detail"]), "tete (Tête)") {
+		t.Fatalf("emplacement inconnu : %d %v", c, v)
+	}
 	// donnée à Aldric : dans son inventaire, avec ses chiffres
 	epee := b.fiche("objet", "Épée de givre", map[string]any{"detenteur": aldric,
 		"equipement": map[string]any{"emplacement": "main_principale", "bonus": []any{map[string]any{"cible": "att", "valeur": 1}}, "arme": map[string]any{"type": "C", "dm": "1d8"}}})

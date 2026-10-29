@@ -67,6 +67,9 @@ func TestEmplacements(t *testing.T) {
 		{`{"nom":"A","porte":true,"emplacement":"anneau"},{"nom":"B","porte":true,"emplacement":"anneau"},{"nom":"C","porte":true,"emplacement":"anneau"}`, "Anneau"},
 		{`{"nom":"Pavois","porte":true,"emplacement":"main_secondaire"},{"nom":"Grande hache","porte":true,"emplacement":"deux_mains"}`, "Main secondaire : « Grande hache »"},
 		{`{"nom":"Corde","porte":true}`, "sans emplacement"},
+		// par son nom, avec ou sans accent ni majuscule : le même emplacement
+		{`{"nom":"Casque","porte":true,"emplacement":"tete"},{"nom":"Heaume","porte":true,"emplacement":"tête"}`, "Tête : « Heaume » ne se porte pas avec « Casque »"},
+		{`{"nom":"Pavois","porte":true,"emplacement":"Main secondaire"},{"nom":"Arc","porte":true,"emplacement":"deux mains"}`, "Main secondaire : « Arc »"},
 		{`{"nom":"Cape","porte":true,"emplacement":"dos"},{"nom":"Sac","porte":true,"emplacement":"dos"}`, "dos : « Sac »"},
 		{`{"nom":"Talisman","porte":true,"bonus":[{"cible":"chance","valeur":1}],"emplacement":"cou"}`, "bonus de -20 à +20"},
 	}
