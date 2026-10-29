@@ -1,6 +1,6 @@
 # Projets — COF DM
 
-Les chantiers possibles pour faire de COF DM le meilleur outil de MJ pour Chroniques Oubliées Fantasy, classés par priorité. Liste établie le 16 octobre 2026, remise à jour le 22 octobre 2026 (version 1.2.3, `main` en 1.2.4 d'essai).
+Les chantiers possibles pour faire de COF DM le meilleur outil de MJ pour Chroniques Oubliées Fantasy, classés par priorité. Liste établie le 16 octobre 2026, remise à jour le 29 octobre 2026 (version 1.2.4, `main` en plus avec l'inventaire).
 
 Rappel des règles qui s'appliquent à chaque projet (voir `CLAUDE.md`) : aucune donnée des livres dans le dépôt (les tables viennent du fichier de règles ou du MJ), un univers = un fichier, rien de secret vers les joueurs (liste blanche + test de non-fuite), tout nouvel objet pris en compte par la synchronisation (`aplatir` / `appliquer`) et par `VersionModele`.
 
@@ -14,8 +14,8 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Où on en est
 
-- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités utilisables), projet 12 (montée de niveau guidée, version 1.2.4), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public). Le détail, PR par PR, est dans `SUIVI.md`.
-- **Chantier en cours** : projet 11, inventaire structuré (lots 1 et 2 en PR), puis 14, le butin.
+- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités utilisables), projet 11 (inventaire structuré, fusionné le 29 octobre 2026), projet 12 (montée de niveau guidée, version 1.2.4), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public). Le détail, PR par PR, est dans `SUIVI.md`.
+- **Prochain chantier** : projet 14, le butin et les récompenses de fin de combat.
 - **Au fil de l'eau** : projet 6, les essais qui ne se font qu'à la main.
 
 ## Vue d'ensemble
@@ -30,10 +30,10 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 6 | Restes à vérifier à la main | P1 | S | ★★ | — | en cours |
 | 9 | Aides de jeu poussées aux joueurs | P2 | M | ★★★ | — | lot 1 fait |
 | 10 | Voies et capacités utilisables | P2 | L | ★★★ | 5 | fait |
-| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | **en cours** (lots 1 et 2 en PR) |
+| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | fait |
 | 12 | Montée de niveau guidée | P2 | M | ★★ | 10 | fait |
 | 13 | Impression et export PDF | P2 | M | ★★ | — | |
-| 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | |
+| 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | **prochain** |
 | 15 | Afficheur de table (télé) | P2 | S | ★★ | — | |
 | 16 | Générateurs et tables aléatoires du MJ | P2 | M | ★★ | — | |
 | 17 | PNJ express en jeu | P2 | S | ★★ | 16 (conseillé) | |
@@ -67,7 +67,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Ordre conseillé
 
-1. **Projets 11 puis 14** (inventaire, puis butin) : l'arme et l'armure portées comptent dans la feuille ; le butin se répartit à la fin du combat.
+1. **Projet 14** (butin) : il se répartit à la fin du combat, dans la bourse et l'inventaire des PJ (projet 11, fait).
 2. Les petits lots visibles à la table, au choix : **15** (afficheur), **18** (notes rapides), **9** (suite des aides de jeu).
 3. **13** (impression), puis **16** et **17** (tables aléatoires, PNJ express).
 4. Le P3 par valeur, puis le P4 à la demande.
@@ -108,7 +108,7 @@ Lettre, image, indice : envoyés en direct depuis la fiche ou l'écran du MJ, ra
 ### 10. Voies et capacités utilisables — fait
 Voies, capacités, profils et peuples saisis ou importés par le MJ, un par un ; bonus des capacités sur la feuille (« A + b ») ; capacités en combat et leurs utilisations (par combat, jour, repos) ; arbre des voies sur la page des joueurs. Aucune donnée des livres : le code n'a que le modèle.
 
-### 11. Inventaire structuré — en cours
+### 11. Inventaire structuré — fait
 Une liste d'objets (quantité, porté ou non, emplacement) au lieu du texte `Équipement`. Lot 1 : l'inventaire sur la feuille, un objet par emplacement, bonus et armes des objets portés comptés (en bleu, formule au survol), reprise de l'ancien équipement. Lot 2 : une ligne pointe vers une fiche « Objet », dont elle prend les chiffres, et le « Détenteur » suit dans les deux sens. Décisions dans `SUIVI.md`.
 
 ### 12. Montée de niveau guidée — fait
