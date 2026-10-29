@@ -72,7 +72,7 @@ kbd{border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padd
 @media (max-width:900px){
   .app{grid-template-columns:1fr}
   .side{position:fixed;inset:0 auto 0 0;width:260px;z-index:40;transform:translateX(-100%);transition:transform .2s}
-  .app.menu .side{transform:none;box-shadow:var(--ombre)}
+  .app.menu-ouvert .side{transform:none;box-shadow:var(--ombre)}
   .burger{display:inline-flex;position:fixed;top:10px;left:10px;z-index:30}
   main{padding-top:56px!important}
 }
@@ -362,7 +362,7 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 /* ---------- écran du MJ : une page, sans défilement ---------- */
 .app.plein{grid-template-columns:minmax(0,1fr)}
 .app.plein .side{position:fixed;inset:0 auto 0 0;width:260px;z-index:40;transform:translateX(-100%);transition:transform .2s}
-.app.plein.menu .side{transform:none;box-shadow:var(--ombre)}
+.app.plein.menu-ouvert .side{transform:none;box-shadow:var(--ombre)}
 .app.plein .burger{display:none}
 .app.plein main{padding:0!important;max-width:none;height:100vh;height:100dvh;overflow:hidden}
 .table{height:100%;display:grid;grid-template:auto minmax(0,1fr)/minmax(210px,.8fr) minmax(260px,1fr) minmax(340px,1.35fr);gap:10px;padding:10px;position:relative}

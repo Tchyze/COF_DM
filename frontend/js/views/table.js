@@ -437,7 +437,7 @@ export async function mount(el, arg) {
 
   // ---------------------------------------------------------------- gestes
 
-  $("#t-menu", el).onclick = e => { e.stopPropagation(); $("#app").classList.toggle("menu"); };
+  $("#t-menu", el).onclick = e => { e.stopPropagation(); $("#app").classList.toggle("menu-ouvert"); };
   $("#t-cherche", el).onclick = () => window.cofRecherche();
   $("#t-options", el).onclick = e => { e.stopPropagation(); ouvrirPop("options"); };
   $("#t-chrono", el).onclick = e => { e.stopPropagation(); ouvrirPop("chrono"); };
@@ -459,7 +459,7 @@ export async function mount(el, arg) {
   $(".t-onglets", el).onclick = e => { const b = e.target.closest("[data-v]"); if (b) racine.dataset.volet = b.dataset.v; };
 
   racine.addEventListener("click", e => {
-    $("#app").classList.remove("menu");
+    $("#app").classList.remove("menu-ouvert");
     if (!pop.hidden && !e.target.closest("#t-pop")) fermerPop();
     const tab = e.target.closest("[data-onglet]");
     if (tab) { onglet = tab.dataset.onglet; peindreCentre(); return; }

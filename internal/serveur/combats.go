@@ -280,6 +280,73 @@ func (s *Serveur) reporterSurFeuilles(st *combat.Etat, deja map[int64]string) {
 	}
 }
 
+// recaler : la feuille du PJ pj vient de changer hors du combat (nouveau jour, repos, remise à
+// zéro) ; les combats en cours où il se bat adoptent ses utilisations, historique des annulations
+// compris, pour que leur prochain report ne les défasse pas.
+func (h *salles) recaler(pj int64, utils map[string]fiches.Utilisation) {
+	docs, err := h.s.store.ListerDocs(collCombats)
+	if err != nil {
+		return
+	}
+	for _, d := range docs {
+		var st combat.Etat
+		if json.Unmarshal(d.Data, &st) != nil || st.Termine || !recalerEtat(&st, pj, utils) {
+			continue
+		}
+		sa, err := h.salle(d.ID)
+		if err != nil {
+			continue
+		}
+		sa.mu.Lock()
+		if recalerEtat(sa.etat, pj, utils) {
+			for i, avant := range sa.hist {
+				if ancien := restaurer(avant); recalerEtat(ancien, pj, utils) {
+					sa.hist[i], _ = json.Marshal(ancien)
+				}
+			}
+			delete(sa.reporte, pj)
+			data, _ := json.Marshal(sa.etat)
+			if _, err := h.s.store.MajDoc(collCombats, d.ID, data, sa.etat.Nom, ""); err != nil {
+				log.Printf("recalage du combat %d : %v", d.ID, err)
+			}
+			sa.diffuser(sa.message(d.ID))
+		}
+		sa.mu.Unlock()
+	}
+}
+
+// recalerEtat aligne les utilisations (hors « par combat ») du PJ pj dans st sur celles de sa
+// feuille : celles du combat restent comptées tant que la feuille en a autant. Vrai si st change.
+func recalerEtat(st *combat.Etat, pj int64, utils map[string]fiches.Utilisation) bool {
+	change := false
+	for _, c := range st.Cbts {
+		if c.Ref == nil || c.Ref.Kind != "pj" || c.Ref.ID != pj {
+			continue
+		}
+		for i := range c.Actives {
+			a := &c.Actives[i]
+			if a.Fois <= 0 || a.Par == "combat" {
+				continue
+			}
+			n, u := utils[a.Cle].N, c.Usages[a.Cle]
+			if a.Deja+u == n {
+				continue
+			}
+			if n >= u {
+				a.Deja = n - u
+			} else {
+				a.Deja = 0
+				if c.Usages == nil {
+					c.Usages = map[string]int{}
+				}
+				c.Usages[a.Cle] = n
+			}
+			change = true
+		}
+	}
+	return change
+}
+
 // ---------------------------------------------------------------- fiches de combat
 
 func ficheDeMonstre(id int64, m *fiches.Monstre) combat.FicheCombat {
