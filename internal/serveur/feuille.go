@@ -98,6 +98,7 @@ func (s *Serveur) nouveauJour(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.joueurs.fiche(id)
+		s.salles.recaler(id, f.Utilisations)
 		n++
 	}
 	repondre(w, 200, map[string]int{"feuilles": n})
@@ -305,6 +306,7 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 		erreurStore(w, err)
 		return
 	}
+	s.salles.recaler(e.ID, f.Utilisations)
 	if garderNotes {
 		*f = f.PourJoueur()
 	}

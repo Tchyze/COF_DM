@@ -65,7 +65,7 @@ async function route() {
   if (typeof nettoyage === "function") nettoyage();
   nettoyage = null;
   $("#apercu").hidden = true;
-  $("#app").classList.remove("menu");
+  $("#app").classList.remove("menu-ouvert");
   // écran du MJ et écran de combat : toute la fenêtre, menu replié
   $("#app").classList.toggle("plein", nom === "table" || (nom === "combat" && !!a));
   const ancien = $("#vue");
@@ -227,7 +227,7 @@ document.addEventListener("keydown", e => {
   if ((e.key === "/" && !saisie) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k")) { e.preventDefault(); ouvrirRecherche(); }
 });
 $("#ouvrir-recherche").onclick = () => ouvrirRecherche();
-$("#burger").onclick = () => $("#app").classList.toggle("menu");
+$("#burger").onclick = () => $("#app").classList.toggle("menu-ouvert");
 $("#theme").onclick = () => {
   const r = document.documentElement;
   r.dataset.theme = r.dataset.theme === "clair" ? "" : "clair";
