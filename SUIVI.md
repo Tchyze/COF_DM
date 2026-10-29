@@ -2,15 +2,15 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 22 octobre 2026 (version 1.2.4).
+Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus les PR 24 à 26).
 
 ## Où on en est
 
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
-- **Numéros d'échange** : `VersionModele` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** (28 octobre 2026) : PR 24 (corrections rapides), PR 25 et 26 (inventaire, lots 1 et 2, empilées), en attente de l'essai du MJ. La branche `preversion-inventaire` les réunit (un conflit réglé dans `enregistrerFeuille`) pour la **préversion 1.2.5-test.30** (canal Test, modèle 6 ; la test.30 ajoute les emplacements reconnus par leur nom et le total affiché avec sa formule au survol). À la fusion des PR, cette branche se supprime.
-- **Prochain chantier** : projet 11 de `PROJETS.md`, l'inventaire structuré (puis 14, le butin). Questions de fond à poser au MJ avant de coder.
-- **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
+- **Numéros d'échange** : `VersionModele` 6 sur `main` (5 dans la 1.2.4), `versionDonnees` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : aucune en cours. Les PR 24 (corrections rapides), 25 et 26 (inventaire, lots 1 et 2), essayées par le MJ en préversion 1.2.5-test.30, sont fusionnées dans `main` le 29 octobre 2026 ; la branche `preversion-inventaire` est supprimée. Pas encore de version stable 1.2.5 : seulement à la demande du MJ.
+- **Prochain chantier** : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Questions de fond à poser au MJ avant de coder.
+- **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` depuis le 29 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
 ## Façon de travailler (consignes du MJ)
@@ -118,6 +118,15 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Rangs** : des points par niveau, le coût de chaque rang et le niveau minimal d'un rang, décrits par le fichier de règles, répartis dans les voies **déjà sur la feuille** (ajouter une voie de la bibliothèque se fait avant, en édition). Sans règles : rangs libres, sans contrôle. Les capacités débloquées sont rappelées.
 - **Historique** rangé dans la feuille (synchronisé) : une ligne par niveau (date, PV gagnés et le jet, rangs pris).
 
+### Inventaire (28 octobre 2026)
+
+- **Une ligne par objet** sur la feuille : nom, quantité, porté ou non, emplacement, notes ; les objets courants restent des lignes libres. Le texte « Équipement », l'armure et le bouclier des anciennes feuilles sont **repris à l'ouverture** (une ligne par ligne de texte ; armure et bouclier portés, avec leur bonus de DEF).
+- **Emplacements** : une liste générique dans le code (tête, cou, épaules, corps, mains, taille, pieds, deux anneaux, main principale, main secondaire, deux mains qui prend les deux), que le fichier de règles peut remplacer (`personnage.emplacements`). **Un seul objet porté par emplacement** (ou son nombre de places) : porter un second casque est refusé.
+- **Chiffres sur l'objet**, saisis par le MJ : des bonus (mêmes valeurs que les capacités : DEF, Init, RD, attaques, caractéristiques, PV, PM) et une arme (type, DM, bonus, portée). Ils ne comptent **que portés** ; une arme portée ajoute sa ligne d'attaque.
+- **Affichage** : une valeur changée par un objet a sa part **en bleu** (les capacités restent en vert), et **la formule au survol** : « DEF 12 = base 8 + 4 Casque du guerrier ».
+- **Joueurs** (édition ouverte) : ils cochent « porté », comptent leurs objets (−/+), ajoutent ou retirent des objets courants ; les chiffres d'un objet et son emplacement restent au MJ.
+- **Objets du monde** (lot 2) : une ligne peut désigner une fiche « Objet », dont elle prend le nom et les chiffres (champ « Chiffres » de la fiche : emplacement, bonus, arme). Le **Détenteur suit dans les deux sens** : donné à un PJ, l'objet entre dans son inventaire (et quitte celui d'un autre PJ) ; donné ailleurs ou ôté de l'inventaire, il n'y est plus / n'a plus de détenteur. Fiche effacée : la ligne reste, en objet courant. Lier ou retirer un objet du monde reste au MJ. Rien ne suit quand les feuilles de personnage sont coupées.
+
 ### Aides de jeu (19 octobre 2026)
 
 - Un **type de fiche** ; l'envoi est une relation `recu` d'un PJ vers l'aide, avec la séance. Le joueur voit **la version à jour** ; le MJ peut **retirer** un envoi.
@@ -159,6 +168,10 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 20 | **Montée de niveau, écrans** (lot 2) : dialogue « ⬆ Niveau » (feuille, onglet Joueurs de l'écran du MJ), historique et annulation sur la feuille, historique en lecture sur la page des joueurs. |
 | 21 | **Montée de niveau accordée** (lot 3) : le MJ accorde le niveau (`…/niveau/accorder`, `niveau_accorde`), le joueur le prend depuis sa page (`POST /api/joueur/pj/{id}/niveau`) ; badge et retrait côté MJ ; outil MCP `accorder_niveau`. |
 | 22 | **Montée de niveau en assistant** (lot 4) : fenêtres dés saisis → rangs → PM → étapes → récapitulatif ; ouverture automatique sur la page des joueurs ; règles `couts_origine`, `pm`, `etapes` ; plus de jet à la table. |
+| 23 | `CLAUDE.md` réorganisé et resserré. |
+| 24 | **Corrections rapides** : « ☀ Nouveau jour » et repos pendant un combat (les combats en cours reprennent les utilisations de la feuille) ; dés coupés depuis un autre appareil ; tiroir du menu en grand écran. |
+| 25 | **Inventaire, lot 1** (projet 11) : inventaire sur la feuille, emplacements, bonus et armes des objets portés (en bleu, formule au survol), reprise de l'ancien équipement ; modèle 6, `versionDonnees` 5. |
+| 26 | **Inventaire, lot 2** : lignes liées aux fiches « Objet » (nom et chiffres de la fiche), Détenteur suivi dans les deux sens, emplacements reconnus par leur nom, total affiché avec sa formule au survol. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
@@ -181,7 +194,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 11, inventaire structuré** (`PROJETS.md`) : questions de fond à poser au MJ avant de coder (lien avec les fiches « Objet », arme et armure portées dans la DEF et les attaques, édition par les joueurs). Le projet 12 (montée de niveau) est publié en 1.2.4 ; le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+**Projet 14, butin et récompenses de fin de combat** (`PROJETS.md`) : questions de fond à poser au MJ avant de coder. Il s'appuie sur l'inventaire (projet 11, fusionné le 29 octobre 2026 ; décisions dans « Inventaire » plus haut). Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
@@ -197,6 +210,5 @@ Aucun. Les trois notés jusqu'au 22 octobre 2026 sont corrigés (PR des correcti
 
 ### Points en attente d'une décision
 
-- **Objet donné à un PJ sans feuille** (lot 2 de l'inventaire) : la feuille est aujourd'hui créée d'office, vierge (PV 1), avec cette seule ligne (`mettreDansInventaire`). Le garder, ou attendre que la feuille existe ? Question posée au MJ le 29 octobre 2026.
-- **Fusion du chantier inventaire, après l'essai du MJ** : #24, puis reporter #26 sur `main` (`gh api -X PATCH repos/Tchyze/COF_DM/pulls/26 -f base=main`) avant de fusionner #25 avec `--delete-branch`, puis #26 ; supprimer la branche `preversion-inventaire` et remettre le serveur Docker sur `main`. Une correction pendant l'essai se fait sur la branche du lot concerné, puis se reporte dans `preversion-inventaire` (fusion) avant une nouvelle préversion.
+- **Objet donné à un PJ sans feuille** (lot 2 de l'inventaire) : la feuille est aujourd'hui créée d'office, vierge (PV 1), avec cette seule ligne (`mettreDansInventaire`). Le garder, ou attendre que la feuille existe ? Question posée au MJ le 29 octobre 2026 ; fusionné en l'état (création d'office) en attendant sa réponse.
 - **Script d'import Obsidian** : en faire un vrai aller-retour (projet 31) ? Aujourd'hui, `vault_vers_cofdm.py` reste un import unique, taillé pour le vault d'origine.
