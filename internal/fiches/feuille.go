@@ -3,6 +3,7 @@ package fiches
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -19,11 +20,6 @@ import (
 // d'attaque) sont recalculées à chaque enregistrement.
 
 type Valeurs = Carac
-
-type Protection struct {
-	Nom   string `json:"nom"`
-	Bonus int    `json:"bonus"`
-}
 
 type AttDivers struct {
 	C int `json:"C"`
@@ -46,39 +42,37 @@ type Bourse struct {
 }
 
 type Feuille struct {
-	Sexe           string     `json:"sexe"`
-	Age            string     `json:"age"`
-	TaillePhysique string     `json:"taille_physique"`
-	Poids          string     `json:"poids"`
-	Divinite       string     `json:"divinite"`
-	Langues        string     `json:"langues"`
-	Valeurs        Valeurs    `json:"valeurs"`
-	Carac          Carac      `json:"carac"` // modificateurs, dérivés des valeurs
-	Dv             string     `json:"dv"`
-	Pv             int        `json:"pv"`
-	PvActuel       *int       `json:"pv_actuel"`
-	Defense        int        `json:"defense"` // dérivée
-	Init           int        `json:"init"`    // dérivée
-	Rd             int        `json:"rd"`
-	Crit           int        `json:"crit"`
-	Armure         Protection `json:"armure"`
-	Bouclier       Protection `json:"bouclier"`
-	DefDivers      int        `json:"def_divers"`
-	InitDivers     int        `json:"init_divers"`
-	AttDivers      AttDivers  `json:"att_divers"`
-	CaracMagie     string     `json:"carac_magie"`
-	Attaques       []Attaque  `json:"attaques"`
-	Pc             int        `json:"pc"`
-	PcMax          int        `json:"pc_max"`
-	Pr             int        `json:"pr"`
-	PrMax          int        `json:"pr_max"`
-	Pm             int        `json:"pm"`
-	PmMax          int        `json:"pm_max"`
-	Voies          []Voie     `json:"voies"`
-	Capacites      string     `json:"capacites"`
-	Equipement     string     `json:"equipement"`
-	Bourse         Bourse     `json:"bourse"`
-	Notes          string     `json:"notes"` // notes du MJ : jamais montrées au joueur
+	Sexe           string    `json:"sexe"`
+	Age            string    `json:"age"`
+	TaillePhysique string    `json:"taille_physique"`
+	Poids          string    `json:"poids"`
+	Divinite       string    `json:"divinite"`
+	Langues        string    `json:"langues"`
+	Valeurs        Valeurs   `json:"valeurs"`
+	Carac          Carac     `json:"carac"` // modificateurs, dérivés des valeurs
+	Dv             string    `json:"dv"`
+	Pv             int       `json:"pv"`
+	PvActuel       *int      `json:"pv_actuel"`
+	Defense        int       `json:"defense"` // dérivée
+	Init           int       `json:"init"`    // dérivée
+	Rd             int       `json:"rd"`
+	Crit           int       `json:"crit"`
+	DefDivers      int       `json:"def_divers"`
+	InitDivers     int       `json:"init_divers"`
+	AttDivers      AttDivers `json:"att_divers"`
+	CaracMagie     string    `json:"carac_magie"`
+	Attaques       []Attaque `json:"attaques"`
+	Pc             int       `json:"pc"`
+	PcMax          int       `json:"pc_max"`
+	Pr             int       `json:"pr"`
+	PrMax          int       `json:"pr_max"`
+	Pm             int       `json:"pm"`
+	PmMax          int       `json:"pm_max"`
+	Voies          []Voie    `json:"voies"`
+	Capacites      string    `json:"capacites"`
+	Inventaire     []Objet   `json:"inventaire"` // inventaire.go
+	Bourse         Bourse    `json:"bourse"`
+	Notes          string    `json:"notes"` // notes du MJ : jamais montrées au joueur
 	// Utilisations : ce qui a été utilisé des capacités à utilisations comptées (par jour, par repos,
 	// à remettre à zéro à la main ; celles « par combat » se comptent dans le combat), par CleCapacite.
 	Utilisations map[string]Utilisation `json:"utilisations,omitempty"`
@@ -134,7 +128,8 @@ type EffetVoie struct {
 	Rang     int
 	Capacite string
 	Voie     string
-	RangCapa int // rang de la capacité dans sa voie
+	RangCapa int    // rang de la capacité dans sa voie
+	Objet    string // ou : l'objet porté qui donne ce bonus (inventaire.go)
 }
 
 // Effets : pour chaque valeur que les capacités changent (FOR…CHA, def, init, pv, pm, rd, att_C,
@@ -151,6 +146,7 @@ type EffetDetail struct {
 	Capacite string `json:"capacite"`
 	Voie     string `json:"voie"`
 	Rang     int    `json:"rang"`
+	Objet    string `json:"objet,omitempty"` // bonus d'un objet porté, et non d'une capacité
 }
 
 var reDe = regexp.MustCompile(`^d\d{1,3}$`)
@@ -170,7 +166,7 @@ const valeurNeutre = 10
 // FeuilleNeuve : une feuille vierge, avec les valeurs de départ que donnent les règles. Les
 // caractéristiques partent de la valeur neutre (modificateur nul), ramenée dans les bornes des règles.
 func FeuilleNeuve(rg *regles.Feuille) *Feuille {
-	f := &Feuille{Pv: 1, Crit: 20, Attaques: []Attaque{}, Voies: []Voie{}}
+	f := &Feuille{Pv: 1, Crit: 20, Attaques: []Attaque{}, Voies: []Voie{}, Inventaire: []Objet{}}
 	v := valeurNeutre
 	if rg != nil {
 		f.Dv, f.CaracMagie = rg.DeDeVie, rg.CaracMagie
@@ -203,10 +199,16 @@ func RelireFeuille(raw []byte, niveau int) (*Feuille, error) {
 
 func normaliser(raw []byte, niveau int, rg *regles.Feuille, effets []EffetVoie, connus bool) (*Feuille, error) {
 	f := FeuilleNeuve(rg)
+	f.Inventaire = nil
 	if err := decoder(raw, f); err != nil {
 		return nil, err
 	}
+	f.reprendreEquipement(raw)
 	f.effets, f.effetsConnus = effets, connus
+	var emplacements []regles.Emplacement // relue sans règles : ce qui est porté n'est pas contrôlé
+	if connus {
+		emplacements = rg.LesEmplacements()
+	}
 	if rg == nil {
 		rg = &regles.Feuille{}
 	}
@@ -240,16 +242,16 @@ func normaliser(raw []byte, niveau int, rg *regles.Feuille, effets []EffetVoie, 
 	if f.Crit < 2 || f.Crit > 20 {
 		return nil, invalide("crit : entre 2 et 20.")
 	}
-	if f.Armure.Bonus < 0 || f.Bouclier.Bonus < 0 {
-		return nil, invalide("bonus d'armure ou de bouclier : ne peut pas être négatif.")
-	}
 	for _, v := range []int{f.Pc, f.PcMax, f.Pr, f.PrMax, f.Pm, f.PmMax, f.Bourse.Po, f.Bourse.Pa, f.Bourse.Pc} {
 		if v < 0 {
 			return nil, invalide("les ressources et la bourse ne peuvent pas être négatives.")
 		}
 	}
-	if f.Attaques == nil {
+	if f.Attaques = sansAttaquesObjets(f.Attaques); f.Attaques == nil {
 		f.Attaques = []Attaque{}
+	}
+	if err := f.verifierInventaire(emplacements); err != nil {
+		return nil, err
 	}
 	if len(f.Attaques) > 40 || len(f.Voies) > 40 {
 		return nil, invalide("trop d'attaques ou de voies.")
@@ -341,7 +343,7 @@ func (f *Feuille) calculer(niveau int, rg *regles.Feuille, bonus map[string]int)
 		c.carac.Set(k, Modificateur(c.valeurs.Get(k)))
 	}
 	c.init = c.valeurs.DEX + f.InitDivers + bonus["init"]
-	c.def = rg.DefenseBase + c.carac.DEX + f.Armure.Bonus + f.Bouclier.Bonus + f.DefDivers + bonus["def"]
+	c.def = rg.DefenseBase + c.carac.DEX + f.DefDivers + bonus["def"]
 	c.pv, c.pm, c.rd = f.Pv+bonus["pv"], f.PmMax+bonus["pm"], f.Rd+bonus["rd"]
 	c.attaque = map[string]int{
 		"C": niveau + c.carac.FOR + f.AttDivers.C + bonus["att_C"],
@@ -395,8 +397,9 @@ func (f *Feuille) resoudre(niveau int) (map[string]int, []EffetDetail) {
 	for _, k := range Caracs {
 		carac.Set(k, Modificateur(f.Valeurs.Get(k)))
 	}
+	tous := append(slices.Clone(f.effets), f.effetsObjets()...)
 	for passe := range 2 {
-		for _, e := range f.effets {
+		for _, e := range tous {
 			if dans(Caracs, e.Cible) != (passe == 0) {
 				continue
 			}
@@ -404,7 +407,7 @@ func (f *Feuille) resoudre(niveau int) (map[string]int, []EffetDetail) {
 			for _, k := range clesCible(e.Cible) {
 				bonus[k] += v
 			}
-			detail = append(detail, EffetDetail{Cible: e.Cible, Valeur: v, Capacite: e.Capacite, Voie: e.Voie, Rang: e.RangCapa})
+			detail = append(detail, EffetDetail{Cible: e.Cible, Valeur: v, Capacite: e.Capacite, Voie: e.Voie, Rang: e.RangCapa, Objet: e.Objet})
 		}
 		for _, k := range Caracs {
 			carac.Set(k, Modificateur(f.Valeurs.Get(k)+bonus[k]))
@@ -420,6 +423,7 @@ func (f *Feuille) Deriver(niveau int, rg *regles.Feuille) {
 	bonus, detail := f.resoudre(niveau)
 	t := f.calculer(niveau, rg, bonus)
 	f.Carac, f.Init, f.Defense = t.carac, t.init, t.def
+	f.Attaques = append(sansAttaquesObjets(f.Attaques), f.attaquesObjets()...)
 	for i := range f.Attaques {
 		f.Attaques[i].Bonus = t.attaque[f.Attaques[i].Type] + f.Attaques[i].Mod
 	}
@@ -454,9 +458,11 @@ func (f *Feuille) PmMaxTotal() int           { return f.PmMax + f.bonus["pm"] }
 func (f *Feuille) RdTotal() int              { return f.Rd + f.bonus["rd"] }
 func (f *Feuille) ValeurTotale(k string) int { return f.Valeurs.Get(k) + f.bonus[k] }
 
-// Stockage : la feuille telle qu'elle se range, sans ce que la bibliothèque y ajoute.
+// Stockage : la feuille telle qu'elle se range, sans ce que la bibliothèque et les objets portés y
+// ajoutent.
 func (f Feuille) Stockage() []byte {
 	f.Effets = nil
+	f.Attaques = sansAttaquesObjets(slices.Clone(f.Attaques))
 	return f.JSON()
 }
 

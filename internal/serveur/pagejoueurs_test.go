@@ -100,7 +100,7 @@ func TestPageJoueursLibre(t *testing.T) {
 	var lue map[string]any
 	_, corps = b.joueurLibre("GET", feuille, nil, false)
 	json.Unmarshal([]byte(corps), &lue)
-	lue["equipement"], lue["notes"] = "Une corde", "piraté"
+	lue["inventaire"], lue["notes"] = []any{map[string]any{"nom": "Une corde"}}, "piraté"
 	if c, _ := b.joueurLibre("PUT", feuille, lue, true); c != 403 {
 		t.Fatalf("feuille verrouillée modifiée : %d", c)
 	}
@@ -113,8 +113,8 @@ func TestPageJoueursLibre(t *testing.T) {
 	if c, corps := b.joueurLibre("PUT", feuille, lue, true); c != 200 || strings.Contains(corps, "piraté") {
 		t.Fatalf("feuille déverrouillée : %d %s", c, corps)
 	}
-	if _, f := b.local("GET", feuille, nil); f["equipement"] != "Une corde" || f["notes"] != "SECRET-MJ" {
-		t.Fatalf("feuille après l'écriture du joueur : équipement %v, notes %v", f["equipement"], f["notes"])
+	if _, f := b.local("GET", feuille, nil); fmt.Sprint(f["inventaire"]) != "[map[id:1 nom:Une corde quantite:1]]" || f["notes"] != "SECRET-MJ" {
+		t.Fatalf("feuille après l'écriture du joueur : inventaire %v, notes %v", f["inventaire"], f["notes"])
 	}
 	// le combat : l'ordre, qui joue, les états ; aucun chiffre
 	_, v := b.local("POST", "/api/combats", map[string]any{"rencontre": s.renc})

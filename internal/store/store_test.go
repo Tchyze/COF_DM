@@ -1,6 +1,7 @@
 package store
 
 import (
+	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -506,5 +507,39 @@ func TestReparerLiensTracker(t *testing.T) {
 	}
 	if baron().Data["profil_combat"] != nil {
 		t.Fatalf("ancien export non repris : %#v", baron().Data)
+	}
+}
+
+// Version 5 des données : à l'ouverture, une feuille qui a encore son ancien équipement le range
+// dans son inventaire (texte, armure, bouclier), et l'univers garde sa DEF.
+func TestRepriseInventaire(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "u.cofdm")
+	s, err := Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pj := creer(t, s, "pj", "Aldric", map[string]any{"niveau": 2})
+	if _, err := s.EcrireFeuille(pj.ID, []byte(`{"pv":7}`), 0, "t"); err != nil {
+		t.Fatal(err)
+	}
+	s.db.Exec(`UPDATE feuilles SET data=? WHERE entite=?`, `{"pv":7,"armure":{"nom":"Cuir","bonus":2},"equipement":"2 torches\nCorde"}`, pj.ID)
+	s.db.Exec(`UPDATE meta SET valeur='4' WHERE cle='version_donnees'`)
+	s.Fermer()
+	if s, err = Ouvrir(chemin); err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fermer()
+	raw, _, err := s.LireFeuille(pj.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var f map[string]any
+	_ = json.Unmarshal(raw, &f)
+	inv, _ := f["inventaire"].([]any)
+	if len(inv) != 3 || f["equipement"] != nil || f["armure"] != nil || f["defense"] != float64(2) {
+		t.Fatalf("feuille reprise : %s", raw)
+	}
+	if o := inv[1].(map[string]any); o["nom"] != "torches" || o["quantite"] != float64(2) {
+		t.Fatalf("ligne : %v", o)
 	}
 }

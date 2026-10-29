@@ -1,6 +1,7 @@
 package serveur
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"testing"
@@ -159,16 +160,24 @@ func TestFeuilleRoles(t *testing.T) {
 		t.Fatalf("feuille écrite par le joueur, édition fermée : %d", c)
 	}
 	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, chef)
-	c, v, _ = b.proxy("PUT", u, map[string]any{"pv": 15, "notes": "j'efface les notes", "equipement": "Une lanterne, une corde"}, joueuse)
+	c, v, _ = b.proxy("PUT", u, map[string]any{"pv": 15, "notes": "j'efface les notes", "inventaire": []any{map[string]any{"nom": "Une lanterne"}}}, joueuse)
 	if c != 200 || v["pv"] != float64(15) || v["notes"] != "" {
 		t.Fatalf("feuille écrite par le joueur : %d %v", c, v)
 	}
 	if c, _, _ := b.proxy("PUT", u, map[string]any{"pv": 1}, autre); c != 404 {
 		t.Fatalf("feuille écrite par un autre joueur : %d", c)
 	}
+	// les chiffres d'un objet restent ceux du MJ : le joueur porte le casque, sans gonfler son bonus
+	b.proxy("PUT", u, map[string]any{"pv": 15, "notes": "SECRET-MJ : il est maudit", "inventaire": []any{map[string]any{"nom": "Casque", "emplacement": "tete", "bonus": []any{map[string]any{"cible": "def", "valeur": 2}}}}}, mj)
+	c, v, _ = b.proxy("PUT", u, map[string]any{"pv": 15, "inventaire": []any{map[string]any{"id": 1, "nom": "Casque", "porte": true, "emplacement": "corps", "bonus": []any{map[string]any{"cible": "def", "valeur": 20}}}}}, joueuse)
+	if o, _ := v["inventaire"].([]any); c != 200 || len(o) != 1 || fmt.Sprint(o[0].(map[string]any)["bonus"]) != "[map[cible:def valeur:2]]" || o[0].(map[string]any)["emplacement"] != "tete" || o[0].(map[string]any)["porte"] != true {
+		t.Fatalf("objet modifié par le joueur : %d %v", c, v["inventaire"])
+	}
+	// une ligne ajoutée sans identifiant n'hérite pas des chiffres du casque qu'elle remplace
+	b.proxy("PUT", u, map[string]any{"pv": 15, "inventaire": []any{map[string]any{"nom": "Une lanterne"}}}, joueuse)
 	// les notes du MJ sont intactes
 	_, v, _ = b.proxy("GET", u, nil, mj)
-	if v["notes"] != "SECRET-MJ : il est maudit" || v["pv"] != float64(15) || v["equipement"] != "Une lanterne, une corde" {
+	if inv, _ := v["inventaire"].([]any); v["notes"] != "SECRET-MJ : il est maudit" || v["pv"] != float64(15) || len(inv) != 1 || inv[0].(map[string]any)["nom"] != "Une lanterne" || inv[0].(map[string]any)["bonus"] != nil {
 		t.Fatalf("feuille après l'édition du joueur : %v", v)
 	}
 }

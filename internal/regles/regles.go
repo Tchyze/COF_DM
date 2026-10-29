@@ -135,8 +135,37 @@ type Feuille struct {
 	RangMax      int               `json:"rang_max"`      // 0 : pas de limite
 	OriginesVoie []string          `json:"origines_voie"` // vide : texte libre
 	Repos        []Repos           `json:"repos,omitempty"`
-	Montee       *Montee           `json:"montee,omitempty"` // absente : montée de niveau en saisie libre
+	Montee       *Montee           `json:"montee,omitempty"`       // absente : montée de niveau en saisie libre
+	Emplacements []Emplacement     `json:"emplacements,omitempty"` // vide : EmplacementsParDefaut
 	Textes       map[string]string `json:"textes,omitempty"`
+}
+
+// Emplacement : où se porte un objet de l'inventaire. Nombre : combien d'objets s'y portent à la
+// fois (0 : un). Occupe : les emplacements que prend en fait un objet porté là (une arme à deux
+// mains prend les deux mains) ; vide : lui-même.
+type Emplacement struct {
+	Cle    string   `json:"cle"`
+	Nom    string   `json:"nom"`
+	Nombre int      `json:"nombre,omitempty"`
+	Occupe []string `json:"occupe,omitempty"`
+}
+
+// EmplacementsParDefaut : les emplacements d'une feuille quand le fichier de règles n'en donne pas.
+// Rien d'un livre : les parties du corps où l'on porte quelque chose.
+var EmplacementsParDefaut = []Emplacement{
+	{Cle: "tete", Nom: "Tête"}, {Cle: "cou", Nom: "Cou"}, {Cle: "epaules", Nom: "Épaules"},
+	{Cle: "corps", Nom: "Corps"}, {Cle: "mains", Nom: "Mains"}, {Cle: "taille", Nom: "Taille"},
+	{Cle: "pieds", Nom: "Pieds"}, {Cle: "anneau", Nom: "Anneau", Nombre: 2},
+	{Cle: "main_principale", Nom: "Main principale"}, {Cle: "main_secondaire", Nom: "Main secondaire"},
+	{Cle: "deux_mains", Nom: "Deux mains", Occupe: []string{"main_principale", "main_secondaire"}},
+}
+
+// LesEmplacements : ceux des règles, sinon ceux par défaut (f peut être nil).
+func (f *Feuille) LesEmplacements() []Emplacement {
+	if f == nil || len(f.Emplacements) == 0 {
+		return EmplacementsParDefaut
+	}
+	return f.Emplacements
 }
 
 // Montee : ce que gagne un PJ qui passe un niveau. PV gagnés : somme de Pv et de PvFixe, chaque dé
@@ -372,6 +401,25 @@ func (r *Regles) Normaliser() error {
 					return fmt.Errorf("personnage.montee.etapes.%d : clé unique, libellé et niveaux attendus", i)
 				}
 				vues[e.Cle] = true
+			}
+		}
+		if len(f.Emplacements) > 30 {
+			return fmt.Errorf("personnage.emplacements : trente au plus")
+		}
+		vus := map[string]bool{}
+		for i := range f.Emplacements {
+			e := &f.Emplacements[i]
+			e.Cle, e.Nom = strings.TrimSpace(e.Cle), strings.TrimSpace(e.Nom)
+			if e.Cle == "" || e.Nom == "" || vus[e.Cle] || e.Nombre < 0 || e.Nombre > 10 || len(e.Occupe) > 6 {
+				return fmt.Errorf("personnage.emplacements.%d : clé unique, nom et nombre de 0 à 10 attendus", i)
+			}
+			vus[e.Cle] = true
+		}
+		for i, e := range f.Emplacements {
+			for _, o := range e.Occupe {
+				if !vus[o] {
+					return fmt.Errorf("personnage.emplacements.%d.occupe : emplacement %q inconnu", i, o)
+				}
 			}
 		}
 		if f.NiveauMax < 0 || f.ValeurMax < 0 || f.RangMax < 0 || f.PcMax < 0 || f.PrMax < 0 || (f.ValeurMax > 0 && f.ValeurMin > f.ValeurMax) {

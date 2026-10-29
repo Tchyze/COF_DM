@@ -645,7 +645,7 @@ func outils() []outil {
 		},
 		{
 			Nom: "modifier_feuille", Fonction: "feuilles", Titre: "Modifier une feuille de personnage",
-			Description: "Modifie la feuille de personnage d'un PJ : seuls les champs donnés changent (pv_actuel, pc, pr, pm, equipement, bourse, attaques, voies…). Une liste (attaques, voies) se donne en entier. Le niveau se change sur la fiche du PJ, pas ici. Les valeurs dérivées (modificateurs, DEF, initiative) sont recalculées.",
+			Description: "Modifie la feuille de personnage d'un PJ : seuls les champs donnés changent (pv_actuel, pc, pr, pm, inventaire, bourse, attaques, voies…). Une liste (attaques, voies, inventaire) se donne en entier. Inventaire : [{id, nom, quantite, porte, emplacement, bonus: [{cible, valeur}], arme: {type, dm, mod, portee}, notes}] ; garder l'id d'un objet existant ; un objet porté a un emplacement (regles.emplacements de la feuille), un seul par emplacement ; ses bonus (cibles des capacités : def, init, att, pv…) et son arme (ligne d'attaque) ne comptent que porté. Le niveau se change sur la fiche du PJ, pas ici. Les valeurs dérivées (modificateurs, DEF, initiative) sont recalculées.",
 			Proprietes: map[string]any{
 				"id":     entier("Identifiant du PJ"),
 				"champs": objet("Champs de la feuille à changer"),

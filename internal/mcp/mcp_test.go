@@ -231,9 +231,9 @@ func TestParcours(t *testing.T) {
 	}
 
 	// feuille : seuls les champs donnés changent
-	b.json("modifier_feuille", map[string]any{"id": idPj, "champs": map[string]any{"equipement": "Épée, corde", "bourse": map[string]any{"po": 12}}})
+	b.json("modifier_feuille", map[string]any{"id": idPj, "champs": map[string]any{"inventaire": []any{map[string]any{"nom": "Corde", "quantite": 2}}, "bourse": map[string]any{"po": 12}}})
 	f := b.json("feuille_personnage", map[string]any{"nom": "Aelis"})
-	if f["equipement"] != "Épée, corde" || f["bourse"].(map[string]any)["po"] != float64(12) || f["niveau"] != float64(2) {
+	if inv := f["inventaire"].([]any); len(inv) != 1 || inv[0].(map[string]any)["quantite"] != float64(2) || f["bourse"].(map[string]any)["po"] != float64(12) || f["niveau"] != float64(2) {
 		t.Fatalf("feuille : %v", f)
 	}
 	b.outil("modifier_feuille", map[string]any{"id": idPj, "champs": map[string]any{"niveau": 5}}, true)
