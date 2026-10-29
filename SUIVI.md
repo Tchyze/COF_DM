@@ -199,4 +199,6 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Points en attente d'une décision
 
+- **Objet donné à un PJ sans feuille** (lot 2 de l'inventaire) : la feuille est aujourd'hui créée d'office, vierge (PV 1), avec cette seule ligne (`mettreDansInventaire`). Le garder, ou attendre que la feuille existe ? Question posée au MJ le 29 octobre 2026.
+- **Fusion du chantier inventaire, après l'essai du MJ** : #24, puis reporter #26 sur `main` (`gh api -X PATCH repos/Tchyze/COF_DM/pulls/26 -f base=main`) avant de fusionner #25 avec `--delete-branch`, puis #26 ; supprimer la branche `preversion-inventaire` et remettre le serveur Docker sur `main`. Une correction pendant l'essai se fait sur la branche du lot concerné, puis se reporte dans `preversion-inventaire` (fusion) avant une nouvelle préversion.
 - **Script d'import Obsidian** : en faire un vrai aller-retour (projet 31) ? Aujourd'hui, `vault_vers_cofdm.py` reste un import unique, taillé pour le vault d'origine.
