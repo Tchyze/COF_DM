@@ -11,6 +11,8 @@ import (
 	"slices"
 	"sort"
 	"strings"
+
+	"github.com/Tchyze/cof_dm/internal/reference"
 )
 
 const (
@@ -158,6 +160,22 @@ var EmplacementsParDefaut = []Emplacement{
 	{Cle: "pieds", Nom: "Pieds"}, {Cle: "anneau", Nom: "Anneau", Nombre: 2},
 	{Cle: "main_principale", Nom: "Main principale"}, {Cle: "main_secondaire", Nom: "Main secondaire"},
 	{Cle: "deux_mains", Nom: "Deux mains", Occupe: []string{"main_principale", "main_secondaire"}},
+}
+
+// CleEmplacement : la clé de l'emplacement que désigne s, par sa clé ou par son nom, sans tenir
+// compte des majuscules, des accents ni des espaces (« Tête », « deux mains ») ; "" si aucun.
+func CleEmplacement(liste []Emplacement, s string) string {
+	norme := func(x string) string { return strings.ReplaceAll(reference.Cle(x), " ", "_") }
+	n := norme(s)
+	if n == "" {
+		return ""
+	}
+	for _, e := range liste {
+		if norme(e.Cle) == n || norme(e.Nom) == n {
+			return e.Cle
+		}
+	}
+	return ""
 }
 
 // LesEmplacements : ceux des règles, sinon ceux par défaut (f peut être nil).

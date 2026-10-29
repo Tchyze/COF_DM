@@ -109,6 +109,12 @@ func (f *Feuille) verifierInventaire(emplacements []regles.Emplacement) error {
 		}
 	}
 	if emplacements != nil {
+		// « Tête » ou « tête » désignent l'emplacement « tete » : deux casques ne s'y portent pas
+		for i := range f.Inventaire {
+			if c := regles.CleEmplacement(emplacements, f.Inventaire[i].Emplacement); c != "" {
+				f.Inventaire[i].Emplacement = c
+			}
+		}
 		return verifierPortes(f.Inventaire, emplacements)
 	}
 	return nil
