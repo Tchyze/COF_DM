@@ -209,3 +209,58 @@ export function editeurAdversaires(conteneur, valeur, auChangement) {
   $("button.petit", conteneur).onclick = () => { ligne(); auChangement?.(); };
   return { valeur: () => { const l = [...liste.children].map(d => d.lire()).filter(a => a.monstre); return l.length ? l : null; } };
 }
+
+// ---------------------------------------------------------------- chiffres d'un objet
+
+let emplacementsConnus = null;
+/** Les emplacements de l'univers (fichier de règles, sinon la liste générique), lus une fois. */
+export const listeEmplacements = () => (emplacementsConnus ||= api("GET", "/api/emplacements").catch(() => { emplacementsConnus = null; return []; }));
+
+const TYPES_ARME = { C: "Contact", D: "Distance", M: "Magique" };
+/** Ce qu'un objet porté peut augmenter : clé → libellé (mêmes cibles que les bonus des capacités). */
+export const CIBLES_OBJET = { def: "DEF", init: "Init", rd: "RD", pv: "PV max", pm: "PM max", att: "Attaque", att_c: "Contact", att_d: "Distance", att_m: "Magique",
+  FOR: "FOR", DEX: "DEX", CON: "CON", INT: "INT", SAG: "SAG", CHA: "CHA" };
+const signe = n => (n >= 0 ? "+" : "−") + Math.abs(n);
+
+/** Les chiffres d'un objet en une ligne : « DEF +2, Contact 1d8 +1 · 30 m » (sans l'emplacement). */
+export function texteChiffres(c) {
+  if (!c) return "";
+  const a = c.arme;
+  return [...(c.bonus || []).map(b => `${CIBLES_OBJET[b.cible] || b.cible} ${signe(b.valeur)}`),
+    a && `${TYPES_ARME[a.type] || a.type}${a.dm ? ` ${a.dm}` : ""}${a.mod ? ` ${signe(a.mod)}` : ""}${a.portee ? ` · ${a.portee}` : ""}`].filter(Boolean).join(", ");
+}
+
+/** Saisie des chiffres d'une fiche « Objet » : emplacement, bonus, arme. valeur() : null si rien. */
+export function editeurChiffres(conteneur, valeur, auChangement) {
+  const v = valeur || {};
+  const ligneBonus = b => `<span class="fp-inv-bonus"><select data-b="cible" aria-label="Valeur augmentée">${Object.entries(CIBLES_OBJET).map(([k, n]) => `<option value="${k}"${k === b.cible ? " selected" : ""}>${esc(n)}</option>`).join("")}</select><input data-b="valeur" type="number" min="-20" max="20" value="${esc(b.valeur ?? 1)}" aria-label="Bonus"><button type="button" class="ghost petit" data-retirer-bonus aria-label="Retirer le bonus">✕</button></span>`;
+  conteneur.innerHTML = `<div class="colonne" style="gap:8px">
+      <label class="champ"><span>Emplacement <small>où il se porte ; un seul objet par emplacement</small></span><select data-e="emplacement"><option value="">— aucun —</option></select></label>
+      <div class="ligne" data-bonus>${(v.bonus || []).map(ligneBonus).join("")}<button type="button" class="petit" data-ajout-bonus>＋ Bonus</button></div>
+      <div class="ligne fp-inv-arme${v.arme ? " on" : ""}"><label class="t-coche"><input type="checkbox" data-a="arme"${v.arme ? " checked" : ""}> Arme</label>
+        <select data-a="type" aria-label="Type d'attaque">${Object.entries(TYPES_ARME).map(([k, n]) => `<option value="${k}"${(v.arme?.type || "C") === k ? " selected" : ""}>${n}</option>`).join("")}</select>
+        <input data-a="dm" value="${esc(v.arme?.dm || "")}" placeholder="DM : 1d8" aria-label="Dégâts" style="width:9em">
+        <input data-a="mod" type="number" value="${esc(v.arme?.mod || 0)}" aria-label="Bonus propre à l'arme" title="Bonus propre à l'arme" style="width:5em">
+        <input data-a="portee" value="${esc(v.arme?.portee || "")}" placeholder="Portée" aria-label="Portée" style="width:8em"></div>
+    </div>`;
+  const sel = $("[data-e=emplacement]", conteneur), a = k => $(`[data-a=${k}]`, conteneur);
+  listeEmplacements().then(l => {
+    const connu = l.some(e => e.cle === v.emplacement);
+    sel.insertAdjacentHTML("beforeend", l.map(e => `<option value="${esc(e.cle)}">${esc(e.nom)}</option>`).join("") + (v.emplacement && !connu ? `<option value="${esc(v.emplacement)}">${esc(v.emplacement)}</option>` : ""));
+    sel.value = v.emplacement || "";
+  });
+  conteneur.addEventListener("click", e => {
+    if (e.target.closest("[data-retirer-bonus]")) { e.target.closest(".fp-inv-bonus").remove(); auChangement?.(); }
+    else if (e.target.closest("[data-ajout-bonus]")) { e.target.closest("[data-ajout-bonus]").insertAdjacentHTML("beforebegin", ligneBonus({ cible: "def", valeur: 1 })); auChangement?.(); }
+  });
+  conteneur.addEventListener("change", e => { if (e.target.dataset.a === "arme") e.target.closest(".fp-inv-arme").classList.toggle("on", e.target.checked); });
+  return {
+    valeur() {
+      const c = { emplacement: sel.value || undefined,
+        bonus: $$(".fp-inv-bonus", conteneur).map(b => ({ cible: $("[data-b=cible]", b).value, valeur: +$("[data-b=valeur]", b).value || 0 })).filter(b => b.valeur),
+        arme: a("arme").checked ? { type: a("type").value, dm: a("dm").value.trim(), mod: +a("mod").value || 0, portee: a("portee").value.trim() } : undefined };
+      if (!c.bonus.length) delete c.bonus;
+      return c.emplacement || c.bonus || c.arme ? c : null;
+    },
+  };
+}

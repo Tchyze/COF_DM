@@ -2,7 +2,7 @@
 import { $, $$, esc, api, toast, armer, dateHeure, lien } from "../ui.js";
 import { schema, types, typeDe, relationDe, vignette, lienFiche, badgeType, valeurCourte, actif as fonctionActive } from "../schema.js";
 import { rendu, inline, resolveur } from "../md.js";
-import { selecteur, saisieDate, completerLiens, hauteurAuto, selecteurMonstre, editeurAdversaires } from "../composants.js";
+import { selecteur, saisieDate, completerLiens, hauteurAuto, selecteurMonstre, editeurAdversaires, editeurChiffres, texteChiffres, listeEmplacements } from "../composants.js";
 import * as panneaux from "./panneaux.js";
 import { panneauFeuille } from "./feuille.js";
 import { organigramme } from "./organigramme.js";
@@ -67,6 +67,7 @@ function lecture(el, f) {
   for (const c of courts) (groupes[c.groupe || ""] ||= []).push(c);
   const longs = t.champs.filter(c => c.genre === "long" && f.data[c.cle]);
   const etapes = t.champs.find(c => c.genre === "etapes");
+  const chiffres = t.champs.find(c => c.genre === "equipement" && f.data[c.cle]); // ceux d'un objet
   // sur un serveur, le MJ choisit les fiches que les joueurs voient (jamais une fiche « Secret »)
   const partageable = !!window.cofAcces?.serveur && !window.cofAcces.lecture_seule && f.type !== "secret" && f.type !== "aide";
   // la feuille de personnage (les joueurs tiennent la leur sur leur page)
@@ -105,6 +106,8 @@ function lecture(el, f) {
         ${special ? `<section class="panneau" id="p-special"></section>` : ""}
         ${etapes && f.data[etapes.cle]?.length ? `<section class="panneau"><h3>${esc(etapes.nom)} <span class="sp"></span><span class="hint" style="text-transform:none;letter-spacing:0">${f.data[etapes.cle].filter(e => e.fait).length} / ${f.data[etapes.cle].length}</span></h3>
           <ul class="etapes" id="etapes">${f.data[etapes.cle].map((e, i) => `<li><label><input type="checkbox" data-i="${i}" ${e.fait ? "checked" : ""}><span class="${e.fait ? "fait" : ""}">${inline(e.texte, res)}</span></label></li>`).join("")}</ul></section>` : ""}
+        ${chiffres ? `<section class="panneau"><h3>${esc(chiffres.nom)}</h3><p>${f.data[chiffres.cle].emplacement ? `<span class="hint" id="chiffres-empl">${esc(f.data[chiffres.cle].emplacement)}</span> · ` : ""}<span class="fp-objet">${esc(texteChiffres(f.data[chiffres.cle]) || "aucun bonus")}</span></p>
+          <p class="hint">Ils comptent quand un PJ le porte : le détenteur l'a dans son inventaire.</p></section>` : ""}
         ${longs.map(c => `<section class="panneau section-md${c.secret ? " secret" : ""}"><h3>${esc(c.nom)}</h3><div class="md">${rendu(f.data[c.cle], res)}</div></section>`).join("")}
         ${!courts.length && !longs.length && !resume ? `<section class="panneau"><p class="vide">Fiche vide. <a href="#/f/${f.id}/modifier">La remplir</a>.</p></section>` : ""}
         ${sectionReferences(f)}
@@ -122,6 +125,8 @@ function lecture(el, f) {
 
   relations(el, f);
   images(el, f);
+  const empl = $("#chiffres-empl", el);
+  if (empl) listeEmplacements().then(l => { empl.textContent = l.find(e => e.cle === empl.textContent)?.nom || empl.textContent; });
   const rafraichir = () => recharger(el, f.id);
   if (feuille) panneauFeuille($("#p-feuille", el), f, { peutEcrire: !window.cofAcces?.lecture_seule, apres: rafraichir });
   if (special) special($("#p-special", el), f, rafraichir);
@@ -361,7 +366,7 @@ function formulaire(el, f, nouveau) {
         <label class="champ pleine"><span>Tags <small>séparés par des virgules</small></span><input id="tags" value="${esc((f.tags || []).join(", "))}" autocomplete="off"></label>
       </fieldset>
       ${groupes.map(g => `<fieldset class="${g.nom === "MJ" ? "mj" : ""}"><legend>${g.nom === "MJ" ? "🔒 Réservé au MJ" : esc(g.nom)}</legend>
-        ${g.champs.map(c => `<div class="${["long", "etapes", "refs", "adversaires"].includes(c.genre) ? "pleine" : ""}" data-champ="${c.cle}"></div>`).join("")}
+        ${g.champs.map(c => `<div class="${["long", "etapes", "refs", "adversaires", "equipement"].includes(c.genre) ? "pleine" : ""}" data-champ="${c.cle}"></div>`).join("")}
       </fieldset>`).join("")}
       <div class="barre-form">
         <span class="hint" style="margin-right:auto;align-self:center"><kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Échap</kbd> annuler · <code>[[</code> pour lier une fiche</span>
@@ -420,6 +425,11 @@ function formulaire(el, f, nouveau) {
       case "adversaires": {
         zone.innerHTML = `<div class="champ"><label class="champ">${etiquette}</label><div class="w"></div></div>`;
         const ed = editeurAdversaires($(".w", zone), v, marquer);
+        lecteurs[c.cle] = ed.valeur; break;
+      }
+      case "equipement": {
+        zone.innerHTML = `<div class="champ"><label class="champ">${etiquette}</label><div class="w"></div></div>`;
+        const ed = editeurChiffres($(".w", zone), v, marquer);
         lecteurs[c.cle] = ed.valeur; break;
       }
       case "etapes": {

@@ -9,6 +9,7 @@ package obsidian
 
 import (
 	"archive/zip"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path"
@@ -499,6 +500,8 @@ func (x *exporteur) noteFiche(n *note, images []string, combats []string) string
 				}
 			}
 			section(titre, strings.Join(l, "\n"))
+		case c.Genre == modele.Equipement:
+			section(titre, chiffres(v))
 		case c.Genre == modele.Adversaires:
 			var l []string
 			lst, _ := v.([]any)
@@ -822,4 +825,34 @@ func (x *exporteur) journal() {
 			x.cellule(l.Auteur), x.cellule(l.Action), fiche, x.cellule(l.Detail))
 	}
 	x.ajouter(x.unique("Journal", "COF DM")+".md", b.String())
+}
+
+// chiffres : ceux d'une fiche « Objet » (emplacement, bonus, arme), une ligne chacun.
+func chiffres(v any) string {
+	var c modele.ChiffresObjet
+	b, _ := json.Marshal(v)
+	if json.Unmarshal(b, &c) != nil {
+		return ""
+	}
+	var l []string
+	if c.Emplacement != "" {
+		l = append(l, "- Emplacement : "+c.Emplacement)
+	}
+	for _, x := range c.Bonus {
+		l = append(l, fmt.Sprintf("- %s %+d", x.Cible, x.Valeur))
+	}
+	if a := c.Arme; a != nil {
+		ligne := "- Arme (" + a.Type + ")"
+		if a.Dm != "" {
+			ligne += " : DM " + a.Dm
+		}
+		if a.Mod != 0 {
+			ligne += fmt.Sprintf(", %+d", a.Mod)
+		}
+		if a.Portee != "" {
+			ligne += ", portée " + a.Portee
+		}
+		l = append(l, ligne)
+	}
+	return strings.Join(l, "\n")
 }

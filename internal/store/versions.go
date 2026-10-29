@@ -34,7 +34,9 @@ import "strconv"
 //
 // Modèle 6 : la feuille range son équipement dans un inventaire (« inventaire » : objets, quantités,
 // portés, bonus, armes ; versionDonnees 5) au lieu des champs « equipement », « armure » et
-// « bouclier » ; le fichier de règles décrit les emplacements (« personnage.emplacements »).
+// « bouclier » ; le fichier de règles décrit les emplacements (« personnage.emplacements »). Une
+// ligne de l'inventaire peut désigner une fiche « Objet » (« fiche »), qui porte ses chiffres (champ
+// « equipement », genre du même nom).
 const (
 	VersionProtocole = 1
 	VersionModele    = 6

@@ -2,10 +2,13 @@ package fiches
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/Tchyze/cof_dm/internal/modele"
+	"github.com/Tchyze/cof_dm/internal/reference"
 	"github.com/Tchyze/cof_dm/internal/regles"
 )
 
@@ -64,6 +67,9 @@ func TestEmplacements(t *testing.T) {
 		{`{"nom":"A","porte":true,"emplacement":"anneau"},{"nom":"B","porte":true,"emplacement":"anneau"},{"nom":"C","porte":true,"emplacement":"anneau"}`, "Anneau"},
 		{`{"nom":"Pavois","porte":true,"emplacement":"main_secondaire"},{"nom":"Grande hache","porte":true,"emplacement":"deux_mains"}`, "Main secondaire : « Grande hache »"},
 		{`{"nom":"Corde","porte":true}`, "sans emplacement"},
+		// par son nom, avec ou sans accent ni majuscule : le même emplacement
+		{`{"nom":"Casque","porte":true,"emplacement":"tete"},{"nom":"Heaume","porte":true,"emplacement":"tête"}`, "Tête : « Heaume » ne se porte pas avec « Casque »"},
+		{`{"nom":"Pavois","porte":true,"emplacement":"Main secondaire"},{"nom":"Arc","porte":true,"emplacement":"deux mains"}`, "Main secondaire : « Arc »"},
 		{`{"nom":"Cape","porte":true,"emplacement":"dos"},{"nom":"Sac","porte":true,"emplacement":"dos"}`, "dos : « Sac »"},
 		{`{"nom":"Talisman","porte":true,"bonus":[{"cible":"chance","valeur":1}],"emplacement":"cou"}`, "bonus de -20 à +20"},
 	}
@@ -117,23 +123,34 @@ func TestRepriseEquipement(t *testing.T) {
 // objet restent ceux du MJ, et ce qu'il ajoute n'a ni bonus ni arme.
 func TestGarderChiffres(t *testing.T) {
 	ancienne, _ := NormaliserFeuille([]byte(`{"pv":5,"inventaire":[{"id":1,"nom":"Casque","emplacement":"tete","bonus":[{"cible":"def","valeur":2}]}]}`), 1, nil)
-	// une ligne ajoutée sans identifiant ne prend pas les chiffres de celle qui en reçoit le numéro
+	// une ligne ajoutée sans identifiant ne prend pas les chiffres de celle qui en reçoit le numéro ;
+	// une ligne portée sans emplacement reprend celui du MJ avant d'être validée
 	raw := []byte(`{"pv":5,"inventaire":[
 		{"nom":"Pierre trouvée"},
-		{"id":1,"nom":"Mon casque","porte":true,"emplacement":"corps","bonus":[{"cible":"def","valeur":9}]},
+		{"id":1,"nom":"Mon casque","porte":true,"bonus":[{"cible":"def","valeur":9}]},
 		{"id":7,"nom":"Épée trouvée","quantite":2,"emplacement":"main_principale","arme":{"dm":"3d6"},"bonus":[{"cible":"att","valeur":5}]}]}`)
-	f, _ := NormaliserFeuille(raw, 1, nil)
-	f.GarderChiffres(ancienne, IDsRecus(raw))
+	f, err := NormaliserFeuille(GarderChiffres(raw, ancienne), 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	p, a, b := f.Inventaire[0], f.Inventaire[1], f.Inventaire[2]
 	if a.Nom != "Mon casque" || !a.Porte || a.Emplacement != "tete" || a.Bonus[0].Valeur != 2 || a.ID != 1 {
 		t.Fatalf("ligne du MJ : %+v", a)
 	}
-	if p.ID != 0 || p.Bonus != nil || p.Emplacement != "" {
+	if p.ID != 2 || p.Bonus != nil || p.Emplacement != "" {
 		t.Fatalf("ligne ajoutée sans identifiant : %+v", p)
 	}
-	if b.ID != 0 || b.Bonus != nil || b.Arme != nil || b.Quantite != 2 || b.Emplacement != "main_principale" {
+	if b.ID != 3 || b.Bonus != nil || b.Arme != nil || b.Quantite != 2 || b.Emplacement != "main_principale" {
 		t.Fatalf("ligne ajoutée : %+v", b)
 	}
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// Les bonus d'un objet se saisissent sur les mêmes cibles, qu'il soit une ligne de l'inventaire ou une
+// fiche « Objet ».
+func TestCiblesBonusObjet(t *testing.T) {
+	if want := append(slices.Clone(reference.CiblesBonus), Caracs...); !slices.Equal(modele.CiblesBonus, want) {
+		t.Fatalf("modele.CiblesBonus %v, attendu %v", modele.CiblesBonus, want)
+	}
+}

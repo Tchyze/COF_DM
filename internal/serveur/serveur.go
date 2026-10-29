@@ -514,11 +514,18 @@ func (s *Serveur) creer(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
+	if in.Type == "objet" {
+		if err := s.verifierChiffres(in.Data); err != nil {
+			erreur(w, 422, err.Error())
+			return
+		}
+	}
 	e, err := s.store.Creer(in.Type, in.Nom, in.Data, in.Tags, auteurDe(r))
 	if err != nil {
 		erreurStore(w, err)
 		return
 	}
+	s.suivreObjet(nil, e, auteurDe(r))
 	s.repondreFiche(w, 201, e.ID)
 }
 
@@ -544,16 +551,25 @@ func (s *Serveur) maj(w http.ResponseWriter, r *http.Request, remplacer bool) {
 	if remplacer {
 		m.Remplacer = true
 	}
-	if t, _ := s.store.TypeDeFiche(id); t == "pj" {
+	switch t, _ := s.store.TypeDeFiche(id); t {
+	case "pj":
 		if err := s.niveauPermis(t, m.Data); err != nil {
 			erreurStore(w, err)
 			return
 		}
+	case "objet":
+		if err := s.verifierChiffres(m.Data); err != nil {
+			erreur(w, 422, err.Error())
+			return
+		}
 	}
-	if _, err := s.store.Modifier(id, m, auteurDe(r)); err != nil {
+	avant, _ := s.store.Lire(id)
+	apres, err := s.store.Modifier(id, m, auteurDe(r))
+	if err != nil {
 		erreurStore(w, err)
 		return
 	}
+	s.suivreObjet(&avant, apres, auteurDe(r))
 	s.repondreFiche(w, 200, id)
 }
 
@@ -572,10 +588,12 @@ func (s *Serveur) supprimer(w http.ResponseWriter, r *http.Request) {
 		repondre(w, 200, map[string]any{"archive": true})
 		return
 	}
+	avant, _ := s.store.Lire(id)
 	if _, err := s.store.Supprimer(id, auteurDe(r)); err != nil {
 		erreurStore(w, err)
 		return
 	}
+	s.objetSupprime(avant, auteurDe(r))
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 

@@ -47,6 +47,7 @@ func (s *Serveur) routesBestiaire() {
 	m.HandleFunc("PUT /api/reference/{coll}/{id}", s.elementModifier)
 	m.HandleFunc("DELETE /api/reference/{coll}/{id}", s.elementSupprimer)
 	m.HandleFunc("GET /api/regles", s.reglesLire)
+	m.HandleFunc("GET /api/emplacements", s.emplacementsLire)
 	m.HandleFunc("POST /api/regles/import", s.reglesImporter)
 	m.HandleFunc("DELETE /api/regles", s.reglesVider)
 	m.HandleFunc("GET /api/bibliotheque", s.bibliothequeExporter)
@@ -695,6 +696,12 @@ func resumeRegles(rg *regles.Regles) map[string]any {
 
 func (s *Serveur) reglesLire(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, s.lireRegles())
+}
+
+// emplacementsLire : où se portent les objets (ceux du fichier de règles, sinon ceux par défaut),
+// pour les chiffres d'une fiche « Objet ».
+func (s *Serveur) emplacementsLire(w http.ResponseWriter, r *http.Request) {
+	repondre(w, 200, s.lireRegles().Personnage.LesEmplacements())
 }
 
 func (s *Serveur) reglesImporter(w http.ResponseWriter, r *http.Request) {

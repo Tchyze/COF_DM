@@ -17,6 +17,7 @@ const (
 	Etapes      = "etapes"      // liste de cases à cocher : [{texte, fait}]
 	Adversaires = "adversaires" // [{monstre, nom, qte, camp}] : monstres du bestiaire de l'univers
 	Monstre     = "monstre"     // identifiant d'un monstre du bestiaire de l'univers
+	Equipement  = "equipement"  // chiffres d'un objet porté : {emplacement, bonus: [{cible, valeur}], arme: {type, dm, mod, portee}}
 )
 
 // Champ d'un type de fiche.
@@ -107,7 +108,8 @@ var Types = []Type{
 			{Cle: "rarete", Nom: "Rareté", Genre: Choix, Options: []string{"courant", "peu courant", "rare", "très rare", "légendaire", "unique"}},
 			{Cle: "prix", Nom: "Prix", Genre: Texte, Aide: "En pc, pa ou po"},
 			{Cle: "magique", Nom: "Magique", Genre: Booleen},
-			{Cle: "detenteur", Nom: "Détenteur", Genre: Ref, Cibles: []string{"pnj", "pj", "faction", "lieu"}},
+			{Cle: "detenteur", Nom: "Détenteur", Genre: Ref, Cibles: []string{"pnj", "pj", "faction", "lieu"}, Aide: "Un PJ : l'objet est dans son inventaire"},
+			{Cle: "equipement", Nom: "Chiffres", Genre: Equipement, Aide: "Emplacement, bonus et arme : ils comptent quand un PJ le porte"},
 			{Cle: "effets", Nom: "Effets (règles)", Genre: Long},
 			{Cle: "histoire", Nom: "Histoire", Genre: Long},
 			{Cle: "secrets", Nom: "Secrets / malédiction", Genre: Long, Secret: true, Groupe: "MJ"},
