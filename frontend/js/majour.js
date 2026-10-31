@@ -1,7 +1,7 @@
 // Mises à jour de l'application de bureau : le panneau de Paramètres (canal, recherche,
 // installation) et le badge du pied du menu quand une version attend. Rien ne s'installe sans clic.
 // Sur un serveur, l'administrateur voit la version du serveur, la dernière publiée, et celle des
-// postes reliés à l'univers (panneauVersionServeur).
+// postes reliés à chaque univers (panneauVersionServeur, page d'administration).
 import { $, esc, api, toast, dateHeure } from "./ui.js";
 
 const CANAUX = {
@@ -93,7 +93,7 @@ const ECARTS = {
   bureau_recent: ["⏳", "plus récent que le serveur : ses changements attendent la mise à jour du serveur"],
 };
 
-/** Le panneau « Version du serveur » de Paramètres (administrateur d'un serveur). */
+/** Le panneau « Version du serveur » de l'administration d'un serveur. */
 export async function panneauVersionServeur(box) {
   const m = await api("GET", "/api/univers/version");
   const d = m.disponible;
@@ -112,6 +112,7 @@ export async function panneauVersionServeur(box) {
         <div class="jeton">${esc(m.commande)}</div>
       </div>` : m.verifie && !m.erreur ? `<p class="hint">✓ Le serveur est à jour.</p>` : ""}
     ${enAvance.length ? `<p class="alerte">${enAvance.length > 1 ? `${enAvance.length} postes ont` : "Un poste a"} une version plus récente que le serveur : ${enAvance.length > 1 ? "leurs" : "ses"} changements attendent sa mise à jour.</p>` : ""}
-    <h4>Postes reliés à « ${esc(m.univers || "")} »</h4>
-    ${m.copies.length ? `<ul class="postes">${m.copies.map(poste).join("")}</ul>` : `<p class="vide">Aucune application de bureau ne tient de copie de cet univers.</p>`}`;
+    ${[...new Set(m.copies.map(c => c.univers))].map(u => `<h4>Postes reliés à « ${esc(u)} »</h4>
+      <ul class="postes">${m.copies.filter(c => c.univers === u).map(poste).join("")}</ul>`).join("")
+      || `<h4>Postes reliés</h4><p class="vide">Aucune application de bureau ne tient de copie d'un univers de ce serveur.</p>`}`;
 }

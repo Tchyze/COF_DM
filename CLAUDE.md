@@ -36,7 +36,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 | `internal/combat`, `internal/des` | Moteur de combat (lit la partie `combat` des règles) ; formules de dés. |
 | `internal/synchro`, `internal/majour` | Client de synchro du bureau ; mises à jour signées (Ed25519 sur `SHA256SUMS`, clé privée = secret `COF_DM_SIGNATURE`, jamais dans le dépôt). |
 | `internal/mcp`, `internal/obsidian` | Serveur MCP ; export vers Obsidian. |
-| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `style.css`, `combat.css`. |
+| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `admin.html` + `js/admin.js` (administrateur d'un serveur : seulement `/api/admin/…`, sa version et son compte) ; `style.css`, `combat.css`. |
 | `docs/API.md` | Documentation de l'API. |
 
 ## Invariants à ne jamais casser

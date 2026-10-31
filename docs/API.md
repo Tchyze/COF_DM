@@ -60,7 +60,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 
 | Requête | Effet |
 |---|---|
-| `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`). |
+| `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`) ; un administrateur (`compte.admin`) est renvoyé vers `/admin.html`. |
 | `POST /api/acces/connexion` `{"nom", "mdp"}` | Ouvre la session (cookie `cof_dm_mj`, 30 jours, `Secure` en HTTPS). `401` : nom ou mot de passe incorrect ; `429` : huit essais ratés en cinq minutes depuis cette adresse, ou vingt sur ce nom. |
 | `POST /api/acces/deconnexion` | Ferme la session. |
 | `GET /api/compte` | Son compte : `{"nom", "admin", "inactif", "role"` (dans l'univers ouvert)`, "roles"` (par identifiant d'univers)`, "pj", "jetons": [{"id", "nom", "cree"}], "cree"}` ; pour un administrateur, ni `role`, ni `roles`, ni `pj`. |

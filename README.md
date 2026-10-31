@@ -99,7 +99,7 @@ Chaque joueur suit la partie sur son téléphone, à l'adresse `http://<adresse>
 
 Les joueurs regardent le combat, ils n'y agissent pas. Tout se met à jour en temps réel.
 
-Le MJ déverrouille les feuilles dans **Paramètres** (Tablette et réseau à la maison, Comptes du serveur sur un serveur) ou, en pleine partie, dans les **options de l'écran du MJ** (⚙, case « Édition par les joueurs »).
+Le MJ déverrouille les feuilles dans **Paramètres** (Tablette et réseau à la maison, Joueurs de l'univers sur un serveur) ou, en pleine partie, dans les **options de l'écran du MJ** (⚙, case « Édition par les joueurs »).
 
 **À la maison**, la page est libre, sans mot de passe, pour les appareils du réseau local : dans **Paramètres → Tablette et réseau**, sur l'ordinateur du MJ, cochez **Ouvrir la page des joueurs au réseau local** (éteinte par défaut ; l'application doit écouter sur le réseau, donc travailler en mode local) et faites scanner son QR code. Chacun y choisit son personnage, gardé sur son appareil. N'importe qui sur ce réseau peut donc lire les feuilles et les documents des PJ ; rien d'autre de l'univers n'est accessible sans le mot de passe MJ. L'apparence, l'historique et les objectifs s'y lisent ; seul le MJ les écrit.
 
@@ -109,20 +109,31 @@ Le MJ déverrouille les feuilles dans **Paramètres** (Tablette et réseau à la
 
 Pour héberger COF DM sur une machine distante, utilisez l'**image Docker** (ci-dessous, « Avec Docker ») : le mode serveur n'existe que dans cette édition (compilée avec l'étiquette `serveur`) ; l'application de bureau n'est qu'un éditeur, qui se relie à un serveur ou travaille seule. Le serveur tourne sans fenêtre, n'écoute que sur `127.0.0.1` et attend un reverse proxy qui porte le HTTPS. Dans ce mode, plus de mot de passe MJ ni de jeton unique : chacun entre avec **son compte** (nom d'utilisateur et mot de passe), et rien n'est accordé d'office aux requêtes venues de la machine.
 
-Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche une seule fois dans le terminal : notez-le, puis changez-le dans **Paramètres → Mon compte**. L'administrateur crée les autres comptes dans **Paramètres → Comptes du serveur** et leur donne un rôle dans l'univers ouvert ; chacun y gère aussi ses jetons d'API. Les comptes sont rangés dans `comptes.json` (mots de passe hachés).
+Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche une seule fois dans le terminal : notez-le, puis changez-le (administration → **Mon compte**). Les comptes sont rangés dans `comptes.json` (mots de passe hachés).
+
+**L'administrateur gère le serveur sans rien voir du contenu des univers.** Connecté, il arrive sur sa page d'administration (`/admin.html`) :
+- **Univers** : créer un univers (vide), le renommer, l'archiver (il n'est plus accessible à personne, fichier et comptes gardés, jusqu'à ce qu'il soit désarchivé), le supprimer (en retapant son nom ; une sauvegarde est faite avant). **Comptes…** donne à chaque compte sa place dans cet univers : MJ, auditeur, joueur possible, ou aucun accès.
+- **Comptes** : créer un compte (administrateur ou non), changer un mot de passe, désactiver, supprimer.
+- **Serveur** : la version du serveur et des applications de bureau reliées. **Mon compte** : son mot de passe.
+
+Un compte administrateur n'a de rôle dans aucun univers ni de jeton d'API : pour préparer une campagne, créez-vous un compte MJ à part.
 
 | Rôle | Droits |
 |---|---|
-| Administrateur | Tout le serveur : comptes, univers, réglages. |
-| MJ (par univers) | Lit et modifie l'univers. |
+| Administrateur | Le serveur : univers (sans leur contenu), comptes, rôles, version. |
+| MJ (par univers) | Lit et modifie l'univers ; joint les joueurs admis et leur donne leur PJ ; importe, exporte, sauvegarde et restaure ses données. Plusieurs MJ possibles. |
 | Auditeur (par univers) | Lit tout, secrets du MJ compris, sans rien modifier. |
 | Joueur (par univers) | N'a que sa page de joueur (voir « Page des joueurs »). |
 
+**Plusieurs groupes sur un même serveur.** L'administrateur décide à quels univers un compte peut être joint comme joueur (« joueur possible ») ; le MJ de l'univers voit ces comptes dans **Paramètres → Joueurs de l'univers**, joint ceux de sa table et choisit le PJ de chacun. Un groupe ne voit rien des univers des autres.
+
+Chacun gère son mot de passe et ses jetons d'API dans **Paramètres → Mon compte**.
+
 Rien n'est partagé avec les joueurs par défaut : sur chaque fiche, le MJ clique **👁 Partager avec les joueurs** (et **Retirer aux joueurs**). Le PJ d'un joueur doit être partagé pour qu'il le voie ; les fiches partagées forment aussi l'export vers Obsidian « joueurs ». Les champs du groupe « MJ », les relations secrètes, le tableau « qui sait quoi », les fiches « Secret », le journal et l'écran du MJ n'y entrent jamais.
 
-Les joueurs ne modifient rien, sauf si le MJ coche **Édition par les joueurs** (Paramètres → Comptes du serveur, ou les options de l'écran du MJ) et que l'administrateur rattache chaque compte à son PJ : depuis sa page, le joueur tient alors toute la feuille de ce PJ (sauf les notes du MJ) et son apparence, son historique et ses objectifs. Ajouter une voie de la bibliothèque reste au MJ.
+Les joueurs ne modifient rien, sauf si le MJ coche **Édition par les joueurs** (Paramètres → Joueurs de l'univers, ou les options de l'écran du MJ) et rattache chaque compte à son PJ : depuis sa page, le joueur tient alors toute la feuille de ce PJ (sauf les notes du MJ) et son apparence, son historique et ses objectifs. Ajouter une voie de la bibliothèque reste au MJ.
 
-Le serveur héberge **plusieurs univers à la fois** : tous les fichiers `.cofdm` de son dossier `univers/` sont ouverts, et chaque compte a son rôle dans chacun (MJ de l'un, joueur de l'autre). L'administrateur en crée un par le menu **Fichier** ; un compte qui a un rôle dans plusieurs univers passe de l'un à l'autre par la liste en haut du menu. Pour ajouter un univers préparé sur votre ordinateur, l'administrateur choisit **Fichier → Déposer un univers…** : le fichier est contrôlé (univers intact, sans objet étranger, qui n'est pas la copie d'un univers déjà présent) puis rangé dans `univers/`, sans relancer le serveur. Déposer le fichier dans `univers/` à la main et relancer le serveur reste possible.
+Le serveur héberge **plusieurs univers à la fois** : tous les fichiers `.cofdm` de son dossier `univers/` sont ouverts, et chaque compte a son rôle dans chacun (MJ de l'un, joueur de l'autre). L'administrateur en crée un, vide, depuis sa page ; un compte qui a un rôle dans plusieurs univers passe de l'un à l'autre par la liste en haut du menu. Pour y mettre un univers préparé sur votre ordinateur, son MJ choisit **Fichier → Importer un fichier d'univers…** (ou, depuis l'application de bureau reliée, **Envoyer cet univers sur le serveur**) : le fichier est contrôlé, puis ses fiches, images, bestiaire, règles et feuilles remplacent le contenu de l'univers (après confirmation et une sauvegarde, s'il en avait déjà) ; le nom de l'univers et ses comptes ne changent pas.
 
 Exemple de configuration nginx :
 
@@ -171,9 +182,9 @@ docker compose logs cof-dm     # premier lancement : le mot de passe du compte �
 ```
 
 - Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui permet à l'application de se fier aux en-têtes `X-Forwarded-*` de nginx : ne remplacez pas ce partage par un port publié.
-- Les données sont dans `./donnees` : `comptes.json`, `reglages.json`, `univers/` (un fichier `.cofdm` par univers) et `sauvegardes/`. Pour ajouter un univers préparé sur votre ordinateur : **Fichier → Déposer un univers…** (administrateur), ou son fichier dans `donnees/univers/` puis `docker compose restart`.
+- Les données sont dans `./donnees` : `comptes.json`, `reglages.json`, `univers/` (un fichier `.cofdm` par univers) et `sauvegardes/`. Pour mettre sur le serveur un univers préparé sur votre ordinateur : l'administrateur crée l'univers et vous en fait MJ, puis **Fichier → Importer un fichier d'univers…** ; ou son fichier dans `donnees/univers/` puis `docker compose restart`. Les univers archivés sont rangés dans `donnees/univers/archives/`.
 - Le conteneur tourne avec l'utilisateur `1000:1000`. Si `./donnees` appartient à un autre utilisateur, indiquez-le : `COF_UID=$(id -u) COF_GID=$(id -g) docker compose up -d`. `COF_PORT` change le port (8100 par défaut).
-- Mise à jour : `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (Paramètres → Version du serveur), avec la version des applications de bureau reliées. Sa version vient de git (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. La première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.
+- Mise à jour : `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (onglet **Serveur** de sa page), avec la version des applications de bureau reliées. Sa version vient de git (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. La première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.
 
 ### Mode de travail : local ou serveur
 
@@ -188,12 +199,12 @@ Relié à un serveur, un bouton **Univers du serveur** apparaît sous le bouton 
 Un clic sur la zone ouvre le panneau : passer de **Client seul** à **Serveur** et inversement, **changer de serveur**, copier un univers du serveur, envoyer celui-ci, synchroniser tout de suite, voir les conflits. **Fichier → Serveur et synchronisation…** ouvre le même panneau.
 
 - **Se connecter** : l'adresse du serveur (HTTPS ; le HTTP n'est admis que sur l'ordinateur ou le réseau local), votre nom d'utilisateur et votre mot de passe. Le mot de passe ne sert qu'à cette connexion et n'est jamais gardé : le serveur donne à l'ordinateur son propre jeton, visible dans « Mon compte » sur le serveur, et retiré quand l'ordinateur quitte ce serveur (sinon, retirez-le là). Ensuite, choisissez l'univers à copier (il faut en être MJ) ou envoyez l'univers ouvert.
-- **Envoyer cet univers sur le serveur** : publie l'univers ouvert (compte administrateur) et le garde synchronisé. L'univers tel qu'il était reste dans ses sauvegardes.
+- **Envoyer cet univers sur le serveur** : verse l'univers ouvert dans un univers du serveur dont vous êtes MJ (l'administrateur le crée), puis le garde synchronisé. L'univers tel qu'il était reste dans ses sauvegardes.
 - **Client seul** ou **Changer de serveur** : les copies du serveur quitté restent sur l'ordinateur, **en pause**. Vous pouvez y travailler ; leurs changements partiront quand vous vous reconnecterez à ce serveur. La page **Synchronisation** permet aussi de **détacher** une copie, qui devient un univers local indépendant.
 - Tant que l'application est reliée, elle ne répond plus au réseau local, même si la case est cochée : la tablette et les joueurs passent par le serveur.
 - Les changements se fusionnent **champ par champ**. Si le même champ a changé des deux côtés, la valeur du serveur reste en place partout, et la vôtre attend dans la liste **Conflits**, où vous choisissez. Une fiche supprimée d'un côté et modifiée de l'autre est gardée et signalée.
 - Tout voyage (fiches, relations, images, feuilles, bestiaire, règles, calendrier, journal, combats terminés), sauf un combat en cours, qui se joue d'un seul côté.
-- **Versions différentes** : l'application et le serveur n'ont pas à avoir la même version, seulement le même **modèle** de données (un numéro qui change quand un type de fiche, un champ ou un réglage apparaît). Serveur plus récent : la synchronisation s'arrête et la zone en bas à gauche propose de **mettre l'application à jour** ; vos changements attendent sur l'ordinateur. Serveur plus ancien : l'application **reçoit seulement** ; vos changements attendent sa mise à jour, que l'administrateur voit dans Paramètres → Version du serveur. Rien n'est perdu, et tout repart dès que les deux côtés sont au même modèle. Un univers ouvert par une version plus récente ne s'ouvre plus dans une plus ancienne.
+- **Versions différentes** : l'application et le serveur n'ont pas à avoir la même version, seulement le même **modèle** de données (un numéro qui change quand un type de fiche, un champ ou un réglage apparaît). Serveur plus récent : la synchronisation s'arrête et la zone en bas à gauche propose de **mettre l'application à jour** ; vos changements attendent sur l'ordinateur. Serveur plus ancien : l'application **reçoit seulement** ; vos changements attendent sa mise à jour, que l'administrateur voit dans son onglet **Serveur**. Rien n'est perdu, et tout repart dès que les deux côtés sont au même modèle. Un univers ouvert par une version plus récente ne s'ouvre plus dans une plus ancienne.
 
 ### Fonctionnalités
 
