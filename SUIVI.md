@@ -7,9 +7,9 @@ Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus l
 ## Où on en est
 
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
-- **Numéros d'échange** : `VersionModele` 6 sur `main` (5 dans la 1.2.4), `versionDonnees` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branche en cours** : `schema-incoherences` (PR 28, schéma des fiches : 5 incohérences corrigées et champs utiles en jeu ; modèle 7, données 6), en préversion 1.2.5-test.31, **à essayer par le MJ avant la fusion**. Les PR 24 (corrections rapides), 25 et 26 (inventaire, lots 1 et 2), essayées par le MJ en préversion 1.2.5-test.30, sont fusionnées dans `main` le 29 octobre 2026 ; la branche `preversion-inventaire` est supprimée. Pas encore de version stable 1.2.5 : seulement à la demande du MJ.
-- **Prochain chantier** (après la PR 28) : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Questions de fond à poser au MJ avant de coder.
+- **Numéros d'échange** : `VersionModele` 7 sur `main` (5 dans la 1.2.4), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : aucune en cours. La PR 28 (schéma des fiches ; préversion 1.2.5-test.31) est fusionnée le 31 octobre 2026 **sans essai, à la demande du MJ**. Les PR 24 (corrections rapides), 25 et 26 (inventaire, lots 1 et 2), essayées par le MJ en préversion 1.2.5-test.30, sont fusionnées dans `main` le 29 octobre 2026 ; la branche `preversion-inventaire` est supprimée. Pas encore de version stable 1.2.5 : seulement à la demande du MJ.
+- **Prochain chantier** : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Questions de fond à poser au MJ avant de coder.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` depuis le 29 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -179,7 +179,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 24 | **Corrections rapides** : « ☀ Nouveau jour » et repos pendant un combat (les combats en cours reprennent les utilisations de la feuille) ; dés coupés depuis un autre appareil ; tiroir du menu en grand écran. |
 | 25 | **Inventaire, lot 1** (projet 11) : inventaire sur la feuille, emplacements, bonus et armes des objets portés (en bleu, formule au survol), reprise de l'ancien équipement ; modèle 6, `versionDonnees` 5. |
 | 26 | **Inventaire, lot 2** : lignes liées aux fiches « Objet » (nom et chiffres de la fiche), Détenteur suivi dans les deux sens, emplacements reconnus par leur nom, total affiché avec sa formule au survol. |
-| 28 | **Schéma des fiches** (en essai) : 5 incohérences corrigées (tactique MJ, attitude du PNJ, campagnes, dirigeant, « Connu du MJ seulement » retiré) et champs utiles en jeu sur presque tous les types et le bestiaire ; modèle 7, `versionDonnees` 6. |
+| 28 | **Schéma des fiches** (fusionnée sans essai) : 5 incohérences corrigées (tactique MJ, attitude du PNJ, campagnes, dirigeant, « Connu du MJ seulement » retiré) et champs utiles en jeu sur presque tous les types et le bestiaire ; modèle 7, `versionDonnees` 6. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
