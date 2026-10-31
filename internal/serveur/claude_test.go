@@ -109,3 +109,55 @@ func TestClaudeAbsent(t *testing.T) {
 		t.Fatal("route Claude sur un serveur")
 	}
 }
+
+// Le programme s'installe ailleurs : l'entrée cof-dm qui le lançait suit, les autres entrées et le
+// reste du fichier restent ; désinstallé, l'entrée part. Un fichier sans COF DM n'est pas touché.
+func TestSuivreClaude(t *testing.T) {
+	dir := t.TempDir()
+	desktop := filepath.Join(dir, "claude_desktop_config.json")
+	code := filepath.Join(dir, ".claude.json")
+	absent := filepath.Join(dir, "absent", "claude_desktop_config.json")
+	ancien, nouveau := filepath.Join(dir, "Bureau", "COF-DM.exe"), filepath.Join(dir, "Programs", "COF DM", "COF-DM.exe")
+	os.WriteFile(desktop, []byte(`{"mcpServers": {"cof-dm": {"command": `+jsonChaine(ancien)+`, "args": ["-mcp"]}, "autre": {"command": "x"}}, "theme": "sombre"}`), 0o600)
+	os.WriteFile(code, []byte(`{"mcpServers": {"cof-dm": {"command": "/ailleurs/cof-dm", "args": ["-mcp"]}}}`), 0o600)
+	precedent := ciblesClaude
+	ciblesClaude = func() []cibleClaude {
+		return []cibleClaude{{Client: "desktop", Chemin: desktop, Present: true}, {Client: "code", Chemin: code, Present: true},
+			{Client: "desktop", Chemin: absent}}
+	}
+	t.Cleanup(func() { ciblesClaude = precedent })
+	lire := func(chemin string) map[string]any {
+		t.Helper()
+		var cfg map[string]any
+		b, _ := os.ReadFile(chemin)
+		if err := json.Unmarshal(b, &cfg); err != nil {
+			t.Fatalf("%s : %v", chemin, err)
+		}
+		return cfg
+	}
+	codeAvant, _ := os.ReadFile(code)
+
+	if err := SuivreClaude(ancien, nouveau); err != nil {
+		t.Fatal(err)
+	}
+	cfg := lire(desktop)
+	s := cfg["mcpServers"].(map[string]any)
+	if e := s["cof-dm"].(map[string]any); e["command"] != nouveau || e["args"].([]any)[0] != "-mcp" || s["autre"] == nil || cfg["theme"] != "sombre" {
+		t.Fatalf("après installation : %v", cfg)
+	}
+	if b, _ := os.ReadFile(code); string(b) != string(codeAvant) {
+		t.Fatalf("entrée d'un autre programme modifiée : %s", b)
+	}
+	if _, err := os.Stat(absent); !os.IsNotExist(err) {
+		t.Fatal("fichier créé là où Claude n'était pas")
+	}
+
+	if err := SuivreClaude(nouveau, ""); err != nil {
+		t.Fatal(err)
+	}
+	if s := lire(desktop)["mcpServers"].(map[string]any); s["cof-dm"] != nil || s["autre"] == nil {
+		t.Fatalf("après désinstallation : %v", s)
+	}
+}
+
+func jsonChaine(s string) string { b, _ := json.Marshal(s); return string(b) }

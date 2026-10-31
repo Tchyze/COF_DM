@@ -337,9 +337,9 @@ Pour un serveur distant : `COF_DM_URL` (son adresse, en HTTPS), `COF_DM_JETON` (
 
 ## Installation et lancement
 
-Pas d'installation : les versions publiées (onglet *Releases*) fournissent un lanceur.
+Les versions publiées (onglet *Releases*) fournissent un programme à lancer.
 
-- **Windows** : `COF-DM.exe`, à lancer directement (WebView2, déjà présent sous Windows 10 et 11).
+- **Windows** : `COF-DM.exe` (WebView2, déjà présent sous Windows 10 et 11). **Il s'installe seul au premier lancement**, sans droits d'administrateur : le programme va dans `%LOCALAPPDATA%\Programs\COF DM`, un raccourci « COF DM » est créé sur le Bureau et dans le menu Démarrer, et COF DM apparaît dans « Applications installées » (d'où il se désinstalle). L'exe téléchargé, s'il était sur le Bureau ou dans les Téléchargements, est ensuite retiré. Relancer un exe plus ancien que la version installée ouvre simplement la version installée.
 - **Linux** : `COF-DM-x.y.z-x86_64.AppImage` ; le rendre exécutable (`chmod +x`) puis le lancer. Il faut WebKitGTK 4.1 sur le système (`libwebkit2gtk-4.1-0` sur Debian / Ubuntu, `webkit2gtk4.1` sur Fedora).
 
 Au lancement, l'application ouvre sa fenêtre ; ses données sont dans :
@@ -349,7 +349,9 @@ Au lancement, l'application ouvre sa fenêtre ; ses données sont dans :
 | Windows | `%APPDATA%\COF DM` |
 | Linux | `~/.local/share/cof-dm` |
 
-**Mode portable** : un dossier `COF DM - données` placé à côté du programme (ou de l'AppImage) est utilisé à la place, pour tout emporter sur une clé USB.
+**Désinstaller (Windows)** : « Applications installées » → COF DM → Désinstaller. Le programme, ses raccourcis et son inscription partent ; vos données restent, sauf si vous demandez à les supprimer (elles serviront si vous réinstallez). COF DM doit être fermé.
+
+**L'ancien mode portable n'existe plus.** Un dossier `COF DM - données` posé à côté du programme (ou de l'AppImage) est repris au lancement, sans rien perdre : déplacé dans le dossier ci-dessus s'il est vide, sinon copié dans un sous-dossier « Repris du mode portable … », dont les univers s'ouvrent par **Fichier → Récents**. L'ancien dossier est renommé « … (repris) ».
 
 On y trouve `univers/` (les univers créés sans choisir d'emplacement), `sauvegardes/` (un dossier par univers), `reglages.json` (univers ouvert, mot de passe MJ haché, jeton d'API), `config.json`, `cof-dm.log` et, tant que l'application tourne, `port.json` (le port qu'elle a pris, lu par `-mcp`).
 

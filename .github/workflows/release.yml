@@ -4,7 +4,8 @@ name: Release
 # demande (onglet Actions → Release → Run workflow) : canal « aucun » pour de simples artefacts,
 # canal « test » pour publier une préversion vX.Y.Z-test.N de la branche choisie (une PR à essayer),
 # que l'application propose à qui suit le canal Test.
-# - Windows : COF-DM.exe portable (zip) ; WebView2 est déjà présent sous Windows 10 et 11.
+# - Windows : COF-DM.exe (aussi en zip), qui s'installe seul au premier lancement pour l'utilisateur ;
+#   WebView2 est déjà présent sous Windows 10 et 11.
 # - Linux : AppImage ; demande WebKitGTK 4.1 sur le système (libwebkit2gtk-4.1-0).
 # Chaque Release porte SHA256SUMS, les empreintes de ses fichiers, et SHA256SUMS.sig, leur signature
 # Ed25519 (base64) par la clé de publication (secret COF_DM_SIGNATURE, au format PEM) : l'application
@@ -133,10 +134,10 @@ jobs:
         run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon build/icon.png --manifest gui --product-name "COF DM" --file-description "COF DM"
       - name: Compilation
         run: CGO_ENABLED=1 go build -tags sqlite_fts5 -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VERSION" -o dist/COF-DM.exe .
-      - name: Archive portable
+      - name: Archive zip
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\COF-DM.exe, LICENSE -DestinationPath "dist\COF-DM-$env:VERSION-windows-portable.zip"
+          Compress-Archive -Path dist\COF-DM.exe, LICENSE -DestinationPath "dist\COF-DM-$env:VERSION-windows.zip"
           Get-ChildItem dist
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -184,7 +185,7 @@ jobs:
           files: dist/*
           generate_release_notes: true
           body: |
-            **Windows** : `COF-DM.exe` se lance directement, sans installation (aussi dans le zip).
+            **Windows** : lancez `COF-DM.exe` (aussi dans le zip) : il s'installe seul pour vous, sans droits d'administrateur (raccourcis sur le Bureau et dans le menu Démarrer, désinstallation par « Applications installées »).
             **Linux** : rendez l'AppImage exécutable (`chmod +x`) puis lancez-la ; il faut WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` sur Debian/Ubuntu, `webkit2gtk4.1` sur Fedora).
-            **Mode portable** : créez un dossier `COF DM - données` à côté du programme pour y garder la base.
+            **Ancien mode portable** : un dossier `COF DM - données` à côté du programme est repris au lancement dans le dossier de données de l'utilisateur, sans rien perdre.
             **Vérifier un téléchargement** : `sha256sum --check --ignore-missing SHA256SUMS` (Linux), ou comparer `Get-FileHash COF-DM.exe` à la ligne de `SHA256SUMS` (Windows). `SHA256SUMS.sig` en est la signature, que l'application vérifie avant toute mise à jour.
