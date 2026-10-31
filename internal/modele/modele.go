@@ -35,6 +35,11 @@ type Champ struct {
 	Secret bool   `json:"secret,omitempty"` // réservé au MJ (jamais montré aux joueurs)
 	Joueur bool   `json:"joueur,omitempty"` // modifiable par le joueur du PJ, quand l'édition par les joueurs est ouverte
 	Groupe string `json:"groupe,omitempty"` // regroupement dans le formulaire
+	// Fonction : la fonctionnalité optionnelle dont le champ dépend ; coupée, il quitte le schéma
+	// publié (ses valeurs restent dans les fiches).
+	Fonction string `json:"fonction,omitempty"`
+	// Auto : rempli par l'application (butin versé…), absent des formulaires ; l'API l'accepte.
+	Auto bool `json:"auto,omitempty"`
 }
 
 // Type de fiche.
@@ -231,8 +236,8 @@ var Types = []Type{
 			{Cle: "pnj", Nom: "PNJ présents", Genre: Refs, Cibles: []string{"pnj"}, Aide: "Ceux qui ont un profil de combat comptent dans la difficulté"},
 			{Cle: "mise_en_scene", Nom: "Mise en scène", Genre: Long},
 			{Cle: "butin", Nom: "Butin", Genre: Long},
-			{Cle: "butin_chiffre", Nom: "Pièces et objets", Genre: Butin, Aide: "Versés au pot commun de la campagne à la fin du combat"},
-			{Cle: "butin_verse", Nom: "Butin versé au pot", Genre: Booleen, Aide: "Coché au versement : le butin ne se verse pas deux fois"},
+			{Cle: "butin_chiffre", Nom: "Pièces et objets", Genre: Butin, Fonction: "butin", Aide: "Versés au pot commun de la campagne à la fin du combat"},
+			{Cle: "butin_verse", Nom: "Butin versé au pot", Genre: Booleen, Fonction: "butin", Auto: true, Aide: "Coché au versement : le butin ne se verse pas deux fois"},
 			{Cle: "tactique", Nom: "Tactique", Genre: Long, Secret: true, Groupe: "MJ"},
 			{Cle: "notes", Nom: "Notes du MJ", Genre: Long, Secret: true, Groupe: "MJ"},
 		},

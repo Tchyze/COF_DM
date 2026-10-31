@@ -264,3 +264,65 @@ export function editeurChiffres(conteneur, valeur, auChangement) {
     },
   };
 }
+
+// ---------------------------------------------------------------- butin et pièces
+
+const MONNAIES = [["po", "po"], ["pa", "pa"], ["pc", "pc"]];
+
+/** Les pièces en une ligne : « 12 po, 3 pa » ("" sans pièce). */
+export function textePieces(p) {
+  return MONNAIES.filter(([k]) => p?.[k]).map(([k, n]) => `${p[k]} ${n}`).join(", ");
+}
+
+/** Saisie de pièces (po, pa, pc) ; lire() : {po, pa, pc}. */
+export function saisiePieces(conteneur, valeur, auChangement) {
+  const v = valeur || {};
+  conteneur.innerHTML = `<div class="pieces">${MONNAIES.map(([k, n]) => `<label><input type="number" min="0" inputmode="numeric" data-m="${k}" value="${v[k] || ""}" placeholder="0" aria-label="${n}"><span>${n}</span></label>`).join("")}</div>`;
+  conteneur.addEventListener("input", () => auChangement?.());
+  return { lire: () => Object.fromEntries(MONNAIES.map(([k]) => [k, Math.max(0, Math.trunc(+$(`[data-m=${k}]`, conteneur).value || 0))])) };
+}
+
+/** Butin chiffré d'une rencontre : pièces et objets (fiche « Objet » du monde, ou objet courant et
+ *  sa quantité). refs : fiches connues (id → résumé). valeur() : null si rien. */
+export function editeurButin(conteneur, valeur, refs, auChangement) {
+  const v = valeur || {};
+  conteneur.innerHTML = `<div class="colonne" style="gap:8px"><div data-pieces></div><div class="liste-butin"></div>
+    <div class="ligne"><button type="button" class="petit" data-ajout="monde">＋ Objet du monde</button><button type="button" class="petit" data-ajout="courant">＋ Objet courant</button></div></div>`;
+  const pieces = saisiePieces($("[data-pieces]", conteneur), v.pieces, auChangement);
+  const liste = $(".liste-butin", conteneur);
+  const ligne = (o, monde) => {
+    const d = document.createElement("div");
+    d.className = "butin-l";
+    if (monde) {
+      d.innerHTML = `<div class="s"></div><button type="button" class="ghost petit" aria-label="Retirer">✕</button>`;
+      const s = selecteur($(".s", d), { cibles: ["objet"], multiple: false, valeur: o.fiche || null, refs, auChangement });
+      d.lire = () => s.valeur() ? { fiche: s.valeur() } : null;
+    } else {
+      d.innerHTML = `<input value="${esc(o.nom || "")}" placeholder="Torche, potion de soins…" aria-label="Objet"><input type="number" min="1" max="9999" value="${o.quantite || 1}" aria-label="Quantité"><button type="button" class="ghost petit" aria-label="Retirer">✕</button>`;
+      d.lire = () => { const nom = $("input", d).value.trim(); return nom ? { nom, quantite: Math.max(1, Math.trunc(+$("input[type=number]", d).value || 1)) } : null; };
+    }
+    $("button.ghost", d).onclick = () => { d.remove(); auChangement?.(); };
+    liste.append(d);
+    return d;
+  };
+  (v.objets || []).forEach(o => ligne(o, !!o.fiche));
+  conteneur.addEventListener("click", e => {
+    const b = e.target.closest("[data-ajout]");
+    if (!b) return;
+    const d = ligne({}, b.dataset.ajout === "monde");
+    $("input", d)?.focus();
+    auChangement?.();
+  });
+  return {
+    valeur() {
+      const p = pieces.lire(), objets = [...liste.children].map(d => d.lire()).filter(Boolean);
+      return p.po || p.pa || p.pc || objets.length ? { pieces: p, objets } : null;
+    },
+  };
+}
+
+/** Le butin en une ligne : « 30 po, Dague d'écume, 4 × Torche ». refs : fiches connues. */
+export function texteButin(b, refs = {}) {
+  if (!b) return "";
+  return [textePieces(b.pieces), ...(b.objets || []).map(o => (o.quantite > 1 ? `${o.quantite} × ` : "") + (o.fiche ? refs[o.fiche]?.nom || o.nom || `objet n°${o.fiche}` : o.nom))].filter(Boolean).join(", ");
+}

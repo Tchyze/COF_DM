@@ -142,6 +142,9 @@ func typesActifs(etat map[string]bool, types []modele.Type) []modele.Type {
 		}
 		champs := []modele.Champ{}
 		for _, c := range t.Champs {
+			if c.Fonction != "" && !etat[c.Fonction] {
+				continue
+			}
 			if len(c.Cibles) > 0 {
 				cibles := []string{}
 				for _, x := range c.Cibles {

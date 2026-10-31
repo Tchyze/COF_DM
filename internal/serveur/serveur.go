@@ -358,6 +358,7 @@ func (s *Serveur) schema(w http.ResponseWriter, r *http.Request) {
 			modele.Ref: "identifiant (id) d'une fiche d'un des types « cibles »", modele.Refs: "liste d'identifiants",
 			modele.DateMonde: "{\"an\":1216,\"mois\":1,\"jour\":1} selon le calendrier", modele.DateReelle: "\"AAAA-MM-JJ\"",
 			modele.Etapes: "[{\"texte\":\"…\",\"fait\":false}]",
+			modele.Butin:  "{\"pieces\":{\"po\":30,\"pa\":0,\"pc\":0},\"objets\":[{\"fiche\":12},{\"nom\":\"Torche\",\"quantite\":4}]}",
 		},
 	})
 }
@@ -449,6 +450,15 @@ func (s *Serveur) complete(id int64) (ficheComplete, error) {
 			for _, x := range idsDe(v) {
 				if o, err := s.store.Lire(x); err == nil {
 					c.RefsNoms[strconv.FormatInt(x, 10)] = store.Resume{ID: o.ID, Type: o.Type, Nom: o.Nom, Image: o.Image, Archive: o.Archive}
+				}
+			}
+		case modele.Butin: // les objets du monde d'un butin, pour les montrer sous leur nom du moment
+			for _, o := range modele.LireButin(v).Objets {
+				if o.Fiche == 0 {
+					continue
+				}
+				if x, err := s.store.Lire(o.Fiche); err == nil {
+					c.RefsNoms[strconv.FormatInt(x.ID, 10)] = store.Resume{ID: x.ID, Type: x.Type, Nom: x.Nom, Image: x.Image, Archive: x.Archive}
 				}
 			}
 		case modele.DateMonde:

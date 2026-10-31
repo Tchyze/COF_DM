@@ -4,6 +4,8 @@
 // elles, le combat est minimal.
 import { $, $$, esc, api, toast, armer, lien } from "../ui.js";
 import { recapHTML, recapMarkdown } from "../recap.js";
+import { actif as fonctionActive } from "../schema.js";
+import { texteButin } from "../composants.js";
 
 const md = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 const CAMP = { pj: "PJ", allie: "Allié", ennemi: "Ennemi" };
@@ -404,8 +406,21 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       : `<button type="button" class="ghost" data-a="copierRecap">Copier pour Obsidian</button><button type="button" class="primary" data-a="finFermer">Fermer</button>`;
     $e("#finBody").innerHTML = `${mode === "proposition" ? `<p class="hint">${st.fin === "victoire" ? "Tous les adversaires sont à terre." : "Tous les PJ sont à terre."} Le combat peut s'arrêter ici : le récap sera enregistré.</p>` : ""}
       ${recapHTML(st.recap)}
+      ${mode === "proposition" ? "" : `<div id="finButin"></div>`}
       <div class="row fin-actions">${boutons}</div>`;
     if (!d.open) d.showModal();
+    if (mode !== "proposition") peindreButin();
+  }
+  // le butin chiffré de la rencontre jouée, à verser au pot commun de sa campagne
+  async function peindreButin() {
+    const z = $e("#finButin");
+    if (!z || !st.rencontre_id || lectureSeule() || !fonctionActive("butin")) return;
+    let r;
+    try { r = await api("GET", "/api/entites/" + st.rencontre_id); } catch { return; }
+    const b = r.data.butin_chiffre;
+    if (!b) return;
+    z.innerHTML = r.data.butin_verse ? `<p class="hint">💰 Le butin de « ${esc(r.nom)} » est versé au pot commun.</p>`
+      : `<div class="row fin-butin"><span>💰 Butin de « ${esc(r.nom)} » : <b>${esc(texteButin(b, r.refs))}</b></span><button type="button" class="primary" data-a="verserButin">Verser au pot commun</button></div>`;
   }
   function gererFin() {
     const d = $e("#dlgFin");
@@ -913,6 +928,12 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     else if (a === "finTerminer") { $e("#dlgFin").close(); send({ type: "terminer" }); }
     else if (a === "finContinuer") { $e("#dlgFin").close(); send({ type: "continuer" }); }
     else if (a === "finFermer") $e("#dlgFin").close();
+    else if (a === "verserButin") {
+      b.disabled = true;
+      api("POST", `/api/entites/${st.rencontre_id}/verser-butin`, { seance: st.seance || 0 })
+        .then(() => { toast("Butin versé au pot commun de la campagne."); peindreButin(); })
+        .catch(err => { toast(err.message, true); b.disabled = false; });
+    }
     else if (a === "voirRecap") ouvrirFin("final");
     else if (a === "copierRecap") copier(recapMarkdown(st.recap)).then(ok => toast(ok ? "Récap copié en Markdown : collez-le dans une note Obsidian." : "Copie impossible depuis ce navigateur."));
   });

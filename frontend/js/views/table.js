@@ -9,6 +9,7 @@ import { lireMonstre, blocMonstre } from "../monstres.js";
 import { COURTS, RESUMES } from "./fiche.js";
 import { aideEditionJoueurs } from "./comptes.js";
 import { monterNiveau } from "../niveau.js";
+import { textePieces } from "../composants.js";
 
 const PREFS = "cof-table";
 const SONDE = 5000; // relecture de ce qui bouge (PV des PJ, combat en cours)
@@ -58,6 +59,7 @@ export async function mount(el, arg) {
       <button class="ghost" id="t-menu" aria-label="Menu">☰</button>
       <select id="t-quete" aria-label="Quête affichée"></select>
       <span class="t-contexte" id="t-contexte"></span>
+      <span class="t-pot" id="t-pot"></span>
       <span class="t-rappels" id="t-rappels"></span>
       <button class="ghost num" id="t-chrono" title="Chronomètre de séance et rappels" hidden></button>
       <button class="ghost" id="t-cherche" title="Rechercher une fiche ( / )" aria-label="Rechercher">🔍</button>
@@ -298,7 +300,23 @@ export async function mount(el, arg) {
     } catch (e) { toast(e.message, true); }
   }
 
+  // ---------------------------------------------------------------- pot commun de la campagne
+
+  let potLu = 0;
+  async function chargerPot(force) {
+    const c = d?.campagne, box = $("#t-pot", el);
+    if (!c || !fonctionActive("butin")) { maj(box, ""); return; }
+    if (!force && Date.now() - potLu < 15000) return;
+    potLu = Date.now();
+    let p;
+    try { p = await api("GET", `/api/campagnes/${c.id}/pot`); } catch { return; }
+    if (!vivant) return;
+    const pieces = textePieces(p.pieces), n = p.propositions.length, objets = p.objets.length;
+    maj(box, pieces || objets || n ? `<a href="#/f/${c.id}" title="Pot commun de ${esc(c.nom)} : ${esc([pieces, objets ? objets + " objet" + (objets > 1 ? "s" : "") : ""].filter(Boolean).join(", ") || "vide")}">💰 <span>${esc(pieces || (objets ? objets + " obj." : "vide"))}</span>${n ? ` <span class="badge" title="Propositions de partage à valider">${n} à valider</span>` : ""}</a>` : "");
+  }
+
   async function sonder() {
+    if (!document.hidden) chargerPot();
     if (enVol || document.hidden) return;
     enVol = true;
     const r = await api("GET", "/api/table/etat" + (d?.campagne ? "?campagne=" + d.campagne.id : "")).catch(() => trk || { pj: {}, combat: null });
@@ -432,7 +450,7 @@ export async function mount(el, arg) {
     brut = texte;
     d = r;
     peindreBarre(); peindrePJ(); peindreScene(); peindreCentre(); peindreCombat();
-    chargerAides();
+    chargerAides(); chargerPot(true);
   }
 
   // ---------------------------------------------------------------- gestes

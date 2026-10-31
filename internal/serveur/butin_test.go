@@ -38,6 +38,12 @@ func TestButinPotCommun(t *testing.T) {
 		return 0
 	}
 
+	// « butin versé » est rempli par l'application : le schéma le dit, pour qu'il reste hors des formulaires
+	_, sch := b.local("GET", "/api/schema", nil)
+	if !strings.Contains(fmt.Sprint(sch["types"]), "auto:true cle:butin_verse") {
+		t.Fatalf("butin_verse sans « auto » dans le schéma")
+	}
+
 	// une rencontre sans campagne ne verse rien ; sans butin chiffré non plus
 	butin := map[string]any{"pieces": map[string]any{"po": 30, "pa": 5}, "objets": []any{map[string]any{"fiche": dague}, map[string]any{"nom": "Torche", "quantite": 4}}}
 	seule := b.fiche("rencontre", "Embuscade perdue", map[string]any{"butin_chiffre": butin})
@@ -65,6 +71,9 @@ func TestButinPotCommun(t *testing.T) {
 	_, r := b.local("GET", fmt.Sprintf("/api/entites/%v", renc), nil)
 	if d := r["data"].(map[string]any); d["butin_verse"] != true || d["statut"] != "jouée" {
 		t.Fatalf("rencontre versée : %v", d)
+	}
+	if fmt.Sprint(r["refs"].(map[string]any)[fmt.Sprint(dague)]) == "<nil>" {
+		t.Fatalf("la fiche de la rencontre ne nomme pas l'objet de son butin : %v", r["refs"])
 	}
 	_, se := b.local("GET", fmt.Sprintf("/api/entites/%v", seance), nil)
 	if txt, _ := se["data"].(map[string]any)["butin"].(string); !strings.HasPrefix(txt, "Une carte.") || !strings.Contains(txt, "Pillards du gué : 30 po, 5 pa, Dague d'écume, 4 × Torche") {
@@ -199,5 +208,9 @@ func TestButinPotCommun(t *testing.T) {
 	b.local("PUT", "/api/fonctionnalites", map[string]any{"butin": false})
 	if c, _ := b.local("GET", pot, nil); c != 404 {
 		t.Fatalf("butin coupé : %d", c)
+	}
+	_, sch = b.local("GET", "/api/schema", nil)
+	if s := fmt.Sprint(sch["types"]); strings.Contains(s, "butin_chiffre") || strings.Contains(s, "butin_verse") {
+		t.Fatal("butin coupé : ses champs restent dans le schéma")
 	}
 }
