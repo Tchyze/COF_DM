@@ -373,7 +373,7 @@ func premierAdmin(reg *comptes.Registre) error {
 	if _, err := reg.Creer("admin", mdp, true); err != nil {
 		return err
 	}
-	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nNotez-le et changez-le après la première connexion : il ne sera plus affiché.\n\n", mdp)
+	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nNotez-le et changez-le après la première connexion : il ne sera plus affiché.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
 	return nil
 }
 

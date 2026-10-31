@@ -170,13 +170,17 @@ func TestMonteeRegles(t *testing.T) {
 func TestMonteeRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
-	chef, mj, audit, joueuse := b.connecter("chef"), b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse")
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
+	mj, audit, joueuse := b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse")
 	_, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": "pj", "nom": "Aldric", "data": map[string]any{"niveau": 1}}, mj)
 	id := strconv.Itoa(int(v["id"].(float64)))
-	b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": v["id"]}, chef)
+	b.proxy("PATCH", "/api/joueurs/comptes/joueuse", map[string]any{"pj": v["id"]}, mj)
 	b.proxy("POST", "/api/entites/"+id+"/partage", map[string]any{"partage": true}, mj)
-	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, chef)
+	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, mj)
 	u := "/api/entites/" + id + "/feuille"
 	b.proxy("PUT", u, map[string]any{"pv": 8, "voies": []any{map[string]any{"nom": "Voie du gué", "rang": 0, "capacites": []string{"Pied sûr"}}}}, mj)
 	for nom, qui := range map[string]func(*http.Request){"auditeur": audit, "joueur": joueuse} {
@@ -207,12 +211,16 @@ func TestMonteeAccordee(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
 		reg.Creer(nom, "mot-de-passe-"+nom, false)
-		reg.Modifier(nom, func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+		reg.Modifier(nom, func(c *comptes.Compte) error {
+			c.Admis = append(c.Admis, b.s.store.ID())
+			c.Roles[b.s.store.ID()] = comptes.Joueur
+			return nil
+		})
 	}
-	chef, mj, joueuse, autre := b.connecter("chef"), b.connecter("meneur"), b.connecter("joueuse"), b.connecter("autre")
+	mj, joueuse, autre := b.connecter("meneur"), b.connecter("joueuse"), b.connecter("autre")
 	_, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": "pj", "nom": "Aldric", "data": map[string]any{"niveau": 2}}, mj)
 	id := strconv.Itoa(int(v["id"].(float64)))
-	b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": v["id"]}, chef)
+	b.proxy("PATCH", "/api/joueurs/comptes/joueuse", map[string]any{"pj": v["id"]}, mj)
 	b.proxy("POST", "/api/entites/"+id+"/partage", map[string]any{"partage": true}, mj)
 	u, uj := "/api/entites/"+id+"/feuille", "/api/joueur/pj/"+id+"/niveau"
 	b.proxy("PUT", u, map[string]any{"pv": 8, "notes": "SECRET-MJ", "voies": []any{map[string]any{"nom": "Voie du gué", "rang": 1, "capacites": []string{"Pied sûr", "Passeur"}}}}, mj)
@@ -227,7 +235,7 @@ func TestMonteeAccordee(t *testing.T) {
 		t.Fatalf("niveau accordé : %d %v", c, v)
 	}
 	// le joueur ne peut pas réécrire l'accord par sa feuille
-	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, chef)
+	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, mj)
 	_, f, _ := b.proxy("GET", u, nil, joueuse)
 	if f["niveau_accorde"] != float64(3) {
 		t.Fatalf("accord vu par le joueur : %v", f)
@@ -236,7 +244,7 @@ func TestMonteeAccordee(t *testing.T) {
 	if _, f, _ = b.proxy("PUT", u, f, joueuse); f["niveau_accorde"] != float64(3) {
 		t.Fatalf("accord réécrit par le joueur : %v", f)
 	}
-	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, chef)
+	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, mj)
 	if c, _, _ := b.proxy("POST", uj, monter, autre); c != 404 {
 		t.Fatalf("montée prise par un autre joueur : %d", c)
 	}

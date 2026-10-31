@@ -99,7 +99,11 @@ func TestPreparationJoueur(t *testing.T) {
 	id := v["id"]
 	b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", id), map[string]any{"partage": true}, mj)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
 	joueuse := b.connecter("joueuse")
 	if c, _, _ := b.proxy("GET", fmt.Sprintf("/api/entites/%v/preparation", id), nil, joueuse); c != 403 {
 		t.Fatalf("préparation lue par la joueuse : %d", c)

@@ -126,7 +126,11 @@ func TestFeuilleRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
 		reg.Creer(nom, "mot-de-passe-"+nom, false)
-		reg.Modifier(nom, func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+		reg.Modifier(nom, func(c *comptes.Compte) error {
+			c.Admis = append(c.Admis, b.s.store.ID())
+			c.Roles[b.s.store.ID()] = comptes.Joueur
+			return nil
+		})
 	}
 	chef, mj, audit, joueuse, autre := b.connecter("chef"), b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse"), b.connecter("autre")
 	_, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": "pj", "nom": "Aldric"}, mj)
@@ -142,7 +146,10 @@ func TestFeuilleRoles(t *testing.T) {
 	if c, _, _ := b.proxy("PUT", u, feuille, audit); c != 403 {
 		t.Fatalf("feuille écrite par l'auditeur : %d", c)
 	}
-	b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": v["id"]}, chef)
+	if c, _, _ := b.proxy("GET", u, nil, chef); c != 403 {
+		t.Fatalf("feuille lue par l'administrateur : %d", c)
+	}
+	b.proxy("PATCH", "/api/joueurs/comptes/joueuse", map[string]any{"pj": v["id"]}, mj)
 	// tant que la fiche n'est pas partagée, le joueur ne voit rien
 	if c, _, _ := b.proxy("GET", u, nil, joueuse); c != 404 {
 		t.Fatalf("feuille d'un PJ non partagé : %d", c)
@@ -159,7 +166,7 @@ func TestFeuilleRoles(t *testing.T) {
 	if c, _, _ := b.proxy("PUT", u, map[string]any{"pv": 50}, joueuse); c != 403 {
 		t.Fatalf("feuille écrite par le joueur, édition fermée : %d", c)
 	}
-	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, chef)
+	b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, mj)
 	c, v, _ = b.proxy("PUT", u, map[string]any{"pv": 15, "notes": "j'efface les notes", "inventaire": []any{map[string]any{"nom": "Une lanterne"}}}, joueuse)
 	if c != 200 || v["pv"] != float64(15) || v["notes"] != "" {
 		t.Fatalf("feuille écrite par le joueur : %d %v", c, v)

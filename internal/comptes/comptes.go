@@ -1,5 +1,9 @@
 // Package comptes garde les comptes du mode serveur : nom d'utilisateur, mot de passe haché, rôle
 // dans chaque univers, jetons d'API. Ils tiennent au serveur, pas à un univers.
+//
+// Un administrateur gère le serveur (univers, comptes) sans rien voir du contenu : il n'a de rôle
+// dans aucun univers, ni jeton d'API. Il décide à quels univers un compte peut être joint comme
+// joueur (Admis) ; c'est ensuite le MJ de l'univers qui l'y joint, ou non, et lui donne son PJ.
 package comptes
 
 import (
@@ -13,13 +17,15 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Rôles d'un compte dans un univers. L'administrateur, lui, l'est pour tout le serveur.
+// Rôles d'un compte dans un univers. L'administrateur, lui, l'est pour tout le serveur, et n'en a
+// aucun dans les univers.
 const (
 	MJ       = "mj"       // lit et modifie l'univers
 	Auditeur = "auditeur" // lit tout l'univers, secrets du MJ et journal compris, sans rien modifier
@@ -44,6 +50,8 @@ var (
 	ErrRole         = errors.New("rôle inconnu : mj, auditeur ou joueur")
 	ErrDernierAdmin = errors.New("il doit rester un administrateur actif")
 	ErrTropDeJetons = errors.New("trop de jetons : retirez-en un d'abord")
+	ErrAdmin        = errors.New("un compte administrateur n'a ni rôle dans les univers ni jeton d'API : retirez-les d'abord, ou utilisez un autre compte")
+	ErrNonAdmis     = errors.New("ce compte n'est pas admis comme joueur dans cet univers")
 
 	reNom = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{2,31}$`)
 )
@@ -62,18 +70,24 @@ type Compte struct {
 	Admin   bool              `json:"admin,omitempty"`
 	Inactif bool              `json:"inactif,omitempty"`
 	Roles   map[string]string `json:"roles,omitempty"`  // identifiant d'univers → rôle
+	Admis   []string          `json:"admis,omitempty"`  // univers où le MJ peut joindre ce compte comme joueur
 	Persos  map[string]int64  `json:"persos,omitempty"` // identifiant d'univers → fiche du PJ que joue ce compte
 	Jetons  []Jeton           `json:"jetons,omitempty"`
 	Version int               `json:"version"` // change avec le mot de passe : les sessions ouvertes tombent
 	Cree    float64           `json:"cree"`
 }
 
-// Role renvoie le rôle du compte dans un univers ("" : aucun accès). Un administrateur y est MJ.
+// Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
 func (c Compte) Role(univers string) string {
 	if c.Admin {
-		return MJ
+		return ""
 	}
 	return c.Roles[univers]
+}
+
+// PeutJouer : l'administrateur a admis ce compte comme joueur de l'univers.
+func (c Compte) PeutJouer(univers string) bool {
+	return !c.Admin && slices.Contains(c.Admis, univers)
 }
 
 // Registre est le fichier des comptes, lisible par son seul propriétaire.
@@ -99,10 +113,36 @@ func Ouvrir(chemin string) (*Registre, error) {
 	if err := json.Unmarshal(b, &l); err != nil {
 		return nil, errors.New("fichier des comptes illisible : " + err.Error())
 	}
+	change := false
 	for _, c := range l {
 		r.m[c.Nom] = c
+		change = reprendre(c) || change
+	}
+	if change {
+		if err := r.ecrire(); err != nil {
+			return nil, err
+		}
 	}
 	return r, nil
+}
+
+// reprendre met un compte d'avant la séparation des rôles dans la forme actuelle : un
+// administrateur perd ses rôles et ses jetons (il n'entre plus dans les univers), un compte joueur
+// est admis dans les univers où il joue déjà.
+func reprendre(c *Compte) bool {
+	if c.Admin {
+		change := len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0
+		c.Roles, c.Admis, c.Persos, c.Jetons = nil, nil, nil, nil
+		return change
+	}
+	change := false
+	for u, role := range c.Roles {
+		if role == Joueur && !slices.Contains(c.Admis, u) {
+			c.Admis, change = append(c.Admis, u), true
+		}
+	}
+	slices.Sort(c.Admis)
+	return change
 }
 
 func (r *Registre) ecrire() error {
@@ -138,6 +178,7 @@ func copie(c *Compte) Compte {
 	for k, v := range c.Persos {
 		x.Persos[k] = v
 	}
+	x.Admis = append([]string(nil), c.Admis...)
 	x.Jetons = append([]Jeton(nil), c.Jetons...)
 	return x
 }
@@ -230,7 +271,8 @@ func (r *Registre) Verifier(nom, mdp string) (Compte, bool) {
 }
 
 // Modifier applique f au compte et l'enregistre. Le dernier administrateur actif ne peut ni perdre
-// son rôle, ni être désactivé.
+// son rôle, ni être désactivé. Un administrateur n'a ni rôle dans les univers ni jeton ; un compte
+// n'est joueur que d'un univers où il est admis (ne plus l'y admettre l'en retire).
 func (r *Registre) Modifier(nom string, f func(*Compte) error) (Compte, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -244,9 +286,20 @@ func (r *Registre) Modifier(nom string, f func(*Compte) error) (Compte, error) {
 		return Compte{}, err
 	}
 	x.Nom = avant.Nom
+	slices.Sort(x.Admis)
+	x.Admis = slices.Compact(x.Admis)
+	x.Admis = slices.DeleteFunc(x.Admis, func(u string) bool { return u == "" })
 	for u, role := range x.Roles {
 		switch role {
-		case MJ, Auditeur, Joueur:
+		case MJ, Auditeur:
+		case Joueur:
+			if !slices.Contains(x.Admis, u) {
+				if avant.Roles[u] == Joueur { // l'administrateur ne l'admet plus : il quitte l'univers
+					delete(x.Roles, u)
+					continue
+				}
+				return Compte{}, ErrNonAdmis
+			}
 		case "":
 			delete(x.Roles, u)
 		default:
@@ -254,9 +307,12 @@ func (r *Registre) Modifier(nom string, f func(*Compte) error) (Compte, error) {
 		}
 	}
 	for u, pj := range x.Persos {
-		if pj <= 0 {
+		if pj <= 0 || x.Roles[u] != Joueur {
 			delete(x.Persos, u)
 		}
+	}
+	if x.Admin && len(x.Roles)+len(x.Admis)+len(x.Persos)+len(x.Jetons) > 0 {
+		return Compte{}, ErrAdmin
 	}
 	*c = x
 	if avant.Admin && !avant.Inactif && !r.resteUnAdmin() {
@@ -310,6 +366,32 @@ func (r *Registre) Supprimer(nom string) error {
 		return err
 	}
 	return nil
+}
+
+// OublierUnivers retire de tous les comptes ce qui tenait à un univers supprimé : rôles, admission,
+// PJ.
+func (r *Registre) OublierUnivers(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	change := false
+	for _, c := range r.m {
+		if _, ok := c.Roles[id]; ok {
+			delete(c.Roles, id)
+			change = true
+		}
+		if _, ok := c.Persos[id]; ok {
+			delete(c.Persos, id)
+			change = true
+		}
+		if i := slices.Index(c.Admis, id); i >= 0 {
+			c.Admis = slices.Delete(c.Admis, i, i+1)
+			change = true
+		}
+	}
+	if !change {
+		return nil
+	}
+	return r.ecrire()
 }
 
 func empreinteJeton(clair string) string {

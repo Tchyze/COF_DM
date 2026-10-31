@@ -15,6 +15,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -268,6 +269,7 @@ func (s *Serveur) routes() {
 	m.HandleFunc("GET /api/export", s.exporter)
 	m.HandleFunc("GET /api/export/obsidian", s.exporterObsidian)
 	m.HandleFunc("POST /api/restaurer", s.restaurer)
+	m.HandleFunc("POST /api/import/univers", s.importerUnivers)
 	m.HandleFunc("POST /api/sauvegarde", s.sauvegarder)
 	s.routesSync(m)
 	m.HandleFunc("GET /api/parametres", s.parametres)
@@ -955,9 +957,15 @@ func (s *Serveur) restaurer(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 422, "Fichier d'export illisible.")
 		return
 	}
-	d, err := sauvegarder(s.store, s.opt.Sauvegardes, "avant-restauration")
+	s.remplacerPar(w, r, x, "avant-restauration")
+}
+
+// remplacerPar remplace tout le contenu de l'univers par celui d'un export, après une sauvegarde
+// (motif). L'univers garde son identifiant, son nom, ses comptes et leurs rôles.
+func (s *Serveur) remplacerPar(w http.ResponseWriter, r *http.Request, x store.Export, motif string) {
+	d, err := sauvegarder(s.store, s.opt.Sauvegardes, motif)
 	if err != nil {
-		log.Printf("sauvegarde avant restauration : %v", err)
+		log.Printf("sauvegarde (%s) : %v", motif, err)
 		erreur(w, 500, "Sauvegarde impossible, rien n'a été modifié. "+msgInterne)
 		return
 	}
@@ -967,6 +975,61 @@ func (s *Serveur) restaurer(w http.ResponseWriter, r *http.Request) {
 	}
 	s.Fermer() // les combats suivis viennent d'être remplacés
 	repondre(w, 200, map[string]any{"fiches": len(x.Entites), "relations": len(x.Relations), "sauvegarde": d})
+}
+
+// importerUnivers : sur un serveur, le MJ verse dans cet univers (créé vide par l'administrateur)
+// les données d'un fichier d'univers .cofdm, envoyé brut dans le corps : fiches, relations,
+// images, bestiaire, règles, feuilles. Un univers qui a déjà des fiches n'est remplacé qu'avec
+// ?remplacer=1, après une sauvegarde. Le fichier est lu à part, jamais servi.
+func (s *Serveur) importerUnivers(w http.ResponseWriter, r *http.Request) {
+	if !modeServeur(r) {
+		erreur(w, 404, "Sur cet ordinateur, ouvrez le fichier directement (menu Fichier, « Ouvrir un univers »).")
+		return
+	}
+	if _, n, err := s.store.Compter(); err != nil || (n > 0 && r.URL.Query().Get("remplacer") != "1") {
+		erreur(w, 409, "Cet univers a déjà des fiches : confirmez le remplacement de tout son contenu (une sauvegarde est faite avant).")
+		return
+	}
+	dir, err := os.MkdirTemp("", "cofdm-import-")
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	defer os.RemoveAll(dir)
+	fichier := filepath.Join(dir, "import"+store.Extension)
+	f, err := os.OpenFile(fichier, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	_, err = io.Copy(f, http.MaxBytesReader(w, r.Body, tailleMaxUnivers))
+	if errFermer := f.Close(); err == nil {
+		err = errFermer
+	}
+	var tropGros *http.MaxBytesError
+	switch {
+	case errors.As(err, &tropGros):
+		erreur(w, 413, "Fichier trop lourd (1 Go au plus).")
+		return
+	case err != nil:
+		erreurStore(w, err)
+		return
+	case !enTeteSQLite(fichier):
+		erreur(w, 422, "Ce fichier n'est pas un univers COF DM.")
+		return
+	}
+	st, err := store.Ouvrir(fichier)
+	if err != nil {
+		erreur(w, 422, "Ce fichier n'est pas un univers COF DM, ou il est abîmé.")
+		return
+	}
+	x, err := st.Exporter()
+	_ = st.Fermer()
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	s.remplacerPar(w, r, x, "avant-import")
 }
 
 func (s *Serveur) parametres(w http.ResponseWriter, r *http.Request) {

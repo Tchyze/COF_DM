@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Tchyze/cof_dm/internal/comptes"
 	"github.com/Tchyze/cof_dm/internal/reglages"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
@@ -35,6 +36,7 @@ type Application struct {
 	avertissement string                    // à montrer au MJ (univers introuvable au lancement…)
 	dist          *distant                  // application de bureau : le lien avec un serveur
 	maj           *misesAJour               // application de bureau : les mises à jour
+	admin         *http.ServeMux            // serveur : l'administration (admin.go)
 }
 
 // universOuvert : un univers ouvert et le serveur de son API.
@@ -71,7 +73,6 @@ func NouvelleApplication(opt Options) *Application {
 	m.HandleFunc("GET /api/univers", a.etat)
 	m.HandleFunc("POST /api/univers/ouvrir", a.routeOuvrir)
 	m.HandleFunc("POST /api/univers/nouveau", a.routeNouveau)
-	m.HandleFunc("POST /api/univers/deposer", a.routeDeposer)
 	m.HandleFunc("POST /api/univers/copie", a.routeCopie)
 	m.HandleFunc("POST /api/univers/parcourir", a.routeParcourir)
 	m.HandleFunc("POST /api/univers/restaurer", a.routeRestaurer)
@@ -81,6 +82,7 @@ func NouvelleApplication(opt Options) *Application {
 		a.routesMaj()
 	} else {
 		a.routesMajServeur()
+		a.admin = a.routesAdmin()
 	}
 	return a
 }
@@ -367,6 +369,10 @@ func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.servirUnivers(w, r)
 		return
 	}
+	if r.URL.Path == "/api/admin" || strings.HasPrefix(r.URL.Path, "/api/admin/") {
+		a.servirAdmin(w, r)
+		return
+	}
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if a.srv == nil {
@@ -384,13 +390,18 @@ func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // lui, jamais à un appareil du réseau, même connecté ou porteur du jeton.
 func (a *Application) servirUnivers(w http.ResponseWriter, r *http.Request) {
 	enTetes(w)
-	if a.opt.acces != nil { // mode serveur : les fichiers du serveur regardent l'administrateur
+	if a.opt.acces != nil { // mode serveur : voir permisSurServeur
 		r, ok := a.opt.acces.entrer(w, r)
 		if !ok {
 			return
 		}
-		if c, connu := compteDe(r); !connu || !c.Admin {
-			erreur(w, 403, "Les univers se gèrent avec un compte administrateur.")
+		c, connu := compteDe(r)
+		if !connu {
+			erreur(w, 401, "Connectez-vous avec votre compte, ou utilisez un jeton d'API.")
+			return
+		}
+		if code, msg := a.permisSurServeur(c, r); code != 0 {
+			erreur(w, code, msg)
 			return
 		}
 		a.mux.ServeHTTP(w, r)
@@ -413,6 +424,34 @@ func (a *Application) servirUnivers(w http.ResponseWriter, r *http.Request) {
 	a.mux.ServeHTTP(w, r)
 }
 
+// permisSurServeur : sur un serveur, /api/univers ne crée ni n'ouvre plus rien (l'administration
+// s'en charge, admin.go). Il reste au MJ de l'univers visé l'état de son univers, ses sauvegardes
+// et la reprise d'une bibliothèque ; à l'administrateur, la version du serveur.
+func (a *Application) permisSurServeur(c comptes.Compte, r *http.Request) (int, string) {
+	chemin := r.URL.Path
+	switch {
+	case c.Admin:
+		if chemin == "/api/univers/version" && !parJeton(r) {
+			return 0, ""
+		}
+		return 403, "L'administrateur gère les univers depuis l'administration, sans y entrer."
+	case chemin == "/api/univers/deposer":
+		return 410, "Ce serveur ne reçoit plus d'univers déposé : l'administrateur y crée l'univers, puis son MJ y importe ses données. Mettez à jour l'application de bureau."
+	case (chemin == "/api/univers" && r.Method == http.MethodGet) || chemin == "/api/univers/restaurer" || chemin == "/api/univers/bibliotheque":
+		a.mu.RLock()
+		o, code, msg := a.choisir(r)
+		a.mu.RUnlock()
+		if code != 0 {
+			return code, msg
+		}
+		if c.Role(o.st.ID()) != comptes.MJ {
+			return 403, "Réservé au MJ de cet univers."
+		}
+		return 0, ""
+	}
+	return 403, "Sur un serveur, les univers se créent et se renomment dans l'administration."
+}
+
 type ficheUnivers struct {
 	Nom     string `json:"nom"`
 	Chemin  string `json:"chemin"`
@@ -432,6 +471,10 @@ func decrire(chemin string) ficheUnivers {
 func (a *Application) etat(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
+	if a.multi() {
+		a.etatSurServeur(w, r)
+		return
+	}
 	out := map[string]any{"dossier": a.DossierUnivers(), "parcourir": a.opt.Dialogue != nil, "avertissement": a.avertissement, "serveur": a.multi()}
 	courant := ""
 	if o := a.vise(r); o != nil {
@@ -465,16 +508,31 @@ func (a *Application) etat(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, out)
 }
 
+// etatSurServeur : l'univers visé et ses sauvegardes, pour son MJ, sans chemin du serveur ; les
+// autres univers du compte (d'où reprendre une bibliothèque). Verrou tenu.
+func (a *Application) etatSurServeur(w http.ResponseWriter, r *http.Request) {
+	c, _ := compteDe(r)
+	o := a.vise(r)
+	courant := decrire(o.st.Chemin())
+	courant.Chemin, courant.ID = "", o.st.ID()
+	autres := []ficheUnivers{}
+	for _, x := range a.accessibles(c) {
+		if role := c.Role(x.st.ID()); x != o && (role == comptes.MJ || role == comptes.Auditeur) {
+			f := decrire(x.st.Chemin())
+			f.Chemin, f.ID = "", x.st.ID()
+			autres = append(autres, f)
+		}
+	}
+	repondre(w, 200, map[string]any{"serveur": true, "parcourir": false, "courant": courant, "recents": []ficheUnivers{},
+		"autres": autres, "sauvegardes": listerSauvegardes(a.dossierSauvegardes(o.st))})
+}
+
 func (a *Application) routeOuvrir(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Chemin string `json:"chemin"`
 	}
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
-		return
-	}
-	if a.multi() {
-		a.ouvrirSurServeur(w, r, in.Chemin)
 		return
 	}
 	if err := a.Ouvrir(in.Chemin, false); err != nil {
@@ -520,10 +578,6 @@ func (a *Application) routeNouveau(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chemin := strings.TrimSpace(in.Chemin)
-	if chemin != "" && a.multi() {
-		erreur(w, 422, "Sur un serveur, un univers se crée par son nom, dans le dossier du serveur.")
-		return
-	}
 	if chemin == "" {
 		nom := nomDeFichier(in.Nom)
 		if nom == "" {
@@ -544,92 +598,11 @@ func (a *Application) routeNouveau(w http.ResponseWriter, r *http.Request) {
 	}
 	a.choisi()
 	o.st.Noter("univers", "univers créé", auteurDe(r))
-	if a.multi() { // l'administrateur passe dans l'univers qu'il vient de créer
-		r = a.viser(w, r, o)
-	}
 	a.etat(w, r)
 }
 
 // tailleMaxUnivers : un univers porte ses images ; au-delà, mieux vaut copier le fichier à la main.
 const tailleMaxUnivers = 1 << 30
-
-// routeDeposer : sur un serveur, l'administrateur y ajoute un univers existant (le fichier .cofdm,
-// brut, dans le corps ; ?nom= pour le nommer). Le fichier est écrit à part et ouvert pour contrôle
-// (univers reconnu, intact, sans objet étranger, remis au format du modèle) avant d'entrer dans le
-// dossier des univers ; la copie d'un univers déjà présent est refusée.
-func (a *Application) routeDeposer(w http.ResponseWriter, r *http.Request) {
-	if !a.multi() {
-		erreur(w, 422, "Sur cet ordinateur, ouvrez le fichier directement (menu Fichier, « Ouvrir un univers »).")
-		return
-	}
-	nom := nomDeFichier(strings.TrimSuffix(r.URL.Query().Get("nom"), store.Extension))
-	if nom == "" {
-		erreur(w, 422, "Donnez un nom à l'univers.")
-		return
-	}
-	chemin := avecExtension(filepath.Join(a.DossierUnivers(), nom))
-	if _, err := os.Stat(chemin); err == nil {
-		erreur(w, 409, "Un univers porte déjà ce nom sur le serveur : choisissez-en un autre.")
-		return
-	}
-	tmp, err := os.CreateTemp(a.DossierUnivers(), ".depot-*.tmp")
-	if err != nil {
-		erreurStore(w, err)
-		return
-	}
-	defer os.Remove(tmp.Name()) // sans effet une fois le fichier rangé
-	_ = tmp.Chmod(0o600)
-	n, err := io.Copy(tmp, http.MaxBytesReader(w, r.Body, tailleMaxUnivers))
-	if errFermer := tmp.Close(); err == nil {
-		err = errFermer
-	}
-	var tropGros *http.MaxBytesError
-	switch {
-	case errors.As(err, &tropGros):
-		erreur(w, 413, "Fichier trop lourd (1 Go au plus).")
-		return
-	case err != nil:
-		erreurStore(w, err)
-		return
-	case !enTeteSQLite(tmp.Name()):
-		erreur(w, 422, "Ce fichier n'est pas un univers COF DM.")
-		return
-	}
-	essai, err := store.Ouvrir(tmp.Name())
-	if errors.Is(err, store.ErrPasUnivers) {
-		erreur(w, 422, "Ce fichier n'est pas un univers COF DM.")
-		return
-	}
-	if err != nil {
-		erreurStore(w, err)
-		return
-	}
-	id := essai.ID()
-	_ = essai.Fermer()
-	a.mu.RLock()
-	deja, pris := a.tous[id]
-	a.mu.RUnlock()
-	if pris {
-		erreur(w, 409, "Cet univers est déjà sur le serveur, sous le nom « "+nomUnivers(deja.st.Chemin())+" » : ce fichier en est une copie. Pour remettre l'univers du serveur dans l'état de ce fichier, ouvrez-le sur votre ordinateur, exportez-le en JSON (Paramètres) et restaurez cet export sur le serveur.")
-		return
-	}
-	if err := os.Link(tmp.Name(), chemin); err != nil { // ne remplace jamais un fichier arrivé entre-temps
-		if errors.Is(err, os.ErrExist) {
-			erreur(w, 409, "Un univers porte déjà ce nom sur le serveur : choisissez-en un autre.")
-			return
-		}
-		erreurStore(w, err)
-		return
-	}
-	o, err := a.ouvrir(chemin, false)
-	if err != nil {
-		_ = os.Remove(chemin)
-		erreurStore(w, err)
-		return
-	}
-	o.st.Noter("univers", fmt.Sprintf("univers déposé sur le serveur (%d octets)", n), auteurDe(r))
-	a.etat(w, a.viser(w, r, o))
-}
 
 // enTeteSQLite : le fichier commence comme une base SQLite (un fichier vide ou d'un autre format
 // deviendrait sinon un univers vide).
@@ -796,6 +769,34 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, map[string]any{"restaure": in.Fichier, "sauvegarde": filepath.Base(avant)})
 }
 
+// bibliothequeSurServeur : la reprise depuis un autre univers du serveur, que le compte lit (MJ
+// ou auditeur).
+func (a *Application) bibliothequeSurServeur(w http.ResponseWriter, r *http.Request, id string) {
+	c, _ := compteDe(r)
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	cible, source := a.vise(r), a.tous[id]
+	if role := c.Role(id); source == nil || (role != comptes.MJ && role != comptes.Auditeur) {
+		erreur(w, 404, "Univers inconnu, ou que votre compte ne lit pas.")
+		return
+	}
+	if source == cible {
+		erreur(w, 422, "C'est l'univers ouvert : choisissez-en un autre.")
+		return
+	}
+	b, err := source.srv.bibliotheque()
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	out, err := cible.srv.recevoirBibliotheque(b, auteurDe(r))
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	repondre(w, 200, out)
+}
+
 func copierFichier(source, cible string) error {
 	in, err := os.Open(source)
 	if err != nil {
@@ -817,10 +818,15 @@ func copierFichier(source, cible string) error {
 // les règles (profils, peuples, voies) d'un autre univers. Rien n'est retiré, ni ici ni là-bas.
 func (a *Application) routeBibliotheque(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Source string `json:"source"`
+		Source  string `json:"source"`
+		Univers string `json:"univers"` // sur un serveur : l'identifiant de l'autre univers
 	}
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
+		return
+	}
+	if a.multi() {
+		a.bibliothequeSurServeur(w, r, in.Univers)
 		return
 	}
 	chemin, err := filepath.Abs(strings.TrimSpace(in.Source))
@@ -843,9 +849,6 @@ func (a *Application) routeBibliotheque(w http.ResponseWriter, r *http.Request) 
 	switch o := a.parChemin(chemin); {
 	case o != nil:
 		b, err = o.srv.bibliotheque()
-	case a.multi():
-		erreur(w, 422, "Sur un serveur, la reprise se fait depuis un univers du serveur.")
-		return
 	default: // sur l'ordinateur du MJ : l'autre univers est lu, puis refermé
 		if info, e := os.Stat(chemin); e != nil || info.IsDir() {
 			erreur(w, 422, "Fichier introuvable : "+chemin)

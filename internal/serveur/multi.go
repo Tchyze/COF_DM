@@ -241,20 +241,3 @@ func (a *Application) mesUnivers(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 404, "Route inconnue.")
 	}
 }
-
-// ouvrirSurServeur : le menu Fichier d'un administrateur. Un serveur n'ouvre que les univers de son
-// dossier ; « ouvrir » y fait passer ce navigateur dans l'univers choisi.
-func (a *Application) ouvrirSurServeur(w http.ResponseWriter, r *http.Request, chemin string) {
-	chemin, err := filepath.Abs(strings.TrimSpace(chemin))
-	dossier, _ := filepath.Abs(a.DossierUnivers())
-	if err != nil || filepath.Dir(chemin) != dossier {
-		erreur(w, 422, "Un serveur n'ouvre que les univers de son dossier : "+dossier)
-		return
-	}
-	o, err := a.ouvrir(chemin, false)
-	if err != nil {
-		erreurStore(w, err)
-		return
-	}
-	a.etat(w, a.viser(w, r, o))
-}

@@ -191,7 +191,11 @@ func TestCombat(t *testing.T) {
 func TestCombatRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
 	mj, audit := b.connecter("meneur"), b.connecter("audit")
 	c, v, _ := b.proxy("POST", "/api/combats", map[string]any{"nom": "Bagarre"}, mj)
 	if c != 201 {
