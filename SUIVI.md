@@ -8,8 +8,8 @@ Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus l
 
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
 - **Numéros d'échange** : `VersionModele` 6 sur `main` (5 dans la 1.2.4), `versionDonnees` 5, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : aucune en cours. Les PR 24 (corrections rapides), 25 et 26 (inventaire, lots 1 et 2), essayées par le MJ en préversion 1.2.5-test.30, sont fusionnées dans `main` le 29 octobre 2026 ; la branche `preversion-inventaire` est supprimée. Pas encore de version stable 1.2.5 : seulement à la demande du MJ.
-- **Prochain chantier** : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Questions de fond à poser au MJ avant de coder.
+- **Branche en cours** : `schema-incoherences` (PR 28, schéma des fiches : 5 incohérences corrigées et champs utiles en jeu ; modèle 7, données 6), en préversion 1.2.5-test.31, **à essayer par le MJ avant la fusion**. Les PR 24 (corrections rapides), 25 et 26 (inventaire, lots 1 et 2), essayées par le MJ en préversion 1.2.5-test.30, sont fusionnées dans `main` le 29 octobre 2026 ; la branche `preversion-inventaire` est supprimée. Pas encore de version stable 1.2.5 : seulement à la demande du MJ.
+- **Prochain chantier** (après la PR 28) : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Questions de fond à poser au MJ avant de coder.
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` depuis le 29 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -127,6 +127,13 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Joueurs** (édition ouverte) : ils cochent « porté », comptent leurs objets (−/+), ajoutent ou retirent des objets courants ; les chiffres d'un objet et son emplacement restent au MJ.
 - **Objets du monde** (lot 2) : une ligne peut désigner une fiche « Objet », dont elle prend le nom et les chiffres (champ « Chiffres » de la fiche : emplacement, bonus, arme). Le **Détenteur suit dans les deux sens** : donné à un PJ, l'objet entre dans son inventaire (et quitte celui d'un autre PJ) ; donné ailleurs ou ôté de l'inventaire, il n'y est plus / n'a plus de détenteur. Fiche effacée : la ligne reste, en objet courant. Lier ou retirer un objet du monde reste au MJ. Rien ne suit quand les feuilles de personnage sont coupées.
 
+### Schéma des fiches (31 octobre 2026)
+
+- **Inventaire des champs** fait type par type ; corrigé en une PR (28) : cinq incohérences, puis les champs utiles en jeu.
+- **Incohérences** : tactique d'une rencontre réservée au MJ (et notes du MJ) ; attitude du PNJ envers les PJ ; campagnes sur lieux, factions, objets, lore ; dirigeant d'un lieu = PNJ, PJ ou faction, d'une faction = PNJ ou PJ ; « Connu du MJ seulement » du lore **supprimé** (doublait le partage ; cochée sur une fiche partagée, la fiche n'est plus partagée à l'ouverture, `versionDonnees` 6).
+- **Pas de champ « contrôlé par » sur le lieu** : le dirigeant peut être une faction. **Pas d'XP** sur la séance (COF n'en a pas). La récompense d'une quête est un texte long.
+- **Laissé pour plus tard** : résumé des joueurs sur la séance (projet 30) ; résumé en une ligne du lore, de l'événement, de la campagne et de l'aide ; l'après-séance ne remplit pas encore les quêtes, lieux et PNJ de la séance.
+
 ### Aides de jeu (19 octobre 2026)
 
 - Un **type de fiche** ; l'envoi est une relation `recu` d'un PJ vers l'aide, avec la séance. Le joueur voit **la version à jour** ; le MJ peut **retirer** un envoi.
@@ -172,6 +179,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 24 | **Corrections rapides** : « ☀ Nouveau jour » et repos pendant un combat (les combats en cours reprennent les utilisations de la feuille) ; dés coupés depuis un autre appareil ; tiroir du menu en grand écran. |
 | 25 | **Inventaire, lot 1** (projet 11) : inventaire sur la feuille, emplacements, bonus et armes des objets portés (en bleu, formule au survol), reprise de l'ancien équipement ; modèle 6, `versionDonnees` 5. |
 | 26 | **Inventaire, lot 2** : lignes liées aux fiches « Objet » (nom et chiffres de la fiche), Détenteur suivi dans les deux sens, emplacements reconnus par leur nom, total affiché avec sa formule au survol. |
+| 28 | **Schéma des fiches** (en essai) : 5 incohérences corrigées (tactique MJ, attitude du PNJ, campagnes, dirigeant, « Connu du MJ seulement » retiré) et champs utiles en jeu sur presque tous les types et le bestiaire ; modèle 7, `versionDonnees` 6. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
