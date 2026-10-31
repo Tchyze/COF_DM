@@ -313,12 +313,12 @@ export async function potCommun(box, f, apres) {
         <div data-pieces></div>
         ${p.objets.length ? `<div class="pot-choix">${p.objets.map(o => `<label class="ligne"><input type="number" min="0" max="${o.quantite}" value="0" data-ligne="${o.id}" aria-label="Quantité de ${esc(o.nom)}"><span>${esc(o.nom)} <span class="hint">sur ${o.quantite}</span></span></label>`).join("")}</div>` : ""}
         <div class="ligne"><select data-pj aria-label="PJ qui reçoit"><option value="">— PJ qui reçoit —</option>${pjs.map(x => `<option value="${x.id}">${esc(x.nom)}</option>`).join("")}</select>
-          <input data-note placeholder="Note (facultatif)" aria-label="Note" style="flex:1;min-width:140px"></div>
+          <input data-note placeholder="Note, vue des joueurs (facultatif)" aria-label="Note" style="flex:1;min-width:140px"></div>
         <div class="ligne"><button type="button" class="primary petit" data-donner${feuilles ? "" : " disabled"}>Donner au PJ</button><button type="button" class="ghost petit" data-retirer>Retirer du pot</button>
           ${feuilles ? `<span class="hint">les pièces vont dans sa bourse, les objets dans son inventaire</span>` : `<span class="hint">Les feuilles de personnage sont désactivées : rien ne peut être donné.</span>`}</div>
       </form></details>` : ""}
     ${ecrire ? `<details class="pot-volet" id="pot-ajout"><summary>Ajouter au pot</summary><form class="colonne" style="gap:8px">
-        <div data-butin></div><input data-libelle placeholder="D'où cela vient : récompense, trésor…" aria-label="Origine">
+        <div data-butin></div><input data-libelle placeholder="D'où cela vient : récompense, trésor… (vu des joueurs)" aria-label="Origine">
         <div><button type="submit" class="primary petit">Ajouter</button></div></form></details>` : ""}
     ${historique ? `<details class="pot-volet"><summary>Historique</summary><ul class="pot-histo">${historique}</ul></details>` : ""}`;
 

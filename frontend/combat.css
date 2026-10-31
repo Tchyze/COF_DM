@@ -415,3 +415,10 @@
 .combat .doc figure img{max-width:100%;height:auto;border-radius:var(--r);border:1px solid var(--line);display:block}
 .combat .doc figcaption{color:var(--muted);font-size:.9rem}
 .combat .fin-butin{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:12px 0}
+.combat .pot-joueur{max-width:820px;width:100%;margin:0 auto;gap:10px}
+.combat .pot-attente{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
+.combat .pot-attente li.perime{opacity:.6;text-decoration:line-through}
+.combat .pot-form{gap:10px}
+.combat .pot-joueur label{flex-direction:row;align-items:center;gap:8px;font-size:.95rem;color:var(--ink);text-transform:none;letter-spacing:0}
+.combat .pot-joueur .pieces label span{color:var(--muted)}
+.combat .pot-joueur .pot-choix label{justify-content:flex-start}
