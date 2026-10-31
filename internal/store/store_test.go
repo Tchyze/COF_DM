@@ -416,6 +416,36 @@ func TestReparer(t *testing.T) {
 	}
 }
 
+// Version 6 : la case « Connu du MJ seulement » du lore disparaît sans laisser de trace dans les
+// secrets ; cochée sur une fiche partagée, elle retire le partage.
+func TestReparerMJSeulement(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "r.db")
+	s, _ := Ouvrir(chemin)
+	cache := creer(t, s, "lore", "La Faille", map[string]any{"contenu": "Profonde.", "secrets": "Vivante."})
+	connu := creer(t, s, "lore", "Le Marché", nil)
+	for _, e := range []Entite{cache, connu} {
+		if _, err := s.Partager(e.ID, true, "test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.db.Exec(`UPDATE entites SET data=? WHERE id=?`, `{"contenu":"Profonde.","secrets":"Vivante.","mj_seulement":true}`, cache.ID)
+	s.db.Exec(`UPDATE entites SET data=? WHERE id=?`, `{"mj_seulement":false}`, connu.ID)
+	s.db.Exec(`UPDATE meta SET valeur='5' WHERE cle='version_donnees'`)
+	s.Fermer()
+	s, err := Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Fermer()
+	f, _ := s.Lire(cache.ID)
+	if f.Partage || f.Data["mj_seulement"] != nil || f.Data["secrets"] != "Vivante." || f.Data["contenu"] != "Profonde." {
+		t.Fatalf("lore réservé au MJ : partage %v, %#v", f.Partage, f.Data)
+	}
+	if f, _ = s.Lire(connu.ID); !f.Partage || len(f.Data) != 0 {
+		t.Fatalf("lore connu de tous : partage %v, %#v", f.Partage, f.Data)
+	}
+}
+
 // Jusqu'à la version 2, le profil de combat d'un PNJ et les créatures d'une rencontre désignaient
 // des fiches du tracker externe : à l'ouverture, les créatures sont rattachées au bestiaire de
 // l'univers par leur nom, et ce qui ne s'y retrouve pas est retiré et signalé.

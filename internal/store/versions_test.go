@@ -16,7 +16,7 @@ import (
 // empreinteModele : l'empreinte du modèle synchronisé à VersionModele. Quand TestVersionModele
 // échoue, le modèle a changé : augmenter VersionModele (versions.go), puis recopier ici la nouvelle
 // empreinte.
-const empreinteModele = "2262eb023d2faf6d"
+const empreinteModele = "dbde23193e3ef2a4"
 
 // empreinte : ce que la synchronisation transporte et que l'autre côté doit connaître pour
 // l'appliquer. La forme d'une feuille et celle du fichier de règles n'y sont pas : un changement de

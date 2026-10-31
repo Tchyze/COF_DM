@@ -421,7 +421,7 @@ def conv_quete(f, n):
         elif secret_titre(h):
             sec.append(("", xx))
         elif k.startswith("recompense") and "recompense" not in d:
-            d["recompense"] = ligne(xx)
+            d["recompense"] = xx
         else:
             extra.append((h, xx))
     d["accroche"] = fusion("###", ([("", intro)] if intro else []) + acc + extra)

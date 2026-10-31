@@ -91,8 +91,9 @@ func delierTracker(e *Entite, bestiaire map[string]int64, avantBestiaire bool) (
 // l'univers, et non plus des fiches du tracker externe. Version 4 : les derniers champs du pont vers
 // le tracker sont retirés (fiche de personnage d'un PJ, combats d'une séance). Version 5 : la
 // feuille de personnage range son équipement dans un inventaire ; le texte « equipement », l'armure
-// et le bouclier en deviennent les lignes (reprendreFeuilles).
-const versionDonnees = "5"
+// et le bouclier en deviennent les lignes (reprendreFeuilles). Version 6 : le lore perd sa case
+// « Connu du MJ seulement », qui doublait le partage avec les joueurs (retirerMJSeulement).
+const versionDonnees = "6"
 
 // reparer remet les fiches au format du modèle après une mise à jour de l'application. Rien n'est
 // perdu : une valeur qui n'a plus sa place est recopiée dans les notes du MJ de la fiche.
@@ -125,6 +126,9 @@ func (s *Store) reparer() error {
 		garde := map[string]any{}
 		avant, _ := json.Marshal(e.Data)
 		perdus := delierTracker(&e, bestiaire, ancienne < 3)
+		if err := retirerMJSeulement(tx, &e); err != nil {
+			return err
+		}
 		apres, _ := json.Marshal(e.Data)
 		rattache := string(avant) != string(apres)
 		cles := make([]string, 0, len(e.Data))
@@ -183,6 +187,26 @@ func (s *Store) reparer() error {
 		return err
 	}
 	return tx.Commit()
+}
+
+// retirerMJSeulement efface la case « Connu du MJ seulement » d'une fiche de lore. Cochée, elle
+// disait que la fiche restait au MJ : le partage avec les joueurs est alors retiré, pour qu'aucune
+// fiche cochée ne se retrouve chez eux.
+func retirerMJSeulement(tx *sql.Tx, e *Entite) error {
+	v, ok := e.Data["mj_seulement"]
+	if e.Type != "lore" || !ok {
+		return nil
+	}
+	delete(e.Data, "mj_seulement")
+	if v != true || !e.Partage {
+		return nil
+	}
+	if _, err := tx.Exec(`UPDATE entites SET partage=0 WHERE id=?`, e.ID); err != nil {
+		return err
+	}
+	e.Partage = false
+	noter(tx, "mise à jour", e.ID, e.Nom, "plus partagée avec les joueurs : elle était marquée « Connu du MJ seulement »", "cof-dm")
+	return nil
 }
 
 // reprendreFeuilles range au format de l'inventaire les feuilles qui ont encore leur ancien

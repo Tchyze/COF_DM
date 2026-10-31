@@ -639,7 +639,7 @@ func TestServeurEditionJoueur(t *testing.T) {
 	w := httptest.NewRecorder()
 	b.s.ServeHTTP(w, r)
 	var liste []pjJoueur
-	if err := json.Unmarshal(w.Body.Bytes(), &liste); err != nil || len(liste) != 1 || len(liste[0].Recit) != 3 || strings.Contains(w.Body.String(), "SECRET-MJ") {
+	if err := json.Unmarshal(w.Body.Bytes(), &liste); err != nil || len(liste) != 1 || len(liste[0].Recit) != 5 || strings.Contains(w.Body.String(), "SECRET-MJ") {
 		t.Fatalf("PJ de la joueuse : %d %s", w.Code, w.Body.String())
 	}
 	// édition fermée par défaut
