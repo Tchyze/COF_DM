@@ -60,6 +60,18 @@ kbd{border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padd
 .cherche kbd{margin-left:auto}
 .side nav{display:flex;flex-direction:column;gap:1px}
 .side h4{font:600 .68rem var(--f-body);text-transform:uppercase;letter-spacing:.12em;color:var(--faint);margin:14px 8px 4px}
+.side nav .groupe{display:flex;flex-direction:column;gap:1px}
+.side nav .groupe h4{margin:10px 0 2px}
+/* titre d'une catégorie : un bouton qui la replie (clavier : Tab puis Entrée ou Espace) */
+.side .groupe-titre{all:unset;box-sizing:border-box;display:flex;align-items:center;gap:6px;width:100%;min-height:30px;padding:4px 8px;border-radius:6px;cursor:pointer;font:inherit;color:inherit;text-transform:inherit;letter-spacing:inherit}
+.side .groupe-titre:hover{color:var(--muted);background:var(--surface)}
+.side .groupe-titre:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.side .groupe-titre .chevron{margin-left:auto;width:0;height:0;border:4px solid transparent;border-top-color:currentColor;border-bottom:0;transition:transform .15s}
+.side .groupe.replie .groupe-titre .chevron{transform:rotate(-90deg)}
+.side .groupe-liens{display:flex;flex-direction:column;gap:1px}
+/* repliée, une catégorie ne garde que le lien de la page ouverte */
+.side .groupe.replie .groupe-liens a:not(.on){display:none}
+@media (prefers-reduced-motion:reduce){.side .groupe-titre .chevron{transition:none}}
 .side nav a{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:6px;text-decoration:none;color:var(--muted);font-size:.93rem}
 .side nav a:hover{background:var(--surface);color:var(--ink)}
 .side nav a.on{background:var(--surface2);color:var(--ink);box-shadow:inset 3px 0 0 var(--gold)}

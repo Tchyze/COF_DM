@@ -93,16 +93,48 @@ async function route() {
   } catch (e) {
     el.innerHTML = `<div class="erreur">${esc(e.message)}</div>`;
   }
-  $$("#nav a").forEach(x => x.classList.toggle("on", x.dataset.cle === actif));
+  marquerActif(actif);
   window.scrollTo(0, 0);
 }
 
 // ---------------------------------------------------------------- navigation latérale
+// Chaque catégorie du menu se replie ; les catégories repliées sont gardées sur cet appareil. Celle
+// de la page ouverte se déplie d'office le temps qu'on y est (sans changer ce qui est gardé) ; repliée
+// à la main, elle garde au moins le lien de la page ouverte.
+const CLE_REPLIES = "cof-menu-replie";
+const lireReplies = () => { try { return new Set(JSON.parse(localStorage.getItem(CLE_REPLIES) || "[]")); } catch { return new Set(); } };
+const garderReplies = s => { try { localStorage.setItem(CLE_REPLIES, JSON.stringify([...s])); } catch { /* stockage indisponible */ } };
+const cleGroupe = g => g.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+function replier(g, replie) {
+  g.classList.toggle("replie", replie);
+  g.querySelector(".groupe-titre").setAttribute("aria-expanded", String(!replie));
+}
+
+function marquerActif(actif) {
+  $$("#nav a").forEach(x => x.classList.toggle("on", x.dataset.cle === actif));
+  const replies = lireReplies();
+  $$("#nav .groupe").forEach(g => replier(g, replies.has(g.dataset.groupe) && !g.querySelector("a.on")));
+}
+
+$("#nav").addEventListener("click", e => {
+  const b = e.target.closest(".groupe-titre");
+  if (!b) return;
+  const g = b.closest(".groupe"), replie = !g.classList.contains("replie");
+  replier(g, replie);
+  const s = lireReplies();
+  if (replie) s.add(g.dataset.groupe); else s.delete(g.dataset.groupe);
+  garderReplies(s);
+});
+
 async function dessinerNav() {
   let compte = {};
   try { compte = (await api("GET", "/api/stats")).compte; } catch { /* hors ligne */ }
   const lien = (cle, href, icone, nom, n) =>
     `<a href="${href}" data-cle="${cle}"${typeDe(cle) ? ` data-type="${cle}"` : ""}><span class="ic">${icone}</span>${esc(nom)}${n ? `<span class="n">${n}</span>` : ""}</a>`;
+  const groupe = (cle, titre, liens) => !liens ? "" :
+    `<div class="groupe" data-groupe="${cle}"><h4><button type="button" class="groupe-titre" aria-expanded="true" aria-controls="nav-${cle}">` +
+    `<span>${esc(titre)}</span><span class="chevron" aria-hidden="true"></span></button></h4><div class="groupe-liens" id="nav-${cle}">${liens}</div></div>`;
   $("#nav").innerHTML =
     lien("accueil", "#/", "🏠", "Tableau de bord") +
     (!fonctionActive("ecran_mj") ? "" : lien("table", "#/table", "🧭", "Écran du MJ")) +
@@ -110,22 +142,21 @@ async function dessinerNav() {
       const connus = cles.filter(typeDe); // types des fonctionnalités coupées : hors du schéma
       // les voies, profils et peuples de l'univers vont avec les règles
       const voies = g === "Règles" ? lien("voies", "#/voies", "📖", "Voies et profils") : "";
-      if (!connus.length && !voies) return "";
-      return `<h4>${g}</h4>` + connus.map(c => {
+      return groupe(cleGroupe(g), g, connus.map(c => {
         const t = typeDe(c);
         return lien(c, `#/t/${c}`, t.icone, t.pluriel, compte[c]);
-      }).join("") + voies + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : "");
+      }).join("") + voies + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : ""));
     }).join("") +
-    `<h4>${fonctionActive("combat") ? "Combat" : "Bestiaire"}</h4>` + (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire") +
-    `<h4>Outils</h4>` +
-    (fonctionActive("graphe") ? lien("graphe", "#/graphe", "🕸", "Graphe") : "") +
-    (fonctionActive("chronologie") ? lien("chronologie", "#/chronologie", "📅", "Chronologie") : "") +
-    lien("liens", "#/liens", "⛓", "Liens morts") +
-    lien("journal", "#/journal", "📒", "Journal") +
-    lien("parametres", "#/parametres", "⚙", "Paramètres");
+    groupe("combat", fonctionActive("combat") ? "Combat" : "Bestiaire",
+      (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire")) +
+    groupe("outils", "Outils",
+      (fonctionActive("graphe") ? lien("graphe", "#/graphe", "🕸", "Graphe") : "") +
+      (fonctionActive("chronologie") ? lien("chronologie", "#/chronologie", "📅", "Chronologie") : "") +
+      lien("liens", "#/liens", "⛓", "Liens morts") +
+      lien("journal", "#/journal", "📒", "Journal") +
+      lien("parametres", "#/parametres", "⚙", "Paramètres"));
   const { parts } = lireHash();
-  const actif = !parts[0] ? "accueil" : parts[0] === "t" ? parts[1] : parts[0] === "f" ? fiche.typeCourant() : parts[0];
-  $$("#nav a").forEach(x => x.classList.toggle("on", x.dataset.cle === actif));
+  marquerActif(!parts[0] ? "accueil" : parts[0] === "t" ? parts[1] : parts[0] === "f" ? fiche.typeCourant() : parts[0]);
 }
 window.addEventListener("cof-change", () => { dessinerNav(); apercus.clear(); });
 

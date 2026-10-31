@@ -304,6 +304,7 @@ Fiches de règles officielles (résumés) et maison, par domaine. **Paramètres 
 - **Un univers = un fichier** `.cofdm` (fiches, images, journal) : menu **Fichier** pour créer un univers, en ouvrir un autre, retrouver les récents, enregistrer une copie.
 - **Sauvegardes automatiques** de l'univers (à l'ouverture, toutes les demi-heures, à la fermeture), restauration en un clic ; **export JSON** complet, images comprises ; **export vers Obsidian** (voir plus bas).
 - **Paramètres**, en quatre groupes (Univers ; Sauvegardes et exports ; Joueurs et accès ; Application) : seuls les titres s'affichent, avec leur description au survol, et un clic étend le réglage sur place.
+- **Menu de gauche** en catégories (Monde, Campagnes, Secrets, Règles, Combat, Outils…) qui se replient d'un clic sur leur titre, ou au clavier (Tab puis Entrée ou Espace). Les catégories repliées sont gardées sur l'appareil ; celle de la page ouverte se déplie le temps qu'on y est, et repliée à la main garde le lien de cette page.
 - Thème sombre et thème clair ; interface utilisable sur tablette et sur téléphone.
 
 ### API
