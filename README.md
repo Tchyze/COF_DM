@@ -169,7 +169,7 @@ Le mode serveur tourne derrière le nginx de la machine (Linux). Deux façons de
 ```yaml
 services:
   cof-dm:
-    image: <compte>/cof-dm:1.2.6   # ou :latest pour suivre chaque version stable
+    image: tchyze/cof-dm:1.2.6   # ou :latest pour suivre chaque version stable
     container_name: cof-dm
     network_mode: host
     user: "${COF_UID:-1000}:${COF_GID:-1000}"
@@ -186,7 +186,7 @@ docker compose up -d
 docker compose logs cof-dm     # premier lancement : le mot de passe du compte « admin »
 ```
 
-Remplacez `<compte>/cof-dm` par le nom de l'image sur Docker Hub. Un tag fixe (`1.2.6`) ne change que quand vous le modifiez : c'est le plus sûr pour un serveur que des bureaux rejoignent, puisqu'un bureau et un serveur ne se synchronisent qu'au même modèle (voir « Mises à jour »). Un serveur déjà construit depuis le dépôt passe à l'image publiée sans rien perdre : même dossier `donnees`, même utilisateur, même commande ; remplacer `build: .` par `image: …` dans son `docker-compose.yml`, puis `docker compose pull && docker compose up -d`.
+L'image est [`tchyze/cof-dm`](https://hub.docker.com/r/tchyze/cof-dm). Un tag fixe (`1.2.6`) ne change que quand vous le modifiez : c'est le plus sûr pour un serveur que des bureaux rejoignent, puisqu'un bureau et un serveur ne se synchronisent qu'au même modèle (voir « Mises à jour »). Un serveur déjà construit depuis le dépôt passe à l'image publiée sans rien perdre : même dossier `donnees`, même utilisateur, même commande ; remplacer `build: .` par `image: …` dans son `docker-compose.yml`, puis `docker compose pull && docker compose up -d`.
 
 **Image construite depuis le dépôt** (pour une branche, ou sans Docker Hub) :
 

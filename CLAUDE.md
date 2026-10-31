@@ -96,5 +96,5 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 - PR empilées : avant de fusionner celle du dessous (`--delete-branch`), reporter celle du dessus sur `main` : `gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` (`gh pr edit --base` échoue).
 - Faire essayer : `gh workflow run release.yml --ref <branche> -f canal=test`.
 - Version stable : tag `vX.Y.Z` (trois nombres, rien d'autre), **jamais sans demande explicite** ; notes de version commençant par « Nouveautés » en français.
-- Image Docker : le job `docker` de *Release* la construit et l'essaie à chaque passage, et ne l'envoie sur Docker Hub (`X.Y.Z` et `latest`) que pour un tag stable. Secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` ; image `<compte>/cof-dm`, ou variable `DOCKERHUB_IMAGE`.
+- Image Docker : le job `docker` de *Release* la construit et l'essaie à chaque passage, et ne l'envoie sur Docker Hub (`X.Y.Z` et `latest`) que pour un tag stable. Secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` ; image `tchyze/cof-dm` (`<DOCKERHUB_USERNAME>/cof-dm`, ou variable `DOCKERHUB_IMAGE`). Sur une branche, le job vérifie seulement les identifiants (connexion, sans envoi).
 - `SUIVI.md` seul : commit direct sur `main`, sans PR.
