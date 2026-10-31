@@ -124,6 +124,7 @@ Une fiche :
 | `etapes` | `[{"texte": "…", "fait": false}]` (une simple chaîne est acceptée) |
 | `monstre` | identifiant d'un monstre du bestiaire de l'univers (`profil_combat` d'un PNJ) |
 | `adversaires` | `[{"monstre": 3, "nom": "Brigand", "qte": 4, "camp": "ennemi"}]` : monstres du bestiaire de l'univers (`monstre` : leur identifiant ; `nom` : gardé pour l'affichage) ; `qte` de 1 à 99, `camp` `ennemi` ou `allie` |
+| `butin` | `{"pieces": {"po": 30, "pa": 5, "pc": 0}, "objets": [{"fiche": 12}, {"nom": "Torche", "quantite": 4}]}` : pièces (entiers positifs) et objets, une fiche « Objet » (unique, `quantite` 1) ou un objet courant (`nom`, `quantite` de 1 à 9999, 1 par défaut). Vide : retiré de la fiche. Une fiche « Objet » effacée reste dans le butin, en objet courant (`butin_chiffre` d'une rencontre) |
 
 Les champs `peuple` et `profil` des PNJ et des PJ prennent les noms officiels (liste dans `/api/schema`) ; `allegeance` d'un PNJ est une faction.
 
@@ -267,6 +268,24 @@ Les créatures d'une rencontre (`adversaires`) et le profil de combat d'un PNJ (
 
 L'export de l'univers (`GET /api/export`) porte la version de son modèle de fiches (`"donnees"`) : un export plus ancien est remis en forme à la restauration, comme un univers à son ouverture (les créatures des rencontres sont rattachées au bestiaire par leur nom, les liens vers l'ancien tracker qui ne s'y retrouvent pas sont retirés et notés au journal ; les champs `fiche_tracker` d'un PJ et `combats` d'une séance, qui n'existent plus, sont retirés). Il contient le bestiaire et les profils, peuples et voies (`"documents"`) et le fichier de règles (`"regles"`) ; les restaurer les remplace. Un export d'avant le modèle 2 porte les profils et voies dans `"reference"` : ils sont rangés un par un à la restauration. Un export plus ancien, qui ne les contient pas, laisse ceux de l'univers en place.
 
+## Butin et pot commun
+
+Fonctionnalité « Butin et pot commun » (`butin`) : coupée, ces routes répondent `404`. Le butin chiffré d'une rencontre (`butin_chiffre`) se verse au **pot commun de sa campagne** ; le MJ y ajoute ou en retire ce qu'il veut ; les PJ se le partagent par des **propositions** que le MJ valide ou refuse. Un partage validé met les pièces dans la bourse du PJ et les objets dans son inventaire (un objet courant rejoint la ligne libre du même nom ; un objet du monde y entre lié à sa fiche, qui prend le PJ pour détenteur) : il demande les **feuilles de personnage** (coupées : `409`, le pot garde tout). Toutes ces routes répondent le pot (voir `GET`) ; elles notent au journal de la campagne ce qui entre et sort, et à celui du PJ ce qu'il reçoit ou rend.
+
+| Requête | Effet |
+|---|---|
+| `GET /api/campagnes/{id}/pot` | Le pot : `{"campagne", "pieces": {"po", "pa", "pc"}, "objets": [{"id", "fiche"?, "nom", "quantite"}], "propositions": [{"id", "pj", "par", "le", "pieces", "objets": [{"ligne", "quantite"}], "note"?}], "historique": [{"id", "genre", "le", "par", "libelle"?, "rencontre"?, "pj"?, "pieces", "objets", "annule"?}], "noms": {"<id>": "nom"}}`. `genre` : `entree` (versement d'une rencontre ou ajout du MJ), `retrait` ou `partage` ; `annule` : partage revenu au pot. `noms` : les PJ, rencontres et objets du monde désignés ; un objet du monde porte le nom de sa fiche. Un pot qui n'a encore rien reçu est vide. `404` si la fiche n'est pas une campagne. |
+| `POST /api/campagnes/{id}/pot/ajouter` | `{"pieces", "objets": [{"fiche"} ou {"nom", "quantite"}], "libelle"}` : le MJ ajoute (récompense de quête, trésor). Un objet du monde déjà dans le pot : `422`. |
+| `POST /api/campagnes/{id}/pot/retirer` | `{"pieces", "objets": [{"ligne", "quantite"}], "libelle"}` : le MJ ôte sans donner (vendu, perdu). Plus que le pot n'en a : `422`. |
+| `POST /api/campagnes/{id}/pot/propositions` | `{"pj", "pieces", "objets": [{"ligne", "quantite"}], "note"}` : une proposition de partage pour un PJ, si le pot a ce qu'elle demande (sinon `422`). |
+| `POST /api/campagnes/{id}/pot/propositions/{n}/valider` | Le PJ reçoit sa part ; la proposition disparaît. Le pot n'a plus ce qu'elle demande : `422`. |
+| `POST /api/campagnes/{id}/pot/propositions/{n}/refuser` | La proposition disparaît, rien ne change. |
+| `POST /api/campagnes/{id}/pot/partager` | `{"pj", "pieces", "objets": [{"ligne", "quantite"}], "note"}` : le MJ partage directement, sans proposition. |
+| `POST /api/campagnes/{id}/pot/partages/{n}/annuler` | Ce que le partage `n` (de l'historique) avait donné quitte la feuille du PJ et revient au pot, s'il l'a encore (sinon `409`, avec ce qui manque, et rien ne change). |
+| `POST /api/entites/{id}/verser-butin` | `{"seance"?}` : le butin chiffré de la rencontre entre dans le pot de sa campagne ; la rencontre passe à `jouée` et `butin_verse` à `true` (versée une seconde fois : `409`) ; la séance (`seance`, sinon celle de la rencontre) ajoute une ligne « - Rencontre : 30 po, Dague, 4 × Torche » à son champ `butin`. Sans campagne ou sans butin chiffré : `422`. |
+
+Une campagne effacée emporte son pot ; une fiche « Objet » effacée y reste, en objet courant. Le pot voyage avec la synchronisation et l'export (collection `pots` des `"documents"`).
+
 ## Page des joueurs
 
 Ce que la page des joueurs (`/joueur.html`) lit : la feuille de son personnage, le combat en cours réduit à ce qu'un joueur en voit, ses documents (aides de jeu reçues), les hauts faits. Rien n'y permet d'agir sur un combat.
@@ -406,7 +425,7 @@ Inscrire le serveur MCP de cette application (`<programme> -mcp`) dans Claude De
 
 ## Fonctionnalités
 
-Certaines parties de l'application sont optionnelles, réglées **univers par univers** (le réglage est rangé dans l'univers et se synchronise) : `ecran_mj`, `seances` (préparation et après-séance), `combat`, `rencontres`, `secrets`, `feuilles`, `page_joueurs`, `des`, `aides`, `regles`, `graphe`, `chronologie`, `organigramme`, `obsidian`. Coupées par défaut dans un univers neuf : `des`, `aides`, `feuilles`, `page_joueurs`. Un univers d'avant cette version garde ce dont il se sert (des feuilles de personnage : `feuilles` et `page_joueurs` ; des aides de jeu : `aides`).
+Certaines parties de l'application sont optionnelles, réglées **univers par univers** (le réglage est rangé dans l'univers et se synchronise) : `ecran_mj`, `seances` (préparation et après-séance), `combat`, `rencontres`, `butin` (butin et pot commun), `secrets`, `feuilles`, `page_joueurs`, `des`, `aides`, `regles`, `graphe`, `chronologie`, `organigramme`, `obsidian`. Coupées par défaut dans un univers neuf : `des`, `aides`, `feuilles`, `page_joueurs`. Un univers d'avant cette version garde ce dont il se sert (des feuilles de personnage : `feuilles` et `page_joueurs` ; des aides de jeu : `aides`).
 
 | Requête | Effet |
 |---|---|
@@ -415,7 +434,7 @@ Certaines parties de l'application sont optionnelles, réglées **univers par un
 
 Une fonctionnalité coupée :
 
-- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
+- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/campagnes/{id}/pot…` et `/api/entites/{id}/verser-butin` (`butin`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
 - ses types de fiches (`rencontre`, `secret`, `aide`, `regle`) quittent le schéma, et avec eux les champs qui ne désignent qu'eux ; ils sortent de `GET /api/entites` et ne se créent plus (`422`, import compris). Une fiche existante reste lisible par `GET /api/entites/{id}` ;
 - la préparation d'une séance ne remonte plus ses secrets (`secrets`) ni ses rencontres (`rencontres`) ;
 - rien n'est effacé : ses données restent dans l'univers, voyagent avec la synchronisation et l'export, et reviennent à la réactivation.

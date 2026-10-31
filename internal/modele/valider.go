@@ -1,6 +1,7 @@
 package modele
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"regexp"
@@ -43,6 +44,41 @@ type Adversaire struct {
 	Nom     string `json:"nom"`
 	Qte     int    `json:"qte"`
 	Camp    string `json:"camp"` // ennemi ou allie
+}
+
+// Pieces : des pièces d'or, d'argent et de cuivre.
+type Pieces struct {
+	Po int `json:"po"`
+	Pa int `json:"pa"`
+	Pc int `json:"pc"`
+}
+
+// Vide : aucune pièce.
+func (p Pieces) Vide() bool { return p.Po == 0 && p.Pa == 0 && p.Pc == 0 }
+
+// LigneButin : un objet d'un butin, fiche « Objet » du monde (Fiche, une seule) ou objet courant.
+type LigneButin struct {
+	Fiche    int64  `json:"fiche,omitempty"`
+	Nom      string `json:"nom"`
+	Quantite int    `json:"quantite"`
+}
+
+// ButinChiffre : les pièces et les objets d'une rencontre (genre Butin).
+type ButinChiffre struct {
+	Pieces Pieces       `json:"pieces"`
+	Objets []LigneButin `json:"objets,omitempty"`
+}
+
+// Vide : ni pièce ni objet.
+func (b ButinChiffre) Vide() bool { return b.Pieces.Vide() && len(b.Objets) == 0 }
+
+// LireButin relit un butin rangé dans une fiche (vide s'il n'y en a pas).
+func LireButin(v any) ButinChiffre {
+	var b ButinChiffre
+	if raw, err := json.Marshal(v); err == nil {
+		_ = json.Unmarshal(raw, &b)
+	}
+	return b
 }
 
 // Etape d'une quête.
@@ -239,6 +275,8 @@ func normaliserValeur(ch *Champ, v any, cal Calendrier, f Fiches) (any, error) {
 		return out, nil
 	case Equipement:
 		return equipement(v)
+	case Butin:
+		return butin(v, f)
 	case Etapes:
 		liste, ok := v.([]any)
 		if !ok {
@@ -375,4 +413,67 @@ func equipement(v any) (any, error) {
 		return nil, nil
 	}
 	return c, nil
+}
+
+// MaxQuantite : la quantité la plus grande d'un objet dans un butin, un pot ou un partage.
+const MaxQuantite = 9999
+
+// butin valide les pièces et les objets d'un butin ; vide, il disparaît de la fiche.
+func butin(v any, f Fiches) (any, error) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf(`butin attendu : {"pieces":{"po":10,"pa":0,"pc":0},"objets":[{"fiche":12},{"nom":"Torche","quantite":3}]}`)
+	}
+	var b ButinChiffre
+	if p, ok := m["pieces"].(map[string]any); ok {
+		for _, x := range []struct {
+			cle string
+			val *int
+		}{{"po", &b.Pieces.Po}, {"pa", &b.Pieces.Pa}, {"pc", &b.Pieces.Pc}} {
+			if p[x.cle] == nil {
+				continue
+			}
+			n, err := nombre(p[x.cle])
+			if err != nil || n < 0 || n != math.Trunc(n) || n > 1e9 {
+				return nil, fmt.Errorf("pièces : %s, un nombre entier positif", x.cle)
+			}
+			*x.val = int(n)
+		}
+	}
+	objets, _ := m["objets"].([]any)
+	for i, x := range objets {
+		o, ok := x.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("objet %d illisible", i+1)
+		}
+		l := LigneButin{Quantite: 1}
+		l.Nom, _ = o["nom"].(string)
+		l.Nom = strings.TrimSpace(l.Nom)
+		if o["fiche"] != nil {
+			id, err := nombre(o["fiche"])
+			if err != nil || id <= 0 || id != math.Trunc(id) {
+				return nil, fmt.Errorf("objet %d : identifiant de fiche attendu", i+1)
+			}
+			if typ, ok := f.TypeDeFiche(int64(id)); !ok || typ != "objet" {
+				return nil, fmt.Errorf("objet %d : la fiche n°%d n'est pas un objet du monde", i+1, int64(id))
+			}
+			l.Fiche = int64(id) // un objet du monde est unique
+		} else {
+			if l.Nom == "" {
+				return nil, fmt.Errorf("objet %d : un nom, ou une fiche « Objet »", i+1)
+			}
+			if o["quantite"] != nil {
+				q, err := nombre(o["quantite"])
+				if err != nil || q < 1 || q > MaxQuantite || q != math.Trunc(q) {
+					return nil, fmt.Errorf("objet %d : quantité de 1 à %d", i+1, MaxQuantite)
+				}
+				l.Quantite = int(q)
+			}
+		}
+		b.Objets = append(b.Objets, l)
+	}
+	if b.Vide() {
+		return nil, nil
+	}
+	return b, nil
 }

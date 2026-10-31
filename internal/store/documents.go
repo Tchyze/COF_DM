@@ -7,11 +7,12 @@ import (
 
 // Documents : ce que l'univers range en dehors des fiches du monde, par collection — le bestiaire
 // (« monstres »), les combats (« combats », en cours ou terminés), les profils, peuples et voies
-// (« profils », « peuples », « voies », un document par élément). Un document est un objet JSON
+// (« profils », « peuples », « voies », un document par élément), le pot commun de chaque campagne
+// (« pots », internal/fiches/pot.go). Un document est un objet JSON
 // validé par son paquet (internal/fiches, internal/combat, internal/reference).
 
 // Collections de documents connues.
-var CollectionsDocs = []string{"monstres", "combats", "profils", "peuples", "voies"}
+var CollectionsDocs = []string{"monstres", "combats", "profils", "peuples", "voies", "pots"}
 
 func collectionConnue(coll string) bool {
 	for _, c := range CollectionsDocs {

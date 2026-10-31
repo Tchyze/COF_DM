@@ -372,3 +372,47 @@ func TestOutilsSelonFonctionnalites(t *testing.T) {
 		t.Fatalf("outil appelé quand même : %s", e)
 	}
 }
+
+// Le butin d'une rencontre au pot commun, puis le partage entre PJ, par les outils.
+func TestPotCommun(t *testing.T) {
+	b := nouveau(t)
+	camp := b.json("creer_fiche", map[string]any{"type": "campagne", "nom": "Les Brumes"})["id"]
+	pj := b.json("creer_fiche", map[string]any{"type": "pj", "nom": "Aldric", "data": map[string]any{"campagne": camp}})["id"]
+	renc := b.json("creer_fiche", map[string]any{"type": "rencontre", "nom": "Pillards", "data": map[string]any{"campagne": camp,
+		"butin_chiffre": map[string]any{"pieces": map[string]any{"po": 12}, "objets": []any{map[string]any{"nom": "Torche", "quantite": 2}}}}})["id"]
+	if p := b.json("verser_butin", map[string]any{"id": renc}); p["pieces"].(map[string]any)["po"] != 12.0 {
+		t.Fatalf("verser_butin : %v", p)
+	}
+	b.outil("verser_butin", map[string]any{"id": renc}, true) // déjà versé
+	if p := b.json("ajouter_au_pot", map[string]any{"campagne": camp, "pieces": map[string]any{"pa": 4}, "libelle": "Prime"}); p["pieces"].(map[string]any)["pa"] != 4.0 {
+		t.Fatalf("ajouter_au_pot : %v", p)
+	}
+	p := b.json("pot_commun", map[string]any{"campagne": camp})
+	ligne := p["objets"].([]any)[0].(map[string]any)["id"]
+	p = b.json("partager_pot", map[string]any{"campagne": camp, "pj": pj, "pieces": map[string]any{"po": 10}, "objets": []any{map[string]any{"ligne": ligne, "quantite": 1}}})
+	if p["pieces"].(map[string]any)["po"] != 2.0 {
+		t.Fatalf("partager_pot : %v", p)
+	}
+	var partage any
+	for _, m := range p["historique"].([]any) {
+		if m.(map[string]any)["genre"] == "partage" {
+			partage = m.(map[string]any)["id"]
+		}
+	}
+	if p = b.json("annuler_partage", map[string]any{"campagne": camp, "partage": partage}); p["pieces"].(map[string]any)["po"] != 12.0 {
+		t.Fatalf("annuler_partage : %v", p)
+	}
+	if p = b.json("retirer_du_pot", map[string]any{"campagne": camp, "pieces": map[string]any{"po": 2}}); p["pieces"].(map[string]any)["po"] != 10.0 {
+		t.Fatalf("retirer_du_pot : %v", p)
+	}
+	// une proposition (faite par l'API) se refuse
+	if _, err := b.mcp.api.appel("POST", fmt.Sprintf("/api/campagnes/%v/pot/propositions", camp), nil, map[string]any{"pj": pj, "pieces": map[string]any{"po": 1}}); err != nil {
+		t.Fatal(err)
+	}
+	p = b.json("pot_commun", map[string]any{"campagne": camp})
+	n := p["propositions"].([]any)[0].(map[string]any)["id"]
+	if p = b.json("traiter_partage", map[string]any{"campagne": camp, "proposition": n, "decision": "refuser"}); len(p["propositions"].([]any)) != 0 {
+		t.Fatalf("traiter_partage : %v", p)
+	}
+	b.outil("traiter_partage", map[string]any{"campagne": camp, "proposition": n, "decision": "oublier"}, true)
+}

@@ -18,6 +18,7 @@ const (
 	Adversaires = "adversaires" // [{monstre, nom, qte, camp}] : monstres du bestiaire de l'univers
 	Monstre     = "monstre"     // identifiant d'un monstre du bestiaire de l'univers
 	Equipement  = "equipement"  // chiffres d'un objet porté : {emplacement, bonus: [{cible, valeur}], arme: {type, dm, mod, portee}}
+	Butin       = "butin"       // pièces et objets : {pieces: {po, pa, pc}, objets: [{fiche, nom, quantite}]}
 )
 
 // Champ d'un type de fiche.
@@ -230,6 +231,8 @@ var Types = []Type{
 			{Cle: "pnj", Nom: "PNJ présents", Genre: Refs, Cibles: []string{"pnj"}, Aide: "Ceux qui ont un profil de combat comptent dans la difficulté"},
 			{Cle: "mise_en_scene", Nom: "Mise en scène", Genre: Long},
 			{Cle: "butin", Nom: "Butin", Genre: Long},
+			{Cle: "butin_chiffre", Nom: "Pièces et objets", Genre: Butin, Aide: "Versés au pot commun de la campagne à la fin du combat"},
+			{Cle: "butin_verse", Nom: "Butin versé au pot", Genre: Booleen, Aide: "Coché au versement : le butin ne se verse pas deux fois"},
 			{Cle: "tactique", Nom: "Tactique", Genre: Long, Secret: true, Groupe: "MJ"},
 			{Cle: "notes", Nom: "Notes du MJ", Genre: Long, Secret: true, Groupe: "MJ"},
 		},
