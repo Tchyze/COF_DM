@@ -177,7 +177,7 @@ Résumé public de chaque séance (distinct du résumé du MJ), lu et complété
 Quelques parcours rejoués dans Chrome sans fenêtre (CDP) en CI : connexion, fiche, Paramètres, combat, page des joueurs, 390 px, sans erreur de console.
 
 ### 33. Nettoyage avant publication — fait
-Dépôt neuf et public depuis le 18 octobre 2026 ; l'ancien, avec son historique, est `Tchyze/COF_DM-historique` (privé).
+Dépôt neuf et public depuis le 18 octobre 2026 ; l'ancien, avec son historique, est gardé à part (privé).
 
 ## P4 — Un jour, si le besoin se confirme
 
