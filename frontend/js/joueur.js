@@ -1,6 +1,6 @@
 // Page des joueurs : la feuille de son personnage, le combat en cours (l'ordre d'initiative et les
 // états, sans aucun chiffre), les documents (aides de jeu envoyées par le MJ), les dés (ses jets et
-// ceux de la table) et les hauts faits. À la maison, la page est libre quand le MJ l'a
+// ceux de la table), le pot commun de sa campagne (il y propose un partage) et les hauts faits. À la maison, la page est libre quand le MJ l'a
 // ouverte et chacun y choisit son PJ ; sur un serveur, on y entre par son compte, avec son PJ : c'est
 // alors tout ce qu'un compte joueur a de l'application (son compte, et le choix de l'univers).
 import { $, $$, esc, api, toast, lien, universOnglet, choisirUniversOnglet } from "./ui.js";
@@ -15,7 +15,7 @@ import { rendu } from "./md.js";
 const CLE = "cof-joueur-pj";
 const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0, fonctions: {} };
 // les onglets et la fonctionnalité de l'univers dont chacun dépend (Paramètres → Fonctionnalités)
-const ONGLETS = [["fiche", "feuilles"], ["voies", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["des", "des"], ["hauts-faits", "combat"]];
+const ONGLETS = [["fiche", "feuilles"], ["voies", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["pot", "butin"], ["des", "des"], ["hauts-faits", "combat"]];
 const fonction = cle => etat.fonctions[cle] !== false;
 const onglets = () => ONGLETS.filter(([, f]) => fonction(f)).map(([v]) => v).concat(etat.serveur ? ["compte"] : []);
 const vue = $("#vue");
@@ -289,6 +289,61 @@ async function vueDocument(id) {
     </article>`;
 }
 
+/* ---------------------------------------------------------- pot commun */
+// Le pot commun de la campagne du PJ : ce que le groupe a gagné et pas encore partagé. Le joueur y
+// propose un partage pour son PJ ; le MJ le valide (pièces dans la bourse, objets dans l'inventaire)
+// ou le refuse.
+const MONNAIES = ["po", "pa", "pc"];
+const textePieces = p => MONNAIES.filter(k => p?.[k]).map(k => `${p[k]} ${k}`).join(", ");
+const texteObjets = l => (l || []).map(o => (o.quantite > 1 ? `${o.quantite} × ` : "") + o.nom).join(", ");
+const ligneButin = (p, l) => [textePieces(p), texteObjets(l)].filter(Boolean).join(", ") || "rien";
+
+async function vuePot() {
+  vue.className = "combat";
+  if (!vue.querySelector(".pot-joueur")) vue.innerHTML = `<section class="panel pot-joueur"><h1>Pot commun</h1><p class="hint">Chargement…</p></section>`;
+  let p;
+  try { p = await api("GET", avecPJ("/api/joueur/pot")); }
+  catch (e) { if (etat.vue === "pot") vue.innerHTML = `<section class="panel pot-joueur"><h1>Pot commun</h1><p class="empty">${esc(e.message)}</p></section>`; return; }
+  if (etat.vue !== "pot") return;
+  const vide = !textePieces(p.pieces) && !p.objets.length;
+  const miennes = p.propositions.filter(x => x.mienne).length;
+  vue.innerHTML = `<section class="panel pot-joueur">
+      <h1>Pot commun</h1><span class="hint">${esc(p.campagne)} · ce que le groupe a gagné et pas encore partagé</span>
+      ${vide ? `<p class="empty">Le pot est vide. Le butin des combats y arrive quand le MJ le verse.</p>`
+        : `<div class="pot-pieces">${esc(textePieces(p.pieces) || "Aucune pièce")}</div>
+          ${p.objets.length ? `<ul class="pot-objets">${p.objets.map(o => `<li>${esc(o.nom)}${o.quantite > 1 ? ` <span class="hint">× ${o.quantite}</span>` : ""}</li>`).join("")}</ul>` : ""}`}
+      ${p.propositions.length ? `<h2>En attente du MJ</h2><ul class="pot-attente">${p.propositions.map(x => `<li${x.valable ? "" : ` class="perime" title="Le pot n'a plus tout ce qu'elle demande"`}>
+          <b>${esc(x.pj_nom || "PJ")}</b> : ${esc(ligneButin(x.pieces, x.objets))}${x.note ? ` <span class="hint">« ${esc(x.note)} »</span>` : ""}
+          ${x.mienne ? `<button type="button" class="ghost petit" data-retirer="${x.id}">Retirer</button>` : ""}</li>`).join("")}</ul>` : ""}
+      ${vide ? "" : `<h2>Proposer un partage pour ${esc(etat.pj.nom)}</h2>
+        <form class="pot-form colonne" autocomplete="off">
+          <div class="pieces">${MONNAIES.map(k => `<label><input type="number" min="0" max="${p.pieces[k] || 0}" inputmode="numeric" data-m="${k}" placeholder="0" aria-label="${k}"${p.pieces[k] ? "" : " disabled"}><span>${k}</span></label>`).join("")}</div>
+          ${p.objets.length ? `<div class="pot-choix">${p.objets.map(o => `<label class="row"><input type="number" min="0" max="${o.quantite}" value="0" data-ligne="${o.ligne}" aria-label="Quantité de ${esc(o.nom)}"><span>${esc(o.nom)} <span class="hint">sur ${o.quantite}</span></span></label>`).join("")}</div>` : ""}
+          <input data-note maxlength="200" placeholder="Un mot pour le groupe et le MJ (facultatif)" aria-label="Note">
+          <div class="row"><button class="primary" type="submit">Proposer au MJ</button>${miennes ? `<span class="hint">${miennes} proposition${miennes > 1 ? "s" : ""} en attente</span>` : ""}</div>
+          ${p.partage ? "" : `<p class="hint">Les feuilles de personnage sont désactivées : le MJ ne pourra pas encore valider de partage.</p>`}
+        </form>`}
+      ${p.historique.length ? `<details class="pot-volet"><summary>Ce qui est entré et sorti</summary><ul class="pot-histo">${p.historique.map(m => `<li><span class="hint">${dateDoc(m.le)}</span>
+          ${m.genre === "partage" ? `<b>${esc(m.pj_nom || "PJ")}</b> a reçu` : m.genre === "retrait" ? "Sorti du pot" : "Entré dans le pot"}${m.libelle ? ` <span class="hint">(${esc(m.libelle)})</span>` : ""} : ${esc(m.texte)}${m.annule ? ` <span class="hint">— rendu au pot</span>` : ""}</li>`).join("")}</ul></details>` : ""}
+    </section>`;
+  const form = $(".pot-form", vue);
+  if (form) form.onsubmit = async e => {
+    e.preventDefault();
+    const pieces = Object.fromEntries(MONNAIES.map(k => [k, Math.max(0, Math.trunc(+$(`[data-m=${k}]`, form).value || 0))]));
+    const objets = $$("[data-ligne]", form).map(i => ({ ligne: +i.dataset.ligne, quantite: Math.trunc(+i.value || 0) })).filter(o => o.quantite > 0);
+    if (!pieces.po && !pieces.pa && !pieces.pc && !objets.length) { toast("Choisissez des pièces ou un objet.", true); return; }
+    try {
+      await api("POST", lien("/api/joueur/pot/propositions"), { pj: etat.pj.id, pieces, objets, note: $("[data-note]", form).value.trim() });
+      toast("Proposition envoyée au MJ.");
+      vuePot();
+    } catch (err) { toast(err.message, true); }
+  };
+  $$("[data-retirer]", vue).forEach(b => b.onclick = async () => {
+    try { await api("POST", lien(`/api/joueur/pot/propositions/${b.dataset.retirer}/retirer`), { pj: etat.pj.id }); toast("Proposition retirée."); vuePot(); }
+    catch (err) { toast(err.message, true); }
+  });
+}
+
 /* ---------------------------------------------------------- dés */
 const signe = n => n > 0 ? "+" + n : n < 0 ? String(n) : "";
 let modeDe = "normal"; // dé bonus : garder le meilleur de deux ; dé malus : le pire
@@ -444,6 +499,7 @@ function connecter() {
     else if (m.type === "hauts_faits") { if (etat.vue === "hauts-faits") vueHautsFaits(); }
     else if (m.type === "document") { if (etat.pj && m.pj.includes(etat.pj.id)) { toast(`✉ Nouveau document : ${m.nom}`); chargerDocs(); } }
     else if (m.type === "documents") chargerDocs();
+    else if (m.type === "pot") { if (etat.vue === "pot") vuePot(); }
     if (etat.vue === "combat") vueCombat();
     rendreBandeau();
   };
@@ -480,6 +536,7 @@ async function route() {
   else if (etat.vue === "rien") { vue.className = "combat"; vue.innerHTML = `<section class="panel pj-choix"><h1>${esc(etat.pj.nom)}</h1><p class="empty">Rien à suivre pour l'instant : le MJ n'a activé ni les feuilles, ni le combat, ni les documents, ni les dés.</p></section>`; }
   else if (etat.vue === "combat") vueCombat();
   else if (etat.vue === "documents") vueDocuments();
+  else if (etat.vue === "pot") await vuePot();
   else if (etat.vue === "des") await vueDes();
   else if (etat.vue === "hauts-faits") await vueHautsFaits();
   else if (etat.vue === "compte") vueCompte();

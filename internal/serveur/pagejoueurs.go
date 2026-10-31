@@ -41,6 +41,7 @@ func (s *Serveur) routesPageJoueurs() {
 		m.HandleFunc("GET /api/joueur/direct", s.joueurDirect)
 		s.routesDesJoueurs(m)
 		s.routesDocumentsJoueurs(m)
+		s.routesPotJoueurs(m)
 	}
 	if s.acces.comptes != nil {
 		return
@@ -56,7 +57,8 @@ func (s *Serveur) routesPageJoueurs() {
 	l.HandleFunc("GET /api/joueur/direct", s.joueurDirect)
 	// les aides de jeu reçues par le PJ choisi
 	s.routesDocumentsJoueurs(l)
-	s.routesDesJoueurs(l) // la seule écriture hors de la feuille : un jet, qui ne touche pas à l'univers
+	s.routesDesJoueurs(l) // un jet, qui ne touche pas à l'univers
+	s.routesPotJoueurs(l) // une proposition de partage du pot commun, que le MJ valide ou refuse
 	l.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireLibre)
 	l.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireLibre)
 	l.HandleFunc("POST /api/joueur/pj/{id}/niveau", s.monterNiveauJoueur(s.pjLibre)) // le niveau accordé par le MJ

@@ -72,7 +72,7 @@ func fonctionsDeRoute(r *http.Request) []string {
 	if debut("/api/joueur") || (p == "/api/acces/joueurs" && r.Method != http.MethodGet) {
 		f = append(f, "page_joueurs")
 	}
-	if debut("/api/campagnes") && strings.Contains(p, "/pot") || fiche("verser-butin") {
+	if debut("/api/campagnes") && strings.Contains(p, "/pot") || fiche("verser-butin") || debut("/api/joueur/pot") {
 		f = append(f, "butin")
 	}
 	switch {

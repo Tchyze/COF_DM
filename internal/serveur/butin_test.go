@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/Tchyze/cof_dm/internal/comptes"
 )
 
 // Le butin d'une rencontre va au pot commun de sa campagne, une seule fois ; le pot se partage par
@@ -212,5 +214,133 @@ func TestButinPotCommun(t *testing.T) {
 	_, sch = b.local("GET", "/api/schema", nil)
 	if s := fmt.Sprint(sch["types"]); strings.Contains(s, "butin_chiffre") || strings.Contains(s, "butin_verse") {
 		t.Fatal("butin coupé : ses champs restent dans le schéma")
+	}
+}
+
+// Le pot vu par les joueurs : à la maison, sur la page libre, le pot de la campagne du PJ choisi,
+// sans identifiant de fiche ni nom de rencontre ; ils y proposent un partage pour leur PJ, que le MJ
+// valide, et retirent leur proposition. Sur un serveur, un compte joueur ne parle que pour son PJ.
+func TestButinJoueurs(t *testing.T) {
+	b, _ := bancReseau(t)
+	camp := b.fiche("campagne", "Les Brumes", nil)
+	aldric := b.fiche("pj", "Aldric", map[string]any{"campagne": camp, "statut": "actif"})
+	mira := b.fiche("pj", "Mira", map[string]any{"campagne": camp, "statut": "actif"})
+	seul := b.fiche("pj", "Seul", map[string]any{"statut": "actif"})
+	b.local("PUT", "/api/fonctionnalites", map[string]any{"feuilles": true, "page_joueurs": true})
+	dague := b.fiche("objet", "Dague SECRETE", map[string]any{"secrets": "SECRET-MJ"})
+	renc := b.fiche("rencontre", "Embuscade TRAHISON", map[string]any{"campagne": camp, "butin_chiffre": map[string]any{"pieces": map[string]any{"po": 20}, "objets": []any{map[string]any{"fiche": dague}}}})
+	b.local("POST", fmt.Sprintf("/api/entites/%v/verser-butin", renc), map[string]any{})
+	pot := func(pj float64) (int, map[string]any) {
+		c, corps := b.joueurLibre("GET", fmt.Sprintf("/api/joueur/pot?pj=%v", pj), nil, false)
+		var v map[string]any
+		_ = json.Unmarshal([]byte(corps), &v)
+		return c, v
+	}
+	// page fermée : rien
+	if c, _ := pot(aldric); c != 401 {
+		t.Fatalf("page fermée : %d", c)
+	}
+	b.local("POST", "/api/acces/joueurs", map[string]any{"active": true})
+	c, corps := b.joueurLibre("GET", fmt.Sprintf("/api/joueur/pot?pj=%v", aldric), nil, false)
+	if c != 200 || !strings.Contains(corps, "Dague SECRETE") || strings.Contains(corps, "TRAHISON") || strings.Contains(corps, "SECRET-MJ") ||
+		strings.Contains(corps, `"fiche"`) || strings.Contains(corps, `"par"`) || strings.Contains(corps, `"rencontre"`) {
+		t.Fatalf("pot vu d'Aldric : %d %s", c, corps)
+	}
+	if c, _ := pot(seul); c != 404 {
+		t.Fatalf("PJ sans campagne : %d", c)
+	}
+	_, v := pot(aldric)
+	ligne := v["objets"].([]any)[0].(map[string]any)["ligne"]
+	// Aldric propose ; trop demander est refusé
+	if c, corps := b.joueurLibre("POST", "/api/joueur/pot/propositions", map[string]any{"pj": aldric, "pieces": map[string]any{"po": 99}}, true); c != 422 {
+		t.Fatalf("trop demandé : %d %s", c, corps)
+	}
+	if c, corps := b.joueurLibre("POST", "/api/joueur/pot/propositions", map[string]any{"pj": aldric, "pieces": map[string]any{"po": 10}, "objets": []any{map[string]any{"ligne": ligne, "quantite": 1}}, "note": "pour moi"}, true); c != 200 || !strings.Contains(corps, `"mienne":true`) {
+		t.Fatalf("proposition : %d %s", c, corps)
+	}
+	// Mira la voit, ne peut pas la retirer ; la sienne, si
+	_, v = pot(mira)
+	prop := v["propositions"].([]any)[0].(map[string]any)
+	if prop["mienne"] != false || prop["pj_nom"] != "Aldric" {
+		t.Fatalf("vue de Mira : %v", prop)
+	}
+	if c, _ := b.joueurLibre("POST", fmt.Sprintf("/api/joueur/pot/propositions/%v/retirer", prop["id"]), map[string]any{"pj": mira}, true); c != 422 {
+		t.Fatalf("retrait par Mira : %d", c)
+	}
+	b.joueurLibre("POST", "/api/joueur/pot/propositions", map[string]any{"pj": mira, "pieces": map[string]any{"po": 5}}, true)
+	_, v = pot(mira)
+	for _, x := range v["propositions"].([]any) {
+		if p := x.(map[string]any); p["mienne"] == true {
+			if c, _ := b.joueurLibre("POST", fmt.Sprintf("/api/joueur/pot/propositions/%v/retirer", p["id"]), map[string]any{"pj": mira}, true); c != 200 {
+				t.Fatalf("retrait de sa proposition : %d", c)
+			}
+		}
+	}
+	// le MJ valide celle d'Aldric : sa feuille la reçoit, l'historique le montre aux joueurs
+	_, mj := b.local("GET", fmt.Sprintf("/api/campagnes/%v/pot", camp), nil)
+	props := mj["propositions"].([]any)
+	if len(props) != 1 {
+		t.Fatalf("propositions vues du MJ : %v", props)
+	}
+	if c, v := b.local("POST", fmt.Sprintf("/api/campagnes/%v/pot/propositions/%v/valider", camp, props[0].(map[string]any)["id"]), map[string]any{}); c != 200 {
+		t.Fatalf("validation : %d %v", c, v)
+	}
+	_, f := b.local("GET", fmt.Sprintf("/api/entites/%v/feuille", aldric), nil)
+	if f["bourse"].(map[string]any)["po"] != 10.0 || !strings.Contains(fmt.Sprint(f["inventaire"]), "Dague SECRETE") {
+		t.Fatalf("feuille d'Aldric : %v %v", f["bourse"], f["inventaire"])
+	}
+	_, corps = b.joueurLibre("GET", fmt.Sprintf("/api/joueur/pot?pj=%v", mira), nil, false)
+	if !strings.Contains(corps, "Butin d'un combat") || !strings.Contains(corps, `"genre":"partage"`) || strings.Contains(corps, "TRAHISON") {
+		t.Fatalf("historique vu des joueurs : %s", corps)
+	}
+	// le reste du pot reste au MJ
+	for _, x := range [][2]string{{"GET", fmt.Sprintf("/api/campagnes/%v/pot", camp)}, {"POST", fmt.Sprintf("/api/campagnes/%v/pot/partager", camp)}, {"POST", fmt.Sprintf("/api/entites/%v/verser-butin", renc)}} {
+		if c, _ := b.joueurLibre(x[0], x[1], map[string]any{"pj": aldric, "pieces": map[string]any{"po": 1}}, true); c != 401 {
+			t.Fatalf("%s %s par un joueur : %d", x[0], x[1], c)
+		}
+	}
+	// butin coupé : la route du pot des joueurs répond 404
+	b.local("PUT", "/api/fonctionnalites", map[string]any{"butin": false})
+	if c, _ := pot(aldric); c != 404 {
+		t.Fatalf("butin coupé : %d", c)
+	}
+}
+
+// Sur un serveur, un compte « joueur » ne voit et ne propose que pour son PJ, quel que soit celui
+// qu'il nomme.
+func TestButinCompteJoueur(t *testing.T) {
+	b, reg := bancServeur(t)
+	mj := b.connecter("meneur")
+	creer := func(typ, nom string, data map[string]any) float64 {
+		c, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": typ, "nom": nom, "data": data}, mj)
+		if c != 201 {
+			t.Fatalf("création de %s : %d %v", nom, c, v)
+		}
+		return v["id"].(float64)
+	}
+	camp := creer("campagne", "Les Brumes", nil)
+	lea := creer("pj", "Léandre", map[string]any{"campagne": camp})
+	tom := creer("pj", "Tomas", map[string]any{"campagne": camp})
+	b.proxy("POST", fmt.Sprintf("/api/campagnes/%v/pot/ajouter", camp), map[string]any{"pieces": map[string]any{"po": 8}}, mj)
+	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		c.Persos[b.s.store.ID()] = int64(lea)
+		return nil
+	})
+	joueuse := b.connecter("joueuse")
+	if c, v, _ := b.proxy("GET", fmt.Sprintf("/api/joueur/pot?pj=%v", tom), nil, joueuse); c != 200 || v["pieces"].(map[string]any)["po"] != 8.0 {
+		t.Fatalf("pot vu par la joueuse : %d %v", c, v)
+	}
+	if c, v, _ := b.proxy("POST", "/api/joueur/pot/propositions", map[string]any{"pj": tom, "pieces": map[string]any{"po": 4}}, joueuse); c != 200 {
+		t.Fatalf("proposition : %d %v", c, v)
+	}
+	_, v, _ := b.proxy("GET", fmt.Sprintf("/api/campagnes/%v/pot", camp), nil, mj)
+	if p := v["propositions"].([]any)[0].(map[string]any); p["pj"] != lea {
+		t.Fatalf("la proposition est pour %v, pas pour son PJ (%v)", p["pj"], lea)
+	}
+	// et rien du pot côté MJ
+	if c, _, _ := b.proxy("GET", fmt.Sprintf("/api/campagnes/%v/pot", camp), nil, joueuse); c != 403 {
+		t.Fatalf("pot du MJ lu par la joueuse : %d", c)
 	}
 }
