@@ -9,7 +9,7 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 - **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `docker-hub` (PR 32, lot A), `installation-hors-depot` (PR 33) `menu-replie` (PR 34, lot B) `maj-fiable` (PR 35, lot C1) et `installation` (PR 36, lot C2, empilée sur la 35), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
-- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses reçues pour le lot C (voir « Installation Windows »), attendues pour le lot D. Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable (PR 35), C2 installation (PR 36, empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
+- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses reçues (voir « Installation Windows » et « Rôles du serveur »). Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable (PR 35), C2 installation (PR 36, empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -56,7 +56,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 - Derrière un reverse proxy nginx qui porte le HTTPS ; seulement dans l'édition serveur (image Docker). Rien n'est accordé aux requêtes venues de la machine.
 - Comptes (nom d'utilisateur, mot de passe), jetons d'API par compte. **Plusieurs univers ouverts à la fois** ; chacun choisit le sien, onglet par onglet.
-- **Rôles** : administrateur pour tout le serveur ; MJ, auditeur et joueur **univers par univers**.
+- **Rôles** : administrateur pour tout le serveur ; MJ, auditeur et joueur **univers par univers** (refonte du 31 octobre 2026 : voir « Rôles du serveur »).
   - Auditeur : lit tout, secrets compris, ne modifie rien.
   - Joueur (21 octobre 2026) : n'a que sa page de joueur (plus de vue filtrée de l'application, ni par l'API) ; un compte à plusieurs rôles passe d'un univers à l'autre depuis sa page ou l'application. Lecture seule, sauf si le MJ de l'univers ouvre l'**édition par les joueurs** (Paramètres, ou options de l'écran du MJ ; réglage synchronisé) : toute la feuille de son PJ sauf les notes du MJ, et l'apparence, l'historique et les objectifs. Ajouter une voie de la bibliothèque reste au MJ.
 - L'application de bureau reste sans compte.
@@ -126,6 +126,14 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Reprise** d'une installation existante : l'exe posé sur le Bureau (ou dans les Téléchargements) est **retiré** après l'installation ; une copie plus ancienne que l'installé n'écrase jamais l'installé.
 - **Le mode portable est supprimé** : un dossier « COF DM - données » à côté du programme est repris au lancement dans le dossier de données de l'utilisateur, sans rien perdre.
 - Données toujours dans `%APPDATA%\COF DM` ; l'AppImage Linux se lance d'où elle est.
+
+### Rôles du serveur (31 octobre 2026, lot D)
+
+- **Administrateur** : compte du serveur seulement, **jamais MJ** (un ou plusieurs comptes bien distincts). Crée, renomme, archive et supprime les univers (pas leur contenu), crée les comptes, change leurs mots de passe, les lie aux univers (MJ, auditeur), décide à quels univers un compte **peut** être joint comme joueur, règle le serveur. D'un univers il ne voit que nom, dates, taille, état et comptes liés : **aucune fiche** (test de non-fuite). Connexion par mot de passe seulement, sans jeton d'API.
+- **MJ** : le contenu des univers auxquels il est lié. Y joint (ou non) les comptes que l'administrateur a admis comme joueurs de cet univers, et lie chacun à son PJ : plusieurs groupes bien distincts sur une même instance. Importe et exporte les **données** (un import remplace le contenu, après une sauvegarde automatique ; nom, comptes et rôles restent ceux de l'administrateur). Sauvegardes et restauration de ses univers. Plusieurs MJ possibles dans un univers.
+- **Joueur** : inchangé (sa page, son affichage). **Auditeur** : garde son nom ; lecture seule, sur les univers choisis par l'administrateur.
+- **Archiver** : l'univers sort de toutes les listes et n'est plus accessible, fichier et rôles gardés ; seul l'administrateur le désarchive. **Supprimer** : sauvegarde automatique, puis nom de l'univers retapé pour confirmer.
+- **Passage** : les comptes administrateurs actuels restent administrateurs (sans plus aucun accès au contenu) ; le MJ recrée lui-même ses comptes MJ.
 
 ### Butin et pot commun (31 octobre 2026, projet 14, avant le code)
 
