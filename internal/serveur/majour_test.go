@@ -1,6 +1,8 @@
 package serveur
 
 import (
+	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -64,6 +66,20 @@ func TestMiseAJour(t *testing.T) {
 	// retour au canal stable : plus rien à proposer
 	if _, v := b.local("PUT", "/api/univers/mise-a-jour/canal", map[string]any{"canal": majour.Stable}); v["disponible"] != nil {
 		t.Fatalf("retour au stable : %v", v)
+	}
+
+	// une AppImage publiée : le dossier du programme dit si elle peut se remplacer elle-même
+	if runtime.GOOS == "linux" {
+		t.Setenv("APPIMAGE", filepath.Join(t.TempDir(), "COF-DM.AppImage"))
+		modif := modifiableMaj
+		t.Cleanup(func() { modifiableMaj = modif })
+		b.a.opt.Version = "1.0.0"
+		for _, ok := range []bool{true, false} {
+			modifiableMaj = func() bool { return ok }
+			if _, v := b.local("GET", "/api/univers/mise-a-jour", nil); v["automatique"] != true || v["modifiable"] != ok {
+				t.Fatalf("dossier modifiable %v : %v", ok, v)
+			}
+		}
 	}
 
 	// un serveur se met à jour par docker compose
