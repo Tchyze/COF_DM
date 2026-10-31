@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot.
 
-Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus les PR 24 à 26).
+Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installation, rôles, menu, Docker Hub » commencé).
 
 ## Où on en est
 
 - **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : aucune en cours. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5. Univers d'avant le modèle 8 sur le serveur du MJ : sauvegarde automatique `donnees/sauvegardes/0900d828a03a8aab/2026-10-31_11-57-10_auto.cofdm` (modèle 6).
-- **Prochain chantier** : à choisir avec le MJ dans `PROJETS.md` (le projet 14, butin et pot commun, est fait).
+- **Branches** : `docker-hub` (PR 32, lot A du nouveau chantier), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5. Univers d'avant le modèle 8 sur le serveur du MJ : sauvegarde automatique `donnees/sauvegardes/0900d828a03a8aab/2026-10-31_11-57-10_auto.cofdm` (modèle 6).
+- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses attendues avant les lots C et D. Lots : A Docker Hub (PR 32) ; B menu repliable ; C1 mise à jour fiable, C2 installation (empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` (1.2.5) depuis le 31 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -191,6 +191,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 29 | **Butin, lot 1** : butin chiffré des rencontres, pot commun par campagne (versement, ajouts, retraits, propositions validées par le MJ, partage direct, annulation), fonctionnalité `butin`, outils MCP ; modèle 8. |
 | 30 | **Butin, lot 2** : saisie et versement du butin d'une rencontre, bouton au bilan du combat, panneau du pot sur la campagne (propositions, partage, retrait, ajout, historique et annulation), pot dans la barre de l'écran du MJ ; champs du butin masqués quand la fonctionnalité est coupée. |
 | 31 | **Butin, lot 3** : onglet « Pot commun » de la page des joueurs (le pot de leur campagne, propositions de partage pour leur PJ, retrait, historique sans nom de rencontre), en direct ; rôle « joueur » restreint à son PJ. |
+| 32 | **Docker Hub** (lot A, en PR) : job `docker` du workflow Release (image construite et essayée à chaque passage, envoyée en `X.Y.Z` et `latest` pour un tag stable seulement ; secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) ; README : image publiée, `image:` à la place de `build:`. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
@@ -211,7 +212,11 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ## Ce qu'il reste à faire
 
-### Prochain chantier
+### Chantier en cours
+
+Voir « Où on en est ». Avant la prochaine version stable : créer les secrets Docker Hub du dépôt (et la variable `DOCKERHUB_IMAGE` si l'image ne s'appelle pas `<compte>/cof-dm`).
+
+### Ensuite
 
 À choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
