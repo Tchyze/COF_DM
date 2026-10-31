@@ -182,7 +182,7 @@ Le bestiaire (monstres officiels et maison), le fichier de règles et les profil
 | Requête | Effet |
 |---|---|
 | `GET /api/bestiaire` | Tous les monstres : la fiche, avec `"id"` et `"modifie"`. |
-| `POST /api/bestiaire` | Crée un monstre. Champs : `nom`, `source` (`maison` par défaut, ou `officiel`), `nc`, `categorie`, `taille`, `tags`, `carac` (`{"FOR", "DEX", "CON", "INT", "SAG", "CHA"}`, modificateurs), `superieures`, `defense`, `pv`, `init`, `rd`, `crit`, `attaques` (`[{"nom", "type": "C"｜"D"｜"M", "bonus", "dm", "notes"}]`), `capacites`, `description`, `notes`, et pour une fiche officielle `ref`, `livre`, `page`. `422` si la fiche est invalide. |
+| `POST /api/bestiaire` | Crée un monstre. Champs : `nom`, `source` (`maison` par défaut, ou `officiel`), `nc`, `categorie`, `taille`, `tags`, `carac` (`{"FOR", "DEX", "CON", "INT", "SAG", "CHA"}`, modificateurs), `superieures`, `defense`, `pv`, `init`, `rd`, `crit`, `attaques` (`[{"nom", "type": "C"｜"D"｜"M", "bonus", "dm", "notes"}]`), `capacites`, `description`, `comportement`, `habitat`, `butin`, `langues`, `notes`, et pour une fiche officielle `ref`, `livre`, `page`. `422` si la fiche est invalide. |
 | `GET /api/bestiaire/{id}`, `PUT`, `DELETE` | Lit, remplace, supprime. `PUT` répond `409` sur une fiche officielle (`source: officiel` avec `ref`) : elle est verrouillée. |
 | `POST /api/bestiaire/{id}/dupliquer` | Crée une copie maison modifiable. |
 | `POST /api/bestiaire/import` | Un tableau de monstres, ou `{"monstres": [...]}`. Une fiche dont la `ref` existe déjà est mise à jour, les autres ajoutées. Réponse `{"crees", "mis_a_jour", "rejets": [{"ligne", "nom", "motif"}]}`. |

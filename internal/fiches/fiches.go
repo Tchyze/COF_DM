@@ -148,6 +148,11 @@ type Monstre struct {
 	Tags        []string `json:"tags"`
 	Superieures []string `json:"superieures"` // Carac. supérieures (*) : 2 dés, on garde le meilleur
 	Description string   `json:"description"`
+	// Pour le jouer : comment il se bat et réagit, où on le croise, ce qu'il porte, ce qu'il parle.
+	Comportement string `json:"comportement,omitempty"`
+	Habitat      string `json:"habitat,omitempty"`
+	Butin        string `json:"butin,omitempty"`
+	Langues      string `json:"langues,omitempty"`
 	// Fiches officielles : identifiant fixe (mise à jour par import) et référence au livre.
 	Ref   string `json:"ref,omitempty"`
 	Livre string `json:"livre,omitempty"`

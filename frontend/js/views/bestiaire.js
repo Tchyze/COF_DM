@@ -13,6 +13,9 @@ const verrouillee = m => m.source === "officiel" && !!m.ref;
 const sup = (m, c) => (m.superieures || []).includes(c) ? "*" : "";
 const opts = (liste, val) => liste.map(x => `<option${x === val ? " selected" : ""}>${esc(x)}</option>`).join("");
 
+// Ce qui aide à jouer le monstre : clé, titre, lignes du champ (1 : une ligne).
+const POUR_JOUER = [["comportement", "Comportement & tactique", 3], ["habitat", "Où le croiser", 1], ["butin", "Butin", 2], ["langues", "Langues", 1]];
+
 function vide() {
   return { nom: "", source: "maison", nc: 1, categorie: "", taille: "", tags: [], superieures: [],
     defense: 12, pv: 8, init: 10, rd: 0, crit: 20, carac: Object.fromEntries(CARAC.map(c => [c, 0])),
@@ -103,7 +106,7 @@ export async function mount(el, arg) {
     let l = data.filter(m => (!f.source || m.source === f.source) && (!f.categorie || m.categorie === f.categorie) && (!f.taille || m.taille === f.taille) &&
       (f.ncMin === "" || m.nc >= +f.ncMin) && (f.ncMax === "" || m.nc <= +f.ncMax));
     if (mots.length) l = l.filter(m => {
-      const t = [m.nom, m.categorie, m.taille, m.capacites, m.description, m.notes, ...(m.tags || []), ...(m.attaques || []).map(a => a.nom)].join(" ").toLowerCase();
+      const t = [m.nom, m.categorie, m.taille, m.capacites, m.description, m.comportement, m.habitat, m.butin, m.langues, m.notes, ...(m.tags || []), ...(m.attaques || []).map(a => a.nom)].join(" ").toLowerCase();
       return mots.every(w => t.includes(w));
     });
     const cmp = { nc: (a, b) => a.nc - b.nc || a.nom.localeCompare(b.nom, "fr"), nom: (a, b) => a.nom.localeCompare(b.nom, "fr", { numeric: true }),
@@ -131,6 +134,7 @@ export async function mount(el, arg) {
       ${blocStats(m)}
       ${m.capacites ? `<h3>Capacités</h3><div class="bst-texte">${esc(m.capacites)}</div>` : ""}
       ${m.description ? `<h3>Description</h3><div class="bst-texte">${esc(m.description)}</div>` : ""}
+      ${POUR_JOUER.filter(([k]) => m[k]).map(([k, t]) => `<h3>${t}</h3><div class="bst-texte">${esc(m[k])}</div>`).join("")}
       ${m.notes ? `<p class="hint bst-texte">${esc(m.notes)}</p>` : ""}
       ${lecture ? "" : `<div class="ligne" style="margin-top:12px"><button class="primary" id="b-dup">Dupliquer pour personnaliser</button><span style="flex:1"></span><button class="danger" id="b-suppr">Supprimer</button></div>`}`;
     if (lecture) return;
@@ -173,6 +177,7 @@ export async function mount(el, arg) {
         <div><button type="button" class="petit" id="b-atk">＋ Attaque</button></div>
         <label class="champ"><span>Capacités <small>affichées pendant le combat</small></span><textarea name="capacites" rows="5">${esc(f.capacites)}</textarea></label>
         <label class="champ"><span>Description</span><textarea name="description" rows="3">${esc(f.description)}</textarea></label>
+        ${POUR_JOUER.map(([k, t, n]) => `<label class="champ"><span>${t}</span>${n > 1 ? `<textarea name="${k}" rows="${n}">${esc(f[k] || "")}</textarea>` : `<input name="${k}" value="${esc(f[k] || "")}">`}</label>`).join("")}
         <label class="champ"><span>Notes du MJ</span><textarea name="notes" rows="2">${esc(f.notes)}</textarea></label>
         <div class="ligne"><button type="submit" class="primary">Enregistrer</button>${estNouveau ? "" : `<button type="button" id="b-dup">Dupliquer</button><span style="flex:1"></span><button type="button" class="danger" id="b-suppr">Supprimer</button>`}</div>
       </form>`;
@@ -197,6 +202,7 @@ export async function mount(el, arg) {
         attaques: $$(".bst-atk", atks).map(r => ({ nom: $("[data-k=nom]", r).value.trim() || "Attaque", type: $("[data-k=type]", r).value,
           bonus: +$("[data-k=bonus]", r).value || 0, dm: $("[data-k=dm]", r).value.trim() })),
         capacites: g("capacites") || "", description: g("description") || "", notes: g("notes") || "",
+        ...Object.fromEntries(POUR_JOUER.map(([k]) => [k, (g(k) || "").trim()])),
       };
     };
     const DM_OK = /^\s*([+-]?\s*(\d*d\d+|\d+)\s*)+$/i;

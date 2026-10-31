@@ -400,7 +400,7 @@ func num(v any) float64 { f, _ := v.(float64); return f }
 // Noms des propriétés que lit outils/vault_vers_cofdm.py, quand ils diffèrent de la clé du champ.
 var proprietes = map[string]string{
 	"lieu.parent": "région", "faction.siege": "siège", "faction.attitude": "attitude_envers_pj",
-	"pnj.peuple": "race", "quete.niveau": "niveau_conseillé", "quete.recompense": "récompense",
+	"pnj.peuple": "race", "quete.niveau": "niveau_conseillé",
 }
 
 // Titres de section que reconnaît le script d'import, quand ils diffèrent du nom du champ.
