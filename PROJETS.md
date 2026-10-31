@@ -117,7 +117,7 @@ Le MJ lance la montée (feuille du PJ, onglet Joueurs de l'écran du MJ) : il l'
 ### 13. Impression et export PDF
 Mise en page imprimable (feuille de style `@media print`, sans dépendance) : feuille de personnage, fiche, préparation de séance, rencontre, bloc d'un monstre, aide de jeu.
 
-### 14. Butin et récompenses de fin de combat
+### 14. Butin et récompenses de fin de combat — fait (1.2.5)
 Butin noté dans la rencontre, proposé au bilan du combat et réparti entre les PJ (bourse, objets de l'inventaire).
 
 ### 15. Afficheur de table

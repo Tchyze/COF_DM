@@ -6,11 +6,11 @@ Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus l
 
 ## Où on en est
 
-- **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
-- **Numéros d'échange** : `VersionModele` 7 sur `main` (5 dans la 1.2.4), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches en cours** (projet 14, PR empilées, à essayer par le MJ avant la fusion) : `butin-serveur` (PR 29, lot 1 : serveur et données ; modèle 8), `butin-ecrans` (PR 30, lot 2 : écrans du MJ, sur la 29) et `butin-joueurs` (PR 31, lot 3 : page des joueurs, sur la 30), en préversion 1.2.5-test.34 ; le serveur Docker du MJ tourne sur `butin-joueurs` (univers d'avant le modèle 8 : sauvegarde automatique `donnees/sauvegardes/0900d828a03a8aab/2026-10-31_11-57-10_auto.cofdm`, modèle 6).
-- **Chantier en cours** : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Décisions prises le 31 octobre 2026 (« Butin et pot commun »).
-- **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` depuis le 29 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
+- **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
+- **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : aucune en cours. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5. Univers d'avant le modèle 8 sur le serveur du MJ : sauvegarde automatique `donnees/sauvegardes/0900d828a03a8aab/2026-10-31_11-57-10_auto.cofdm` (modèle 6).
+- **Prochain chantier** : à choisir avec le MJ dans `PROJETS.md` (le projet 14, butin et pot commun, est fait).
+- **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` (1.2.5) depuis le 31 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
 ## Façon de travailler (consignes du MJ)
@@ -28,7 +28,7 @@ Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus l
 
 - `Tchyze/COF_DM` est **public** depuis le 18 octobre 2026, reparti d'un commit unique. L'ancien dépôt, avec tout l'historique et ses PR 1 à 54, est **`Tchyze/COF_DM-historique`**, privé (remote `historique` du dépôt local). Les numéros de PR de ce fichier renvoient au dépôt public, sauf dans la section « Avant le dépôt public ».
 - **Clé de publication** : `~/Outil/cle-publication-cof-dm.pem` (hors dépôt), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
-- **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4) ; 1.2.4 (22 octobre 2026 : PR 17, 19 à 22, modèle 5).
+- **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4) ; 1.2.4 (22 octobre 2026 : PR 17, 19 à 22, modèle 5) ; 1.2.5 (31 octobre 2026 : PR 23 à 26, 28 à 31, modèle 8).
 - **Version affichée** : en petit à côté de « Thème » (une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
 
 ## Pour reprendre sur un autre poste
@@ -188,9 +188,9 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 25 | **Inventaire, lot 1** (projet 11) : inventaire sur la feuille, emplacements, bonus et armes des objets portés (en bleu, formule au survol), reprise de l'ancien équipement ; modèle 6, `versionDonnees` 5. |
 | 26 | **Inventaire, lot 2** : lignes liées aux fiches « Objet » (nom et chiffres de la fiche), Détenteur suivi dans les deux sens, emplacements reconnus par leur nom, total affiché avec sa formule au survol. |
 | 28 | **Schéma des fiches** (fusionnée sans essai) : 5 incohérences corrigées (tactique MJ, attitude du PNJ, campagnes, dirigeant, « Connu du MJ seulement » retiré) et champs utiles en jeu sur presque tous les types et le bestiaire ; modèle 7, `versionDonnees` 6. |
-| 29 | **Butin, lot 1** (en essai) : butin chiffré des rencontres, pot commun par campagne (versement, ajouts, retraits, propositions validées par le MJ, partage direct, annulation), fonctionnalité `butin`, outils MCP ; modèle 8. |
-| 30 | **Butin, lot 2** (en essai, sur la 29) : saisie et versement du butin d'une rencontre, bouton au bilan du combat, panneau du pot sur la campagne (propositions, partage, retrait, ajout, historique et annulation), pot dans la barre de l'écran du MJ ; champs du butin masqués quand la fonctionnalité est coupée. |
-| 31 | **Butin, lot 3** (en essai, sur la 30) : onglet « Pot commun » de la page des joueurs (le pot de leur campagne, propositions de partage pour leur PJ, retrait, historique sans nom de rencontre), en direct ; rôle « joueur » restreint à son PJ. |
+| 29 | **Butin, lot 1** : butin chiffré des rencontres, pot commun par campagne (versement, ajouts, retraits, propositions validées par le MJ, partage direct, annulation), fonctionnalité `butin`, outils MCP ; modèle 8. |
+| 30 | **Butin, lot 2** : saisie et versement du butin d'une rencontre, bouton au bilan du combat, panneau du pot sur la campagne (propositions, partage, retrait, ajout, historique et annulation), pot dans la barre de l'écran du MJ ; champs du butin masqués quand la fonctionnalité est coupée. |
+| 31 | **Butin, lot 3** : onglet « Pot commun » de la page des joueurs (le pot de leur campagne, propositions de partage pour leur PJ, retrait, historique sans nom de rencontre), en direct ; rôle « joueur » restreint à son PJ. |
 
 ### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
 
@@ -213,7 +213,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 14, butin et récompenses de fin de combat** (`PROJETS.md`) : questions de fond posées le 31 octobre 2026, décisions dans « Butin et pot commun » plus haut. Il s'appuie sur l'inventaire (projet 11, fusionné le 29 octobre 2026 ; décisions dans « Inventaire » plus haut). Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+À choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
