@@ -282,7 +282,7 @@ Fonctionnalité « Butin et pot commun » (`butin`) : coupée, ces routes répon
 | `POST /api/campagnes/{id}/pot/propositions/{n}/refuser` | La proposition disparaît, rien ne change. |
 | `POST /api/campagnes/{id}/pot/partager` | `{"pj", "pieces", "objets": [{"ligne", "quantite"}], "note"}` : le MJ partage directement, sans proposition. |
 | `POST /api/campagnes/{id}/pot/partages/{n}/annuler` | Ce que le partage `n` (de l'historique) avait donné quitte la feuille du PJ et revient au pot, s'il l'a encore (sinon `409`, avec ce qui manque, et rien ne change). |
-| `POST /api/entites/{id}/verser-butin` | `{"seance"?}` : le butin chiffré de la rencontre entre dans le pot de sa campagne ; la rencontre passe à `jouée` et `butin_verse` à `true` (versée une seconde fois : `409`) ; la séance (`seance`, sinon celle de la rencontre) ajoute une ligne « - Rencontre : 30 po, Dague, 4 × Torche » à son champ `butin`. Sans campagne ou sans butin chiffré : `422`. |
+| `POST /api/entites/{id}/verser-butin` | `{"seance"?}` (`butin_verse` est marqué `auto` dans le schéma : rempli par l'application, il reste hors des formulaires ; `PATCH` avec `"butin_verse": null` retire un marquage fait par erreur) : le butin chiffré de la rencontre entre dans le pot de sa campagne ; la rencontre passe à `jouée` et `butin_verse` à `true` (versée une seconde fois : `409`) ; la séance (`seance`, sinon celle de la rencontre) ajoute une ligne « - Rencontre : 30 po, Dague, 4 × Torche » à son champ `butin`. Sans campagne ou sans butin chiffré : `422`. |
 
 Une campagne effacée emporte son pot ; une fiche « Objet » effacée y reste, en objet courant. Le pot voyage avec la synchronisation et l'export (collection `pots` des `"documents"`).
 

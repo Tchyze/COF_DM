@@ -351,6 +351,7 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .pot-histo li{margin:4px 0}
 .pot-prop{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:6px 0;border-bottom:1px solid var(--line)}
 .pot-volet{margin-top:10px}
+.combat-butin{margin-top:6px;flex-wrap:wrap}
 .pot-volet summary{cursor:pointer;font-weight:600}
 .pot-volet form{margin-top:8px}
 .pot-choix{display:flex;flex-direction:column;gap:4px}

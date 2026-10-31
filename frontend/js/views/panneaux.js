@@ -121,6 +121,23 @@ export async function combatsSeance(box, f, apres) {
             <span class="note" style="flex:0 0 auto;padding:0;margin:0">${esc(statut || "statut inconnu")}</span>
             ${fi && modifiable && statut !== "mort" ? `<button class="petit danger" data-mort="${fi.id}" style="opacity:1">Marquer mort</button>` : ""}</div>`;
         }).join("")}</div>` : ""}`;
+      // le butin chiffré de la rencontre jouée, et son versement au pot commun de la campagne
+      const renc = st.rencontre_id && fonctionActive("butin") ? await api("GET", "/api/entites/" + st.rencontre_id).catch(() => null) : null;
+      if (renc?.data?.butin_chiffre) {
+        const verse = renc.data.butin_verse, camp = renc.data.campagne;
+        d.insertAdjacentHTML("beforeend", `<div class="ligne combat-butin">💰 <span>Butin de ${lienFiche(renc)} : <b>${esc(texteButin(renc.data.butin_chiffre, renc.refs))}</b></span>
+          ${verse ? `<span class="badge">versé au pot</span>${camp ? `<a href="#/f/${camp}" class="hint">voir le pot</a>` : ""}`
+            : !camp ? `<span class="hint">rencontre sans campagne : pas de pot où le verser</span>`
+            : modifiable ? `<button class="petit primary" data-verser="${renc.id}">Verser au pot commun</button>` : ""}</div>`);
+        const v = $("[data-verser]", d);
+        if (v) armer(v, "Verser ?", async () => {
+          try {
+            await api("POST", `/api/entites/${renc.id}/verser-butin`, { seance: f.id });
+            toast("Butin versé au pot commun de la campagne ; la séance le note.");
+            change(); apres();
+          } catch (err) { toast(err.message, true); }
+        });
+      }
       $$("[data-mort]", d).forEach(btn => armer(btn, "Confirmer", async () => {
         try {
           await api("PATCH", "/api/entites/" + btn.dataset.mort, { data: { statut: "mort" } });

@@ -62,7 +62,7 @@ function lecture(el, f) {
   const res = resolveur(f.mentions);
   const refs = f.refs || {};
   const resume = RESUMES.map(k => f.data[k]).find(Boolean);
-  const courts = t.champs.filter(c => COURTS.has(c.genre) && !RESUMES.includes(c.cle) && f.data[c.cle] != null && f.data[c.cle] !== "");
+  const courts = t.champs.filter(c => COURTS.has(c.genre) && !c.auto && !RESUMES.includes(c.cle) && f.data[c.cle] != null && f.data[c.cle] !== "");
   const groupes = {};
   for (const c of courts) (groupes[c.groupe || ""] ||= []).push(c);
   const longs = t.champs.filter(c => c.genre === "long" && f.data[c.cle]);
@@ -111,7 +111,7 @@ function lecture(el, f) {
           <ul class="etapes" id="etapes">${f.data[etapes.cle].map((e, i) => `<li><label><input type="checkbox" data-i="${i}" ${e.fait ? "checked" : ""}><span class="${e.fait ? "fait" : ""}">${inline(e.texte, res)}</span></label></li>`).join("")}</ul></section>` : ""}
         ${chiffres ? `<section class="panneau"><h3>${esc(chiffres.nom)}</h3><p>${f.data[chiffres.cle].emplacement ? `<span class="hint" id="chiffres-empl">${esc(f.data[chiffres.cle].emplacement)}</span> · ` : ""}<span class="fp-objet">${esc(texteChiffres(f.data[chiffres.cle]) || "aucun bonus")}</span></p>
           <p class="hint">Ils comptent quand un PJ le porte : le détenteur l'a dans son inventaire.</p></section>` : ""}
-        ${butin ? `<section class="panneau"><h3>${esc(butin.nom)}${f.data.butin_verse ? ` <span class="badge">versé au pot</span>` : ""}</h3><p>${esc(texteButin(f.data[butin.cle], refs))}</p>
+        ${butin ? `<section class="panneau"><h3>${esc(butin.nom)}${f.data.butin_verse ? ` <span class="badge">versé au pot</span><span class="sp"></span>${window.cofAcces?.lecture_seule ? "" : `<button class="petit ghost" id="non-verse" title="Le butin n'a pas été versé (marqué par erreur) : il pourra l'être">Retirer le marquage</button>`}` : ""}</h3><p>${esc(texteButin(f.data[butin.cle], refs))}</p>
           ${versable ? `<div class="ligne"><button class="primary petit" id="verser">💰 Verser au pot commun</button><span class="hint">de ${f.refs?.[f.data.campagne] ? esc(f.refs[f.data.campagne].nom) : "la campagne"} ; la rencontre passe à « jouée »</span></div>`
             : !f.data.butin_verse && !f.data.campagne ? `<p class="hint">Rattachez la rencontre à une campagne pour verser ce butin à son pot commun.</p>` : ""}</section>` : ""}
         ${longs.map(c => `<section class="panneau section-md${c.secret ? " secret" : ""}"><h3>${esc(c.nom)}</h3><div class="md">${rendu(f.data[c.cle], res)}</div></section>`).join("")}
@@ -143,6 +143,14 @@ function lecture(el, f) {
       await api("POST", `/api/entites/${f.id}/verser-butin`, {});
       toast("Butin versé au pot commun de la campagne.");
       window.dispatchEvent(new Event("cof-change"));
+      recharger(el, f.id);
+    } catch (err) { toast(err.message, true); }
+  });
+  const nonVerse = $("#non-verse", el);
+  if (nonVerse) armer(nonVerse, "Confirmer : il pourra être versé", async () => {
+    try {
+      await api("PATCH", "/api/entites/" + f.id, { data: { butin_verse: null } });
+      toast("Le butin n'est plus marqué versé : il peut l'être au pot commun.");
       recharger(el, f.id);
     } catch (err) { toast(err.message, true); }
   });
@@ -366,7 +374,8 @@ function formulaire(el, f, nouveau) {
   const t = typeDe(f.type);
   const refs = f.refs || {};
   const groupes = [];
-  for (const c of t.champs) {
+  const saisis = t.champs.filter(c => !c.auto); // les champs que remplit l'application restent hors du formulaire
+  for (const c of saisis) {
     const g = c.groupe || "Informations";
     let grp = groupes.find(x => x.nom === g);
     if (!grp) groupes.push(grp = { nom: g, champs: [] });
@@ -392,7 +401,7 @@ function formulaire(el, f, nouveau) {
   const lecteurs = {};
   let modifie = false;
   const marquer = () => { modifie = true; };
-  for (const c of t.champs) {
+  for (const c of saisis) {
     const zone = $(`[data-champ="${c.cle}"]`, el);
     const v = f.data[c.cle];
     const etiquette = `<span>${esc(c.nom)}${c.aide ? ` <small>${esc(c.aide)}</small>` : ""}</span>`;
