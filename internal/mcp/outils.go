@@ -594,6 +594,117 @@ func outils() []outil {
 			},
 		},
 		{
+			Nom: "pot_commun", Fonction: "butin", Titre: "Pot commun d'une campagne", Lecture: true,
+			Description: "Le pot commun d'une campagne : ce que le groupe a gagné et pas encore partagé (pièces, objets avec leur numéro de ligne), les propositions de partage en attente du MJ et l'historique (versements, ajouts, retraits, partages). « noms » donne le nom des PJ, rencontres et objets désignés.",
+			Proprietes:  map[string]any{"campagne": entier("Identifiant de la campagne")},
+			Requis:      []string{"campagne"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("campagne")
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("GET", chemin("/api/campagnes/%d/pot", id), nil, nil)
+			},
+		},
+		{
+			Nom: "verser_butin", Fonction: "butin", Titre: "Verser le butin d'une rencontre",
+			Description: "Verse au pot commun de sa campagne le butin chiffré d'une rencontre (champ butin_chiffre) : la rencontre passe à « jouée », son butin est marqué versé (il ne se verse pas deux fois) et la séance l'ajoute à « Butin & récompenses ». À ne faire que si le MJ le demande.",
+			Proprietes: map[string]any{
+				"id":     entier("Identifiant de la rencontre"),
+				"seance": entier("Séance du combat (par défaut : celle de la rencontre)"),
+			},
+			Requis: []string{"id"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("id")
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("POST", chemin("/api/entites/%d/verser-butin", id), nil, a.copier("seance"))
+			},
+		},
+		{
+			Nom: "ajouter_au_pot", Fonction: "butin", Titre: "Ajouter au pot commun",
+			Description: "Ajoute au pot commun d'une campagne des pièces et des objets (récompense de quête, trésor trouvé hors combat). Un objet du monde se désigne par sa fiche, un objet courant par son nom et sa quantité.",
+			Proprietes: map[string]any{
+				"campagne": entier("Identifiant de la campagne"),
+				"pieces":   objet("{\"po\", \"pa\", \"pc\"}"),
+				"objets":   map[string]any{"type": "array", "description": "[{\"fiche\": id d'un objet du monde} ou {\"nom\", \"quantite\"}]", "items": map[string]any{"type": "object"}},
+				"libelle":  texte("D'où cela vient"),
+			},
+			Requis: []string{"campagne"},
+			Faire:  potAction("ajouter", "pieces", "objets", "libelle"),
+		},
+		{
+			Nom: "retirer_du_pot", Fonction: "butin", Titre: "Retirer du pot commun", Destructif: true,
+			Description: "Ôte du pot commun des pièces et des objets sans les donner à un PJ (vendus, perdus, dépensés pour le groupe). Les objets se désignent par leur numéro de ligne (pot_commun).",
+			Proprietes: map[string]any{
+				"campagne": entier("Identifiant de la campagne"),
+				"pieces":   objet("{\"po\", \"pa\", \"pc\"}"),
+				"objets":   map[string]any{"type": "array", "description": "[{\"ligne\", \"quantite\"}]", "items": map[string]any{"type": "object"}},
+				"libelle":  texte("Pourquoi"),
+			},
+			Requis: []string{"campagne"},
+			Faire:  potAction("retirer", "pieces", "objets", "libelle"),
+		},
+		{
+			Nom: "partager_pot", Fonction: "butin", Titre: "Partager le pot commun",
+			Description: "Donne à un PJ une part du pot commun : les pièces vont dans sa bourse, les objets dans son inventaire (feuilles de personnage nécessaires). Les objets se désignent par leur numéro de ligne (pot_commun). À ne faire que si le MJ le demande.",
+			Proprietes: map[string]any{
+				"campagne": entier("Identifiant de la campagne"),
+				"pj":       entier("PJ qui reçoit"),
+				"pieces":   objet("{\"po\", \"pa\", \"pc\"}"),
+				"objets":   map[string]any{"type": "array", "description": "[{\"ligne\", \"quantite\"}]", "items": map[string]any{"type": "object"}},
+				"note":     texte("Note du partage"),
+			},
+			Requis: []string{"campagne", "pj"},
+			Faire:  potAction("partager", "pj", "pieces", "objets", "note"),
+		},
+		{
+			Nom: "traiter_partage", Fonction: "butin", Titre: "Valider ou refuser un partage proposé",
+			Description: "Valide (le PJ reçoit sa part) ou refuse une proposition de partage du pot commun (numéro dans pot_commun, « propositions »). À ne faire que si le MJ le demande.",
+			Proprietes: map[string]any{
+				"campagne":    entier("Identifiant de la campagne"),
+				"proposition": entier("Numéro de la proposition"),
+				"decision":    choix("Ce que décide le MJ", "valider", "refuser"),
+			},
+			Requis: []string{"campagne", "proposition", "decision"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("campagne")
+				if err != nil {
+					return nil, err
+				}
+				n, err := a.id("proposition")
+				if err != nil {
+					return nil, err
+				}
+				d := a.texte("decision")
+				if d != "valider" && d != "refuser" {
+					return nil, fmt.Errorf("decision : valider ou refuser")
+				}
+				return c.appel("POST", chemin("/api/campagnes/%d/pot/propositions/%d/", id, n)+d, nil, map[string]any{})
+			},
+		},
+		{
+			Nom: "annuler_partage", Fonction: "butin", Titre: "Annuler un partage du pot", Destructif: true,
+			Description: "Annule un partage validé (numéro dans l'historique de pot_commun) : pièces et objets quittent la feuille du PJ et reviennent au pot, seulement s'il les a encore. À ne faire que si le MJ le demande.",
+			Proprietes: map[string]any{
+				"campagne": entier("Identifiant de la campagne"),
+				"partage":  entier("Numéro du partage"),
+			},
+			Requis: []string{"campagne", "partage"},
+			Faire: func(c *Client, a arguments) (any, error) {
+				id, err := a.id("campagne")
+				if err != nil {
+					return nil, err
+				}
+				n, err := a.id("partage")
+				if err != nil {
+					return nil, err
+				}
+				return c.appel("POST", chemin("/api/campagnes/%d/pot/partages/%d/annuler", id, n), nil, map[string]any{})
+			},
+		},
+		{
 			Nom: "lancer_des", Fonction: "des", Titre: "Lancer des dés",
 			Description: "Lance des dés pour le MJ : formule comme 1d20+3, 2d6-1, 2d20kh1 (garder le meilleur de deux), 2d20kl1 (le pire). Le jet s'affiche sur la page des joueurs, sauf s'il est caché.",
 			Proprietes: map[string]any{
@@ -704,6 +815,17 @@ func outils() []outil {
 }
 
 // voiesProfilsPeuples : la bibliothèque en résumé, filtrée ici.
+// potAction : une écriture du pot commun de la campagne (argument « campagne »), avec ces arguments.
+func potAction(action string, cles ...string) func(c *Client, a arguments) (any, error) {
+	return func(c *Client, a arguments) (any, error) {
+		id, err := a.id("campagne")
+		if err != nil {
+			return nil, err
+		}
+		return c.appel("POST", chemin("/api/campagnes/%d/pot/", id)+action, nil, a.copier(cles...))
+	}
+}
+
 func voiesProfilsPeuples(c *Client, a arguments) (any, error) {
 	b, err := c.appel("GET", "/api/reference", nil, nil)
 	if err != nil {

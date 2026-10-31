@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -213,6 +214,10 @@ func TestSynchronisationObjets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	pot, err := p.copie.CreerDoc("pots", []byte(fmt.Sprintf(`{"campagne":%d,"pieces":{"po":12},"objets":[{"id":1,"nom":"Torche","quantite":3}]}`, pj.ID)), "Pot commun", "copie")
+	if err != nil {
+		t.Fatal(err)
+	}
 	enCours, _ := p.serveur.CreerDoc("combats", []byte(`{"nom":"Embuscade","termine":false}`), "", "srv")
 	fini, _ := p.serveur.CreerDoc("combats", []byte(`{"nom":"Escarmouche","termine":true}`), "", "srv")
 	cal := modele.CalendrierParDefaut()
@@ -242,6 +247,9 @@ func TestSynchronisationObjets(t *testing.T) {
 	}
 	if _, err := p.serveur.LireDoc("monstres", monstre.ID); err != nil {
 		t.Fatalf("monstre : %v", err)
+	}
+	if d, err := p.serveur.LireDoc("pots", pot.ID); err != nil || !strings.Contains(string(d.Data), `"Torche"`) || !strings.Contains(string(d.Data), `"po":12`) {
+		t.Fatalf("pot commun : %v %s", err, d.Data)
 	}
 	if p.serveur.Calendrier().Ere != "de la Couronne" {
 		t.Fatal("calendrier non reçu")

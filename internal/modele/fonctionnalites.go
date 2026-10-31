@@ -24,6 +24,8 @@ var Fonctionnalites = []Fonctionnalite{
 		Description: "Écran de combat (initiative, PV, attaques, états), combats des séances et hauts faits."},
 	{Cle: "rencontres", Nom: "Rencontres", Groupe: "Partie", Defaut: true, Types: []string{"rencontre"},
 		Description: "Fiches de rencontre avec leurs créatures du bestiaire, et leur difficulté."},
+	{Cle: "butin", Nom: "Butin et pot commun", Groupe: "Partie", Defaut: true,
+		Description: "Le butin chiffré des rencontres, versé au pot commun de la campagne, puis partagé entre les PJ."},
 	{Cle: "secrets", Nom: "Secrets", Groupe: "Partie", Defaut: true, Types: []string{"secret"},
 		Description: "Fiches de secret, « qui sait quoi » et révélations aux PJ."},
 	{Cle: "feuilles", Nom: "Feuilles de personnage", Groupe: "Joueurs", Defaut: false,

@@ -45,9 +45,12 @@ import "strconv"
 // métier et voix du PNJ, état d'un lieu, branches d'une faction, sous-quêtes, échéances, dates de fin,
 // quêtes, lieux et PNJ d'une séance…) ; la récompense d'une quête devient un texte long ; le
 // monstre a son comportement, son habitat, son butin et ses langues.
+//
+// Modèle 8 : le butin chiffré d'une rencontre (« butin_chiffre », genre « butin » ; « butin_verse »),
+// le pot commun de chaque campagne (collection « pots ») et la fonctionnalité « butin ».
 const (
 	VersionProtocole = 1
-	VersionModele    = 7
+	VersionModele    = 8
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

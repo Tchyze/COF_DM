@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -78,6 +79,7 @@ type Serveur struct {
 	joueurs     *diffusion     // appareils qui suivent la page des joueurs
 	libre       *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
 	jets        *tableJets     // lanceur de dés : les derniers jets de la partie
+	potMu       sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
 	reseauVoulu atomic.Bool
 }
 
@@ -234,6 +236,7 @@ func (s *Serveur) routes() {
 	m.HandleFunc("POST /api/import/fiches", s.importerFiches)
 	s.routesBestiaire()
 	s.routesRencontres()
+	s.routesButin()
 	s.routesCombats()
 	s.routesFeuille()
 	s.routesTable()
@@ -594,6 +597,7 @@ func (s *Serveur) supprimer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.objetSupprime(avant, auteurDe(r))
+	s.butinSupprime(avant, auteurDe(r))
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 

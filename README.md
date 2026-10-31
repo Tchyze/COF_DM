@@ -22,7 +22,7 @@ Quatorze types de fiches, chacun avec ses champs propres, ses images et ses tags
 | ⏳ Événement | date en jeu et date de fin, statut (passé, en cours, prévu), catégorie, lieu, campagne, acteurs, quêtes liées, ce qu'on en raconte, conséquences ; MJ : vérité |
 | 📖 Campagne | statut, pitch, thèmes, début, date actuelle et fin en jeu, niveaux des PJ, où est le groupe, arc principal, règles de la campagne ; MJ : fils rouges, notes |
 | ✦ Quête | campagne, catégorie (arc principal, mission, secondaire), ordre, fait partie de (sous-quêtes), statut, commanditaire, lieu, PNJ impliqués, échéance en jeu, niveau conseillé, accroche, objectif, **étapes à cocher**, indices, récompense, conséquences ; MJ : secrets |
-| ⚔ Rencontre | campagne, quête, séance, lieu, créatures (monstres du bestiaire, nombre, camp), PNJ présents, mise en scène, butin ; difficulté calculée ; MJ : tactique, notes |
+| ⚔ Rencontre | campagne, quête, séance, lieu, créatures (monstres du bestiaire, nombre, camp), PNJ présents, mise en scène, butin (texte, pièces et objets versés au pot commun) ; difficulté calculée ; MJ : tactique, notes |
 | 🎲 Séance | campagne, numéro, statut, date réelle, dates en jeu (début et fin), PJ présents, quêtes avancées, lieux visités, PNJ rencontrés, résumé, butin & récompenses ; ses combats et leur bilan ; MJ : préparation, notes |
 | 🛡 PJ | joueur, campagne, statut, peuple, profil, niveau, apparence, personnalité, historique, liens & attaches, objectifs ; sa feuille de personnage ; MJ : ce que le MJ sait |
 | 🔒 Secret | statut (caché, soupçonné, en partie révélé, révélé), importance, catégorie, campagne, fiches concernées, vérité, indices, conséquences, séance de la révélation |
@@ -253,6 +253,7 @@ Sur un serveur, un joueur voit la feuille de son PJ (sans les notes du MJ) sur s
 ### Rencontres et profil de combat des PNJ
 
 - **Rencontre** : ses créatures sont des monstres du bestiaire de l'univers (nombre, camp), auxquels s'ajoutent les PNJ présents qui ont un profil de combat. Sa fiche affiche chaque créature (NC, DEF, PV) et **la difficulté**, calculée avec le fichier de règles et les PJ de la campagne : niveau de la rencontre, verdict, alertes, détail du calcul, et l'effet d'une condition (terrain, obscurité…). Les alliés ne comptent pas. Sans fichier de règles, les créatures s'affichent sans verdict.
+- **Butin et pot commun** : le butin chiffré d'une rencontre (pièces, objets du monde ou courants) se verse au **pot commun de la campagne** à la fin du combat ; le MJ y ajoute une récompense ou un trésor, en retire ce qui est vendu. Les PJ se le partagent par des propositions que le MJ valide : les pièces vont dans la bourse, les objets dans l'inventaire. Un partage s'annule tant que le PJ a encore ce qu'il a reçu. La séance, le journal et la rencontre (« jouée », butin versé) en gardent la trace.
 - **PNJ** : on lui choisit un monstre du bestiaire comme profil de combat ; le bloc (NC, DEF, PV, caractéristiques, attaques) s'affiche sur sa fiche et dans le tiroir de l'écran du MJ.
 - Un monstre qui sert à une rencontre ou à un PNJ ne se supprime pas tant qu'il y est.
 

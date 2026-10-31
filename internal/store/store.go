@@ -424,6 +424,15 @@ func indexer(tx execer, e Entite) error {
 					return err
 				}
 			}
+		case modele.Butin: // les objets du monde d'un butin : la fiche est citée par la rencontre
+			for _, o := range modele.LireButin(v).Objets {
+				if o.Fiche == 0 {
+					continue
+				}
+				if _, err := tx.Exec(`INSERT INTO refs (source, champ, cible) VALUES (?,?,?)`, e.ID, ch.Cle, o.Fiche); err != nil {
+					return err
+				}
+			}
 		case modele.Texte, modele.Long, modele.Choix:
 			s, _ := v.(string)
 			texte.WriteString(s + "\n")
@@ -855,6 +864,20 @@ func (s *Store) Supprimer(id int64, auteur string) ([]string, error) {
 				} else {
 					o.Data[ch.Cle] = reste
 				}
+			case modele.Butin: // l'objet du monde effacé reste dans le butin, en objet courant
+				if _, ok := o.Data[ch.Cle]; !ok {
+					continue
+				}
+				b := modele.LireButin(o.Data[ch.Cle])
+				for i := range b.Objets {
+					if b.Objets[i].Fiche == id {
+						b.Objets[i].Fiche = 0
+						if b.Objets[i].Nom == "" {
+							b.Objets[i].Nom = e.Nom
+						}
+					}
+				}
+				o.Data[ch.Cle] = b
 			}
 		}
 		dj, _ := json.Marshal(o.Data)
@@ -1480,6 +1503,13 @@ func (s *Store) journal(limite int) ([]LigneJournal, error) {
 		out = append(out, l)
 	}
 	return out, rows.Err()
+}
+
+// NoterFiche note au journal une action sur une fiche (id 0 : aucune).
+func (s *Store) NoterFiche(action string, id int64, nom, detail, auteur string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	noter(s.db, action, id, nom, detail, auteur)
 }
 
 func (s *Store) Noter(action, detail, auteur string) {

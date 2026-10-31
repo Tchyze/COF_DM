@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -43,6 +44,9 @@ func TestRestaurationValidee(t *testing.T) {
 	if _, err := s.AjouterMedia(chef.ID, "0123456789abcdef0123.png", "aldric.png", []byte("\x89PNG"), "t"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := s.CreerDoc("pots", []byte(`{"campagne":`+strconv.FormatInt(camp.ID, 10)+`,"pieces":{"po":4},"objets":[{"id":1,"nom":"Corde","quantite":2}]}`), "Pot", "t"); err != nil {
+		t.Fatal(err)
+	}
 	x, err := s.Exporter()
 	if err != nil {
 		t.Fatal(err)
@@ -62,6 +66,9 @@ func TestRestaurationValidee(t *testing.T) {
 	}
 	if b, _, err := s2.LireFeuille(pj.ID); err != nil || !strings.Contains(string(b), `"pv":7`) {
 		t.Fatalf("feuille après restauration : %v %s", err, b)
+	}
+	if pots, _ := s2.ListerDocs("pots"); len(pots) != 1 || !strings.Contains(string(pots[0].Data), `"Corde"`) {
+		t.Fatalf("pot commun après restauration : %v", pots)
 	}
 
 	fiche := func(x *Export, id int64) *Entite {
@@ -91,6 +98,13 @@ func TestRestaurationValidee(t *testing.T) {
 		{"supérieur hors de la faction", func(x *Export) { x.Relations[1].Superieur = pj.ID }, "supérieur"},
 		{"boucle dans l'organigramme", func(x *Export) { x.Relations[0].Superieur = second.ID }, "boucle"},
 		{"contexte absent", func(x *Export) { x.Relations[1].Contexte = 9999 }, "Contexte"},
+		{"pot commun aux pièces négatives", func(x *Export) {
+			for i := range x.Documents {
+				if x.Documents[i].Coll == "pots" {
+					x.Documents[i].Data = json.RawMessage(`{"campagne":1,"pieces":{"po":-3}}`)
+				}
+			}
+		}, "négatif"},
 		{"image d'une fiche absente", func(x *Export) { x.Medias[0].Entite = 9999 }, "absente"},
 		{"nom d'image refusé", func(x *Export) { x.Medias[0].Fichier = "../../secret.png" }, "nom de fichier"},
 		{"feuille invalide", func(x *Export) { x.Feuilles[0].Data = json.RawMessage(`{"pv":0}`) }, "Feuille"},

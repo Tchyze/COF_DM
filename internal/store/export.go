@@ -32,6 +32,12 @@ func normaliserDoc(coll string, data []byte) ([]byte, error) {
 		return data, nil
 	case reference.CollProfils, reference.CollPeuples, reference.CollVoies:
 		return reference.NormaliserDoc(coll, data)
+	case "pots":
+		p, err := fiches.NormaliserPot(data)
+		if err != nil {
+			return nil, err
+		}
+		return p.JSON(), nil
 	}
 	return nil, fmt.Errorf("collection inconnue")
 }
