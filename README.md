@@ -162,7 +162,33 @@ Les deux en-têtes `X-Forwarded-*` comptent : le premier donne à la limite d'es
 
 ### Avec Docker
 
-Le dépôt fournit un `Dockerfile` et un `docker-compose.yml` pour le mode serveur, derrière le nginx de la machine (Linux) :
+Le mode serveur tourne derrière le nginx de la machine (Linux). Deux façons de l'obtenir : l'**image publiée** sur Docker Hub, ou l'image **construite** depuis le dépôt (`Dockerfile`, `docker-compose.yml`).
+
+**Image publiée.** Chaque version stable est publiée sur Docker Hub sous deux tags : `X.Y.Z` (par exemple `1.2.6`) et `latest` (la dernière version stable). Les versions d'essai n'y vont jamais. Image pour Linux `amd64`. Dans un dossier à vous, gardez un `docker-compose.yml` qui reprend celui du dépôt, avec `image:` à la place de `build:` :
+
+```yaml
+services:
+  cof-dm:
+    image: <compte>/cof-dm:1.2.6   # ou :latest pour suivre chaque version stable
+    container_name: cof-dm
+    network_mode: host
+    user: "${COF_UID:-1000}:${COF_GID:-1000}"
+    command: ["-serveur", "-port", "${COF_PORT:-8100}", "-data", "/data"]
+    volumes:
+      - ./donnees:/data
+    restart: unless-stopped
+```
+
+```bash
+mkdir -p donnees
+docker compose pull
+docker compose up -d
+docker compose logs cof-dm     # premier lancement : le mot de passe du compte « admin »
+```
+
+Remplacez `<compte>/cof-dm` par le nom de l'image sur Docker Hub. Un tag fixe (`1.2.6`) ne change que quand vous le modifiez : c'est le plus sûr pour un serveur que des bureaux rejoignent, puisqu'un bureau et un serveur ne se synchronisent qu'au même modèle (voir « Mises à jour »). Un serveur déjà construit depuis le dépôt passe à l'image publiée sans rien perdre : même dossier `donnees`, même utilisateur, même commande ; remplacer `build: .` par `image: …` dans son `docker-compose.yml`, puis `docker compose pull && docker compose up -d`.
+
+**Image construite depuis le dépôt** (pour une branche, ou sans Docker Hub) :
 
 ```bash
 mkdir -p donnees
@@ -173,7 +199,7 @@ docker compose logs cof-dm     # premier lancement : le mot de passe du compte �
 - Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui permet à l'application de se fier aux en-têtes `X-Forwarded-*` de nginx : ne remplacez pas ce partage par un port publié.
 - Les données sont dans `./donnees` : `comptes.json`, `reglages.json`, `univers/` (un fichier `.cofdm` par univers) et `sauvegardes/`. Pour ajouter un univers préparé sur votre ordinateur : **Fichier → Déposer un univers…** (administrateur), ou son fichier dans `donnees/univers/` puis `docker compose restart`.
 - Le conteneur tourne avec l'utilisateur `1000:1000`. Si `./donnees` appartient à un autre utilisateur, indiquez-le : `COF_UID=$(id -u) COF_GID=$(id -g) docker compose up -d`. `COF_PORT` change le port (8100 par défaut).
-- Mise à jour : `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (Paramètres → Version du serveur), avec la version des applications de bureau reliées. Sa version vient de git (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. La première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.
+- Mise à jour : avec l'image publiée, changer le tag (ou garder `latest`) puis `docker compose pull && docker compose up -d` ; construite depuis le dépôt, `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (Paramètres → Version du serveur), avec la version des applications de bureau reliées. Sa version est celle de l'image publiée, ou vient de git pour une image construite (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. Construite depuis le dépôt, la première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.
 
 ### Mode de travail : local ou serveur
 
@@ -212,7 +238,7 @@ L'application de bureau se met à jour seule, sur votre clic : **Paramètres →
 - **Canal Stable** : les versions publiées (`vX.Y.Z`), pour jouer.
 - **Canal Test** : en plus, les versions d'essai d'une modification en cours (`vX.Y.Z-test.N`), publiées pour l'essayer avant de la fusionner. Repasser en Stable propose la prochaine version stable.
 - **Installer et redémarrer** : l'univers est sauvegardé et fermé, la nouvelle version téléchargée puis **vérifiée** (la liste des empreintes est signée par la clé de publication de COF DM ; un fichier qui ne correspond pas est refusé et rien ne change), le programme remplacé, et l'application redémarre.
-- Se met à jour seul : l'exe Windows et l'AppImage. Une version compilée à la main se met à jour à la main. Le serveur Docker, lui, se met à jour par `docker compose up -d --build`.
+- Se met à jour seul : l'exe Windows et l'AppImage. Une version compilée à la main se met à jour à la main. Le serveur Docker, lui, se met à jour par `docker compose pull && docker compose up -d` (image publiée) ou `docker compose up -d --build` (construite depuis le dépôt).
 
 Pour publier une version d'essai d'une branche : onglet **Actions → Release → Run workflow**, la branche, canal **test**.
 
