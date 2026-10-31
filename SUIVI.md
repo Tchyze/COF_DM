@@ -9,7 +9,7 @@ Dernière mise à jour : 29 octobre 2026 (version 1.2.4 ; `main` porte en plus l
 - **Version stable : 1.2.4** (22 octobre 2026) : PR 17 (Paramètres en accordéon) et PR 19 à 22 (montée de niveau guidée).
 - **Numéros d'échange** : `VersionModele` 7 sur `main` (5 dans la 1.2.4), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : aucune en cours. La PR 28 (schéma des fiches ; préversion 1.2.5-test.31) est fusionnée le 31 octobre 2026 **sans essai, à la demande du MJ**. Les PR 24 (corrections rapides), 25 et 26 (inventaire, lots 1 et 2), essayées par le MJ en préversion 1.2.5-test.30, sont fusionnées dans `main` le 29 octobre 2026 ; la branche `preversion-inventaire` est supprimée. Pas encore de version stable 1.2.5 : seulement à la demande du MJ.
-- **Prochain chantier** : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Questions de fond à poser au MJ avant de coder.
+- **Prochain chantier** : projet 14 de `PROJETS.md`, le butin et les récompenses de fin de combat (s'appuie sur l'inventaire). Décisions prises le 31 octobre 2026 (« Butin et pot commun »).
 - **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` depuis le 29 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -127,6 +127,14 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Joueurs** (édition ouverte) : ils cochent « porté », comptent leurs objets (−/+), ajoutent ou retirent des objets courants ; les chiffres d'un objet et son emplacement restent au MJ.
 - **Objets du monde** (lot 2) : une ligne peut désigner une fiche « Objet », dont elle prend le nom et les chiffres (champ « Chiffres » de la fiche : emplacement, bonus, arme). Le **Détenteur suit dans les deux sens** : donné à un PJ, l'objet entre dans son inventaire (et quitte celui d'un autre PJ) ; donné ailleurs ou ôté de l'inventaire, il n'y est plus / n'a plus de détenteur. Fiche effacée : la ligne reste, en objet courant. Lier ou retirer un objet du monde reste au MJ. Rien ne suit quand les feuilles de personnage sont coupées.
 
+### Butin et pot commun (31 octobre 2026, projet 14, avant le code)
+
+- **Butin de la rencontre en lignes chiffrées** : pièces (po / pa / pc) et objets (fiche « Objet » ou objet courant, quantité). Le texte libre « Butin » reste pour la description.
+- **Pot commun par campagne** : il reçoit le butin d'un combat (versé par le MJ au bilan) et ce que le MJ y ajoute (récompense de quête, trésor trouvé hors combat). Les joueurs n'y déposent rien.
+- **Partage par les joueurs, validé par le MJ** : depuis leur page, les joueurs proposent un partage (pièces, objets) ; le MJ valide ou refuse ; validé, les pièces vont dans la bourse et les objets dans l'inventaire. C'est compatible avec « les joueurs n'agissent jamais sur un combat » : ils ne touchent qu'au pot, après le combat.
+- **Partage annulable par le MJ** : pièces et objets reviennent au pot, tant que le PJ les a encore.
+- **Trace** : le champ « Butin & récompenses » de la séance se remplit, le journal note ce que chaque PJ reçoit, et la rencontre passe à « jouée », avec son butin marqué versé (il ne se verse pas deux fois).
+
 ### Schéma des fiches (31 octobre 2026)
 
 - **Inventaire des champs** fait type par type ; corrigé en une PR (28) : cinq incohérences, puis les champs utiles en jeu.
@@ -202,7 +210,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Prochain chantier
 
-**Projet 14, butin et récompenses de fin de combat** (`PROJETS.md`) : questions de fond à poser au MJ avant de coder. Il s'appuie sur l'inventaire (projet 11, fusionné le 29 octobre 2026 ; décisions dans « Inventaire » plus haut). Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+**Projet 14, butin et récompenses de fin de combat** (`PROJETS.md`) : questions de fond posées le 31 octobre 2026, décisions dans « Butin et pot commun » plus haut. Il s'appuie sur l'inventaire (projet 11, fusionné le 29 octobre 2026 ; décisions dans « Inventaire » plus haut). Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
