@@ -342,6 +342,21 @@ mark{background:color-mix(in srgb,var(--gold) 35%,transparent);color:inherit;bor
 .carac small{font-size:.7rem;color:var(--muted);font-weight:500;letter-spacing:.04em}
 ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3px}
 .liste-adv{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}
+.pieces{display:flex;flex-wrap:wrap;gap:8px}
+.pieces label{display:flex;align-items:center;gap:4px}
+.pieces input{width:6.5em}
+.liste-butin{display:flex;flex-direction:column;gap:6px}
+.pot-pieces{font:600 1.05rem var(--f-display);margin-bottom:4px}
+.pot-objets,.pot-histo{margin:4px 0 8px;padding-left:1.2em}
+.pot-histo li{margin:4px 0}
+.pot-prop{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:6px 12px;padding:6px 0;border-bottom:1px solid var(--line)}
+.pot-volet{margin-top:10px}
+.pot-volet summary{cursor:pointer;font-weight:600}
+.pot-volet form{margin-top:8px}
+.pot-choix{display:flex;flex-direction:column;gap:4px}
+.pot-choix input{width:5.5em}
+.butin-l{display:grid;grid-template-columns:minmax(0,1fr) 80px auto;gap:6px;align-items:start}
+.butin-l:has(.s){grid-template-columns:minmax(0,1fr) auto}
 .adv{display:grid;grid-template-columns:minmax(0,1fr) 70px 110px auto;gap:6px;align-items:start}
 .adv .m{min-width:0}
 .combat-seance{padding:10px 0;border-top:1px solid var(--line)}
@@ -373,6 +388,10 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .t-contexte{display:flex;align-items:center;gap:8px;min-width:0;flex:1;overflow:hidden;white-space:nowrap}
 .t-contexte .lien-fiche{flex:0 1 auto;min-width:0;overflow:hidden}
 .t-contexte .lien-fiche span:last-child{overflow:hidden;text-overflow:ellipsis}
+.t-pot{flex:0 0 auto;white-space:nowrap}
+.t-pot a{display:flex;align-items:center;gap:4px;color:var(--gold)}
+.t-pot:empty{display:none}
+@media (max-width:640px){.t-pot a>span:first-of-type{display:none}}
 .t-rappels{display:flex;gap:4px;flex:0 1 auto;min-width:0;overflow:auto hidden}
 .t-rappel{font-variant-numeric:tabular-nums;border-radius:999px}
 .t-rappel.fini{background:var(--warn);border-color:var(--warn);color:#17130a;font-weight:600}

@@ -2,7 +2,7 @@
 import { $, $$, esc, api, toast, armer, dateHeure, lien } from "../ui.js";
 import { schema, types, typeDe, relationDe, vignette, lienFiche, badgeType, valeurCourte, actif as fonctionActive } from "../schema.js";
 import { rendu, inline, resolveur } from "../md.js";
-import { selecteur, saisieDate, completerLiens, hauteurAuto, selecteurMonstre, editeurAdversaires, editeurChiffres, texteChiffres, listeEmplacements } from "../composants.js";
+import { selecteur, saisieDate, completerLiens, hauteurAuto, selecteurMonstre, editeurAdversaires, editeurChiffres, texteChiffres, listeEmplacements, editeurButin, texteButin } from "../composants.js";
 import * as panneaux from "./panneaux.js";
 import { panneauFeuille } from "./feuille.js";
 import { organigramme } from "./organigramme.js";
@@ -52,7 +52,7 @@ export async function creer(el, type, params) {
 
 const PANNEAUX = {
   pnj: panneaux.combatPNJ, rencontre: panneaux.rencontre,
-  seance: panneaux.combatsSeance, secret: panneaux.quiSait, aide: panneaux.envois,
+  seance: panneaux.combatsSeance, secret: panneaux.quiSait, aide: panneaux.envois, campagne: panneaux.potCommun,
 };
 export const COURTS = new Set(["texte", "choix", "nombre", "booleen", "ref", "refs", "date_jeu", "date"]);
 export const RESUMES = ["resume", "impression", "but"];
@@ -73,7 +73,10 @@ function lecture(el, f) {
   // la feuille de personnage (les joueurs tiennent la leur sur leur page)
   const feuille = f.type === "pj" && fonctionActive("feuilles");
   // panneau propre au type ; celui d'une séance montre ses combats
-  const special = f.type === "seance" && !fonctionActive("combat") ? null : PANNEAUX[f.type];
+  const special = (f.type === "seance" && !fonctionActive("combat")) || (f.type === "campagne" && !fonctionActive("butin")) ? null : PANNEAUX[f.type];
+  // le butin chiffré d'une rencontre, et son versement au pot commun
+  const butin = t.champs.find(c => c.genre === "butin" && f.data[c.cle]);
+  const versable = butin && !f.data.butin_verse && !window.cofAcces?.lecture_seule && f.data.campagne;
 
   el.innerHTML = `
     <div class="fiche-tete" data-type="${f.type}">
@@ -108,6 +111,9 @@ function lecture(el, f) {
           <ul class="etapes" id="etapes">${f.data[etapes.cle].map((e, i) => `<li><label><input type="checkbox" data-i="${i}" ${e.fait ? "checked" : ""}><span class="${e.fait ? "fait" : ""}">${inline(e.texte, res)}</span></label></li>`).join("")}</ul></section>` : ""}
         ${chiffres ? `<section class="panneau"><h3>${esc(chiffres.nom)}</h3><p>${f.data[chiffres.cle].emplacement ? `<span class="hint" id="chiffres-empl">${esc(f.data[chiffres.cle].emplacement)}</span> · ` : ""}<span class="fp-objet">${esc(texteChiffres(f.data[chiffres.cle]) || "aucun bonus")}</span></p>
           <p class="hint">Ils comptent quand un PJ le porte : le détenteur l'a dans son inventaire.</p></section>` : ""}
+        ${butin ? `<section class="panneau"><h3>${esc(butin.nom)}${f.data.butin_verse ? ` <span class="badge">versé au pot</span>` : ""}</h3><p>${esc(texteButin(f.data[butin.cle], refs))}</p>
+          ${versable ? `<div class="ligne"><button class="primary petit" id="verser">💰 Verser au pot commun</button><span class="hint">de ${f.refs?.[f.data.campagne] ? esc(f.refs[f.data.campagne].nom) : "la campagne"} ; la rencontre passe à « jouée »</span></div>`
+            : !f.data.butin_verse && !f.data.campagne ? `<p class="hint">Rattachez la rencontre à une campagne pour verser ce butin à son pot commun.</p>` : ""}</section>` : ""}
         ${longs.map(c => `<section class="panneau section-md${c.secret ? " secret" : ""}"><h3>${esc(c.nom)}</h3><div class="md">${rendu(f.data[c.cle], res)}</div></section>`).join("")}
         ${!courts.length && !longs.length && !resume ? `<section class="panneau"><p class="vide">Fiche vide. <a href="#/f/${f.id}/modifier">La remplir</a>.</p></section>` : ""}
         ${sectionReferences(f)}
@@ -131,6 +137,15 @@ function lecture(el, f) {
   if (feuille) panneauFeuille($("#p-feuille", el), f, { peutEcrire: !window.cofAcces?.lecture_seule, apres: rafraichir });
   if (special) special($("#p-special", el), f, rafraichir);
   if ($("#p-secrets", el)) panneaux.secretsDe($("#p-secrets", el), f);
+  const verser = $("#verser", el);
+  if (verser) armer(verser, "Verser ?", async () => {
+    try {
+      await api("POST", `/api/entites/${f.id}/verser-butin`, {});
+      toast("Butin versé au pot commun de la campagne.");
+      window.dispatchEvent(new Event("cof-change"));
+      recharger(el, f.id);
+    } catch (err) { toast(err.message, true); }
+  });
   const partager = $("#partager", el);
   if (partager) partager.onclick = async () => {
     try {
@@ -366,7 +381,7 @@ function formulaire(el, f, nouveau) {
         <label class="champ pleine"><span>Tags <small>séparés par des virgules</small></span><input id="tags" value="${esc((f.tags || []).join(", "))}" autocomplete="off"></label>
       </fieldset>
       ${groupes.map(g => `<fieldset class="${g.nom === "MJ" ? "mj" : ""}"><legend>${g.nom === "MJ" ? "🔒 Réservé au MJ" : esc(g.nom)}</legend>
-        ${g.champs.map(c => `<div class="${["long", "etapes", "refs", "adversaires", "equipement"].includes(c.genre) ? "pleine" : ""}" data-champ="${c.cle}"></div>`).join("")}
+        ${g.champs.map(c => `<div class="${["long", "etapes", "refs", "adversaires", "equipement", "butin"].includes(c.genre) ? "pleine" : ""}" data-champ="${c.cle}"></div>`).join("")}
       </fieldset>`).join("")}
       <div class="barre-form">
         <span class="hint" style="margin-right:auto;align-self:center"><kbd>Ctrl</kbd>+<kbd>S</kbd> enregistrer · <kbd>Échap</kbd> annuler · <code>[[</code> pour lier une fiche</span>
@@ -430,6 +445,11 @@ function formulaire(el, f, nouveau) {
       case "equipement": {
         zone.innerHTML = `<div class="champ"><label class="champ">${etiquette}</label><div class="w"></div></div>`;
         const ed = editeurChiffres($(".w", zone), v, marquer);
+        lecteurs[c.cle] = ed.valeur; break;
+      }
+      case "butin": {
+        zone.innerHTML = `<div class="champ"><label class="champ">${etiquette}</label><div class="w"></div></div>`;
+        const ed = editeurButin($(".w", zone), v, refs, marquer);
         lecteurs[c.cle] = ed.valeur; break;
       }
       case "etapes": {

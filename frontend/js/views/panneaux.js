@@ -1,8 +1,9 @@
 // Panneaux propres à certains types de fiches : profil de combat d'un PNJ, difficulté et lancement
-// d'une rencontre, combats d'une séance et leur bilan, secrets (qui sait quoi), envois d'une aide de jeu.
-import { $, $$, esc, api, toast, armer } from "../ui.js";
+// d'une rencontre, combats d'une séance et leur bilan, secrets (qui sait quoi), envois d'une aide de jeu,
+// pot commun d'une campagne.
+import { $, $$, esc, api, toast, armer, dateHeure } from "../ui.js";
 import { lienFiche, vignette, badgeType, actif as fonctionActive } from "../schema.js";
-import { selecteur, selecteurMonstre } from "../composants.js";
+import { selecteur, selecteurMonstre, saisiePieces, editeurButin, texteButin, textePieces } from "../composants.js";
 import { lireMonstre, blocMonstre, nc } from "../monstres.js";
 import { lancerCombat } from "./combat.js";
 import { recapHTML } from "../recap.js";
@@ -257,4 +258,80 @@ export async function envois(box, f, apres) {
     try { await api("DELETE", "/api/relations/" + b.dataset.retirer); change(); apres(); }
     catch (err) { toast(err.message, true); }
   }));
+}
+
+// ---------------------------------------------------------------- campagne : pot commun
+
+const GENRES_POT = { entree: "Entrée", retrait: "Retrait", partage: "Partage" };
+
+/** Sur une campagne : son pot commun, les propositions de partage à valider, partager, ajouter,
+ *  retirer, et l'historique (un partage s'annule tant que le PJ a encore ce qu'il a reçu). */
+export async function potCommun(box, f, apres) {
+  box.id = "pot";
+  box.innerHTML = `<h3>Pot commun</h3><div class="contenu"><p class="hint">…</p></div>`;
+  const zone = $(".contenu", box);
+  let p, pjs;
+  try {
+    [p, pjs] = await Promise.all([api("GET", `/api/campagnes/${f.id}/pot`), api("GET", `/api/entites?type=pj&campagne=${f.id}`)]);
+  } catch (e) { zone.innerHTML = `<p class="alerte">${esc(e.message)}</p>`; return; }
+  const nom = id => p.noms[id] || `fiche n°${id}`;
+  const lienDe = id => p.noms[id] ? `<a href="#/f/${id}">${esc(p.noms[id])}</a>` : esc(nom(id));
+  const objetsPris = x => (x.objets || []).map(o => ({ ...o, nom: p.objets.find(l => l.id === o.ligne)?.nom || "objet parti du pot" }));
+  const ecrire = !lecture(), feuilles = fonctionActive("feuilles");
+  const vide = !textePieces(p.pieces) && !p.objets.length;
+  $("h3", box).innerHTML = `Pot commun <span class="sp"></span><span class="hint">${vide ? "vide" : esc(textePieces(p.pieces) || "pas de pièce")}${p.objets.length ? ` · ${p.objets.length} objet${p.objets.length > 1 ? "s" : ""}` : ""}</span>`;
+
+  const propositions = p.propositions.map(x => `<div class="pot-prop"><div><b>${lienDe(x.pj)}</b> : ${esc(texteButin({ pieces: x.pieces, objets: objetsPris(x) }) || "rien")}
+      ${x.note ? `<span class="hint">« ${esc(x.note)} »</span>` : ""}<br><span class="hint">proposé par ${esc(x.par)} le ${dateHeure(x.le)}</span></div>
+      ${ecrire ? `<div class="ligne"><button class="petit primary" data-valider="${x.id}"${feuilles ? "" : " disabled title=\"Les feuilles de personnage sont désactivées\""}>Valider</button><button class="petit ghost" data-refuser="${x.id}">Refuser</button></div>` : ""}</div>`).join("");
+  const historique = [...p.historique].reverse().map(m => `<li><span class="hint">${dateHeure(m.le)}</span> <b>${GENRES_POT[m.genre] || esc(m.genre)}</b>
+      ${m.genre === "partage" ? `→ ${lienDe(m.pj)}` : ""}${m.rencontre ? ` · ${lienDe(m.rencontre)}` : m.libelle ? ` · ${esc(m.libelle)}` : ""} : ${esc(texteButin(m) || "rien")}
+      ${m.annule ? `<span class="badge">annulé</span>` : m.genre === "partage" && ecrire ? `<button class="petit ghost" data-annuler="${m.id}" title="Reprendre au PJ ce qu'il a reçu et le remettre dans le pot">Annuler</button>` : ""}</li>`).join("");
+
+  zone.innerHTML = `${vide ? `<p class="vide">Le pot est vide. Le butin d'une rencontre y arrive à la fin du combat ; vous pouvez aussi y ajouter une récompense.</p>`
+      : `<div class="pot-pieces">${esc(textePieces(p.pieces) || "Aucune pièce")}</div>
+        ${p.objets.length ? `<ul class="pot-objets">${p.objets.map(o => `<li>${o.fiche ? lienDe(o.fiche) : esc(o.nom)}${o.quantite > 1 ? ` <span class="hint">× ${o.quantite}</span>` : ""}</li>`).join("")}</ul>` : ""}`}
+    ${propositions ? `<div class="rel-groupe"><small>Propositions de partage à valider</small>${propositions}</div>` : ""}
+    ${ecrire && !vide ? `<details class="pot-volet" id="pot-partage"><summary>Partager ou retirer</summary><form class="colonne" style="gap:8px">
+        <div data-pieces></div>
+        ${p.objets.length ? `<div class="pot-choix">${p.objets.map(o => `<label class="ligne"><input type="number" min="0" max="${o.quantite}" value="0" data-ligne="${o.id}" aria-label="Quantité de ${esc(o.nom)}"><span>${esc(o.nom)} <span class="hint">sur ${o.quantite}</span></span></label>`).join("")}</div>` : ""}
+        <div class="ligne"><select data-pj aria-label="PJ qui reçoit"><option value="">— PJ qui reçoit —</option>${pjs.map(x => `<option value="${x.id}">${esc(x.nom)}</option>`).join("")}</select>
+          <input data-note placeholder="Note (facultatif)" aria-label="Note" style="flex:1;min-width:140px"></div>
+        <div class="ligne"><button type="button" class="primary petit" data-donner${feuilles ? "" : " disabled"}>Donner au PJ</button><button type="button" class="ghost petit" data-retirer>Retirer du pot</button>
+          ${feuilles ? `<span class="hint">les pièces vont dans sa bourse, les objets dans son inventaire</span>` : `<span class="hint">Les feuilles de personnage sont désactivées : rien ne peut être donné.</span>`}</div>
+      </form></details>` : ""}
+    ${ecrire ? `<details class="pot-volet" id="pot-ajout"><summary>Ajouter au pot</summary><form class="colonne" style="gap:8px">
+        <div data-butin></div><input data-libelle placeholder="D'où cela vient : récompense, trésor…" aria-label="Origine">
+        <div><button type="submit" class="primary petit">Ajouter</button></div></form></details>` : ""}
+    ${historique ? `<details class="pot-volet"><summary>Historique</summary><ul class="pot-histo">${historique}</ul></details>` : ""}`;
+
+  const action = async (chemin, corps, message) => {
+    try { await api("POST", `/api/campagnes/${f.id}/pot/${chemin}`, corps); toast(message); change(); apres(); }
+    catch (err) { toast(err.message, true); }
+  };
+  $$("[data-valider]", zone).forEach(b => b.onclick = () => action(`propositions/${b.dataset.valider}/valider`, {}, "Partage validé : le PJ a reçu sa part."));
+  $$("[data-refuser]", zone).forEach(b => armer(b, "Refuser ?", () => action(`propositions/${b.dataset.refuser}/refuser`, {}, "Proposition refusée.")));
+  $$("[data-annuler]", zone).forEach(b => armer(b, "Annuler ?", () => action(`partages/${b.dataset.annuler}/annuler`, {}, "Partage annulé : tout est revenu au pot.")));
+
+  const partage = $("#pot-partage form", zone);
+  if (partage) {
+    const pieces = saisiePieces($("[data-pieces]", partage), {});
+    const choix = () => ({ pieces: pieces.lire(), objets: $$("[data-ligne]", partage).map(i => ({ ligne: +i.dataset.ligne, quantite: Math.trunc(+i.value || 0) })).filter(o => o.quantite > 0) });
+    $("[data-donner]", partage).onclick = () => {
+      const pj = +$("[data-pj]", partage).value;
+      if (!pj) { toast("Choisissez le PJ qui reçoit.", true); return; }
+      action("partager", { pj, ...choix(), note: $("[data-note]", partage).value.trim() }, "Partagé : le PJ a reçu sa part.");
+    };
+    armer($("[data-retirer]", partage), "Retirer ?", () => action("retirer", { ...choix(), libelle: $("[data-note]", partage).value.trim() }, "Retiré du pot."));
+  }
+  const ajout = $("#pot-ajout form", zone);
+  if (ajout) {
+    const ed = editeurButin($("[data-butin]", ajout), null, {});
+    ajout.onsubmit = e => {
+      e.preventDefault();
+      const b = ed.valeur();
+      if (!b) { toast("Rien à ajouter : des pièces ou un objet.", true); return; }
+      action("ajouter", { ...b, libelle: $("[data-libelle]", ajout).value.trim() }, "Ajouté au pot.");
+    };
+  }
 }

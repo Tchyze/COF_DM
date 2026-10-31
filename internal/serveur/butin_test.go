@@ -66,6 +66,9 @@ func TestButinPotCommun(t *testing.T) {
 	if d := r["data"].(map[string]any); d["butin_verse"] != true || d["statut"] != "jouée" {
 		t.Fatalf("rencontre versée : %v", d)
 	}
+	if fmt.Sprint(r["refs"].(map[string]any)[fmt.Sprint(dague)]) == "<nil>" {
+		t.Fatalf("la fiche de la rencontre ne nomme pas l'objet de son butin : %v", r["refs"])
+	}
 	_, se := b.local("GET", fmt.Sprintf("/api/entites/%v", seance), nil)
 	if txt, _ := se["data"].(map[string]any)["butin"].(string); !strings.HasPrefix(txt, "Une carte.") || !strings.Contains(txt, "Pillards du gué : 30 po, 5 pa, Dague d'écume, 4 × Torche") {
 		t.Fatalf("séance : %q", txt)
@@ -199,5 +202,9 @@ func TestButinPotCommun(t *testing.T) {
 	b.local("PUT", "/api/fonctionnalites", map[string]any{"butin": false})
 	if c, _ := b.local("GET", pot, nil); c != 404 {
 		t.Fatalf("butin coupé : %d", c)
+	}
+	_, sch := b.local("GET", "/api/schema", nil)
+	if s := fmt.Sprint(sch["types"]); strings.Contains(s, "butin_chiffre") || strings.Contains(s, "butin_verse") {
+		t.Fatal("butin coupé : ses champs restent dans le schéma")
 	}
 }

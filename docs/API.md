@@ -445,7 +445,7 @@ Le serveur MCP ne propose pas les outils d'une fonctionnalité coupée (il lit `
 
 | Requête | Effet |
 |---|---|
-| `GET /api/schema` | Types, champs, relations, calendrier, genres de champ, et `fonctionnalites` (`{"des": false, …}`, voir « Fonctionnalités »). Les types et les champs d'une fonctionnalité coupée n'y figurent pas. |
+| `GET /api/schema` | Types, champs, relations, calendrier, genres de champ, et `fonctionnalites` (`{"des": false, …}`, voir « Fonctionnalités »). Les types et les champs d'une fonctionnalité coupée n'y figurent pas ; un champ qui dépend d'une fonctionnalité le dit par `fonction` (`butin_chiffre` et `butin_verse` d'une rencontre : `butin`). Une fiche nomme dans `refs` les objets du monde de son butin chiffré. |
 | `GET /api/stats` | Comptes par type, liens morts, journal récent, campagnes, séances, quêtes en cours. |
 | `GET /api/resoudre?nom=Mont-Veille` | La fiche qui porte ce nom et sa phrase de présentation. |
 | `GET /api/liens-morts` | Les `[[Nom]]` qui ne mènent à aucune fiche, et où ils sont. |
