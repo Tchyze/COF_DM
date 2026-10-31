@@ -12,5 +12,8 @@
 /AppDir/
 /appimagetool
 
+# installation du MJ (machine, chemins, fichiers) : jamais dans le dépôt public
+/LOCAL.md
+
 # Python
 __pycache__/
