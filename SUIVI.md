@@ -8,8 +8,8 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 
 - **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `docker-hub` (PR 32, lot A du nouveau chantier), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
-- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses attendues avant les lots C et D. Lots : A Docker Hub (PR 32) ; B menu repliable ; C1 mise à jour fiable, C2 installation (empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
+- **Branches** : `docker-hub` (PR 32, lot A), `installation-hors-depot` (PR 33) et `menu-replie` (PR 34, lot B), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
+- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses attendues avant les lots C et D. Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable, C2 installation (empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -185,6 +185,8 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 30 | **Butin, lot 2** : saisie et versement du butin d'une rencontre, bouton au bilan du combat, panneau du pot sur la campagne (propositions, partage, retrait, ajout, historique et annulation), pot dans la barre de l'écran du MJ ; champs du butin masqués quand la fonctionnalité est coupée. |
 | 31 | **Butin, lot 3** : onglet « Pot commun » de la page des joueurs (le pot de leur campagne, propositions de partage pour leur PJ, retrait, historique sans nom de rencontre), en direct ; rôle « joueur » restreint à son PJ. |
 | 32 | **Docker Hub** (lot A, en PR) : job `docker` du workflow Release (image construite et essayée à chaque passage, envoyée en `X.Y.Z` et `latest` pour un tag stable seulement ; secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) ; README : image publiée, `image:` à la place de `build:`. |
+| 33 | **Installation du MJ hors dépôt** (en PR) : `LOCAL.md`, ignoré par git, reçoit ce qui décrit l'installation du MJ ; CLAUDE.md demande de le lire. |
+| 34 | **Menu repliable** (lot B, en PR) : catégories du menu de gauche repliables (clic, Entrée, Espace), gardées sur l'appareil (`localStorage` sous try/catch) ; la catégorie de la page ouverte se déplie le temps qu'on y est. |
 
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
