@@ -38,6 +38,7 @@ const (
 	fichierSignature  = "SHA256SUMS.sig"
 	tailleMax         = 300 << 20 // un programme publié
 	suffixeAncien     = ".ancien"
+	prefixeTelecharge = ".cof-dm-maj-"
 )
 
 // ClePublique : la clé publique Ed25519 de publication (base64). Variable pour les tests seulement.
@@ -299,7 +300,7 @@ func Verifier(empreintes, signature []byte, nom string, somme []byte) error {
 }
 
 // Installer télécharge la version, la vérifie, puis remplace le programme. Renvoie le chemin du
-// programme à relancer. Le programme d'avant reste à côté (« .ancien ») jusqu'au lancement suivant.
+// programme à relancer. Le programme d'avant reste à côté (« .ancien ») jusqu'à ce que Nettoyer le retire.
 func Installer(d *Disponible) (string, error) {
 	if !d.Installable() {
 		return "", errors.New("cette version ne peut pas s'installer seule ici : téléchargez-la depuis sa page")
@@ -315,9 +316,12 @@ func Installer(d *Disponible) (string, error) {
 	if err := telecharger(d.signature, 4<<10, &signature); err != nil {
 		return "", err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(cible), ".cof-dm-maj-*")
+	if !modifiable(cible) { // avant de télécharger quoi que ce soit
+		return "", errNonModifiable(cible)
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(cible), prefixeTelecharge+"*")
 	if err != nil {
-		return "", fmt.Errorf("dossier du programme non modifiable : %w", err)
+		return "", errNonModifiable(cible)
 	}
 	defer os.Remove(tmp.Name())
 	h := sha256.New()
@@ -338,26 +342,143 @@ func Installer(d *Disponible) (string, error) {
 }
 
 // Remplacer met « nouveau » à la place de « cible ». Un programme en cours ne s'écrase pas sous
-// Windows : il est d'abord renommé en « .ancien ».
+// Windows, mais se renomme : il devient « .ancien ». Un programme d'avant encore là (que Windows ou
+// un antivirus tenait au dernier nettoyage) ne bloque rien : s'il ne se retire pas, celui-ci prend
+// le nom libre suivant (« .ancien-2 »…). Chaque renommage est réessayé quelques secondes, le temps
+// qu'un antivirus lâche le fichier neuf ; en cas d'échec, le programme reste celui d'avant.
 func Remplacer(cible, nouveau string) error {
 	if err := os.Chmod(nouveau, 0o755); err != nil {
 		return err
 	}
 	ancien := cible + suffixeAncien
-	_ = os.Remove(ancien)
-	if err := os.Rename(cible, ancien); err != nil {
-		return fmt.Errorf("programme non remplaçable : %w", err)
+	if retirerSiPresent(ancien) != nil {
+		ancien = nomLibre(ancien)
 	}
-	if err := os.Rename(nouveau, cible); err != nil {
-		_ = os.Rename(ancien, cible) // rien n'a changé
-		return fmt.Errorf("programme non remplaçable : %w", err)
+	if err := reessayer(pauses, func() error { return renommer(cible, ancien) }); err != nil {
+		return fmt.Errorf("programme non remplaçable (un autre programme le tient peut-être) : %w", err)
+	}
+	if err := reessayer(pauses, func() error { return renommer(nouveau, cible) }); err != nil {
+		_ = reessayer(pauses, func() error { return renommer(ancien, cible) }) // rien n'a changé
+		return fmt.Errorf("programme non remplaçable (un autre programme tient peut-être le fichier neuf) : %w", err)
 	}
 	return nil
 }
 
-// Nettoyer retire le programme d'avant la dernière mise à jour, une fois le nouveau lancé.
-func Nettoyer() {
-	if cible, _ := Programme(); cible != "" {
-		_ = os.Remove(cible + suffixeAncien)
+// Nettoyer retire les programmes d'avant les mises à jour (« .ancien », « .ancien-2 »…) et les
+// téléchargements abandonnés (« .cof-dm-maj-* » de plus d'une heure), à côté de ce programme. Juste
+// après une mise à jour, le programme d'avant tourne encore un instant (il ferme l'univers), et
+// Windows refuse de retirer un programme en cours ; un antivirus peut aussi tenir le fichier. Ce qui
+// résiste est donc réessayé pendant une minute environ, et ce qui reste encore le sera au lancement
+// suivant (l'erreur le dit). À lancer en fond : elle peut attendre.
+func Nettoyer() error {
+	cible, _ := Programme()
+	if cible == "" {
+		return nil
 	}
+	return nettoyer(cible)
+}
+
+func nettoyer(cible string) error {
+	dir, base := filepath.Split(cible)
+	entrees, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	var restes []string
+	for _, e := range entrees {
+		nom := e.Name()
+		if commencePar(nom, base+suffixeAncien) {
+			restes = append(restes, filepath.Join(dir, nom))
+		} else if strings.HasPrefix(nom, prefixeTelecharge) {
+			if i, err := e.Info(); err == nil && time.Since(i.ModTime()) > time.Hour {
+				restes = append(restes, filepath.Join(dir, nom))
+			}
+		}
+	}
+	var echecs []error
+	for _, p := range append([]time.Duration{0}, pausesNettoyage...) {
+		if len(restes) == 0 {
+			break
+		}
+		time.Sleep(p)
+		echecs = echecs[:0]
+		suivants := restes[:0]
+		for _, c := range restes {
+			if err := retirerSiPresent(c); err != nil {
+				suivants = append(suivants, c)
+				echecs = append(echecs, err)
+			}
+		}
+		restes = suivants
+	}
+	return errors.Join(echecs...)
+}
+
+// Modifiable : ce programme peut se remplacer lui-même, c'est-à-dire que son dossier accepte un
+// fichier neuf (sinon, la nouvelle version se télécharge depuis sa page).
+func Modifiable() bool {
+	cible, _ := Programme()
+	return cible != "" && modifiable(cible)
+}
+
+func modifiable(cible string) bool {
+	f, err := os.CreateTemp(filepath.Dir(cible), prefixeTelecharge+"essai-*")
+	if err != nil {
+		return false
+	}
+	f.Close()
+	_ = os.Remove(f.Name())
+	return true
+}
+
+func errNonModifiable(cible string) error {
+	return fmt.Errorf("le dossier du programme (%s) n'accepte pas de fichier neuf : placez COF DM dans un dossier à vous, ou téléchargez la version depuis sa page", filepath.Dir(cible))
+}
+
+// Opérations sur les fichiers, et pauses entre deux essais : variables pour les tests seulement
+// (verrou simulé, attente raccourcie).
+var (
+	renommer        = os.Rename
+	retirer         = os.Remove
+	pauses          = []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second}
+	pausesNettoyage = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second, 30 * time.Second}
+)
+
+// reessayer refait f après chaque pause tant qu'elle échoue ; renvoie la dernière erreur.
+func reessayer(p []time.Duration, f func() error) error {
+	err := f()
+	for _, d := range p {
+		if err == nil {
+			break
+		}
+		time.Sleep(d)
+		err = f()
+	}
+	return err
+}
+
+// retirerSiPresent : un fichier déjà absent est bien retiré.
+func retirerSiPresent(chemin string) error {
+	if err := retirer(chemin); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// nomLibre : « base-2 », « base-3 »… le premier qui n'existe pas.
+func nomLibre(base string) string {
+	for i := 2; ; i++ {
+		c := base + "-" + strconv.Itoa(i)
+		if _, err := os.Lstat(c); errors.Is(err, os.ErrNotExist) {
+			return c
+		}
+	}
+}
+
+// commencePar compare sans tenir compte de la casse sous Windows, comme son système de fichiers.
+func commencePar(nom, prefixe string) bool {
+	if runtime.GOOS == "windows" {
+		return len(nom) >= len(prefixe) && strings.EqualFold(nom[:len(prefixe)], prefixe)
+	}
+	return strings.HasPrefix(nom, prefixe)
 }
