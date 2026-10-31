@@ -14,15 +14,15 @@ Quatorze types de fiches, chacun avec ses champs propres, ses images et ses tags
 
 | Type | Principaux champs |
 |---|---|
-| 👤 PNJ | en une phrase, alias, statut (vivant, mort, disparu, inconnu), peuple et profil (listes du fichier de règles), allégeance apparente (une faction), où le trouver, campagnes, apparence, personnalité, rôle ; combat : un monstre du bestiaire qui lui sert de profil ; MJ : secrets, notes |
-| 🏰 Lieu | impression, catégorie, fait partie de (hiérarchie), dirigeant, description, lieux notables, rumeurs ; MJ : secrets |
-| ⚑ Faction | but, catégorie, siège, dirigeant, attitude envers les PJ, description, ressources ; MJ : secrets |
-| 🗝 Objet | catégorie, rareté, prix (pc / pa / po), magique, détenteur, effets, histoire ; MJ : secrets / malédiction |
-| 📜 Lore | catégorie, connu du MJ seulement, contenu ; MJ : vérité |
+| 👤 PNJ | en une phrase, alias, statut (vivant, mort, disparu, inconnu), attitude envers les PJ, peuple et profil (listes du fichier de règles), allégeance apparente (une faction), où le trouver, campagnes, apparence, personnalité, rôle ; combat : un monstre du bestiaire qui lui sert de profil ; MJ : secrets, notes |
+| 🏰 Lieu | impression, catégorie, fait partie de (hiérarchie), dirigeant (PNJ, PJ ou faction), campagnes, description, lieux notables, rumeurs ; MJ : secrets |
+| ⚑ Faction | but, catégorie, siège, dirigeant (PNJ ou PJ), attitude envers les PJ, campagnes, description, ressources ; MJ : secrets |
+| 🗝 Objet | catégorie, rareté, prix (pc / pa / po), magique, détenteur, campagnes, effets, histoire ; MJ : secrets / malédiction |
+| 📜 Lore | catégorie, campagnes, contenu ; MJ : vérité |
 | ⏳ Événement | date en jeu, lieu, campagne, acteurs, ce qu'on en raconte, conséquences ; MJ : vérité |
 | 📖 Campagne | statut, pitch, thèmes, début et date actuelle en jeu, où est le groupe, arc principal ; MJ : fils rouges |
 | ✦ Quête | campagne, catégorie (arc principal, mission, secondaire), ordre, statut, commanditaire, lieu, niveau conseillé, accroche, objectif, **étapes à cocher**, indices, récompense, conséquences ; MJ : secrets |
-| ⚔ Rencontre | campagne, quête, séance, lieu, créatures (monstres du bestiaire, nombre, camp), PNJ présents, mise en scène, tactique, butin ; difficulté calculée |
+| ⚔ Rencontre | campagne, quête, séance, lieu, créatures (monstres du bestiaire, nombre, camp), PNJ présents, mise en scène, butin ; difficulté calculée ; MJ : tactique, notes |
 | 🎲 Séance | campagne, numéro, statut, date réelle, date en jeu, PJ présents, résumé ; ses combats et leur bilan ; MJ : préparation, notes |
 | 🛡 PJ | joueur, campagne, statut, peuple, profil, niveau, apparence, historique, objectifs ; sa feuille de personnage ; MJ : ce que le MJ sait |
 | 🔒 Secret | statut (caché, soupçonné, en partie révélé, révélé), importance, catégorie, campagne, fiches concernées, vérité, indices, conséquences, séance de la révélation |

@@ -37,9 +37,14 @@ import "strconv"
 // « bouclier » ; le fichier de règles décrit les emplacements (« personnage.emplacements »). Une
 // ligne de l'inventaire peut désigner une fiche « Objet » (« fiche »), qui porte ses chiffres (champ
 // « equipement », genre du même nom).
+//
+// Modèle 7 : le PNJ a une attitude envers les PJ ; lieux, factions, objets et lore ont leurs
+// campagnes ; un lieu peut être dirigé par un PJ ou une faction, une faction par un PJ ; la tactique
+// d'une rencontre est réservée au MJ, à côté de nouvelles notes du MJ ; le lore perd « Connu du MJ
+// seulement » (versionDonnees 6).
 const (
 	VersionProtocole = 1
-	VersionModele    = 6
+	VersionModele    = 7
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne
