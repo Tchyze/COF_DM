@@ -1,6 +1,6 @@
 # Suivi du chantier — COF DM
 
-Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot.
+Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
 Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installation, rôles, menu, Docker Hub » commencé).
 
@@ -8,9 +8,9 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 
 - **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `docker-hub` (PR 32, lot A du nouveau chantier), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5. Univers d'avant le modèle 8 sur le serveur du MJ : sauvegarde automatique `donnees/sauvegardes/0900d828a03a8aab/2026-10-31_11-57-10_auto.cofdm` (modèle 6).
+- **Branches** : `docker-hub` (PR 32, lot A du nouveau chantier), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
 - **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses attendues avant les lots C et D. Lots : A Docker Hub (PR 32) ; B menu repliable ; C1 mise à jour fiable, C2 installation (empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
-- **Le serveur du MJ** tourne en Docker sur le poste WSL (`~/Outil/COF_DM`, `http://localhost:8100`, données dans `~/Outil/COF_DM/donnees`), sur `main` (1.2.5) depuis le 31 octobre 2026, mis à jour à la main : `git pull && docker compose up -d --build`. Le bureau (exe Windows) s'y relie en mode serveur.
+- **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
 ## Façon de travailler (consignes du MJ)
@@ -26,8 +26,8 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 
 ## Dépôt et publication
 
-- `Tchyze/COF_DM` est **public** depuis le 18 octobre 2026, reparti d'un commit unique. L'ancien dépôt, avec tout l'historique et ses PR 1 à 54, est **`Tchyze/COF_DM-historique`**, privé (remote `historique` du dépôt local). Les numéros de PR de ce fichier renvoient au dépôt public, sauf dans la section « Avant le dépôt public ».
-- **Clé de publication** : `~/Outil/cle-publication-cof-dm.pem` (hors dépôt), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
+- `Tchyze/COF_DM` est **public** depuis le 18 octobre 2026, reparti d'un commit unique. L'ancien dépôt, avec tout l'historique et ses PR 1 à 54, est gardé à part, privé (voir `LOCAL.md`). Les numéros de PR de ce fichier renvoient au dépôt public, sauf dans la section « Avant le dépôt public ».
+- **Clé de publication** : hors dépôt (voir `LOCAL.md`), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
 - **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4) ; 1.2.4 (22 octobre 2026 : PR 17, 19 à 22, modèle 5) ; 1.2.5 (31 octobre 2026 : PR 23 à 26, 28 à 31, modèle 8).
 - **Version affichée** : en petit à côté de « Thème » (une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
 
@@ -35,19 +35,12 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 
 1. **Cloner le dépôt** `COF_DM`.
 2. **Outils** : Go 1.26.9 au moins (fixé par `go.mod`) et un compilateur C pour SQLite (CGO). Commandes dans `CLAUDE.md`.
-3. **Copier à la main les fichiers hors dépôt** (ci-dessous) : ils ne sont dans aucun dépôt, volontairement.
+3. **Copier à la main les fichiers hors dépôt** et `LOCAL.md`, qui les liste : ils ne sont dans aucun dépôt, volontairement.
 4. Vérifier que tout passe : `gofmt -l .`, `go vet -tags "sqlite_fts5 nogui" ./...`, `go test -tags "sqlite_fts5 nogui" ./...`.
 
-### Fichiers hors dépôt, à emporter
+### Fichiers hors dépôt
 
-Sur le poste WSL, dans `~/Outil/`, à côté du dépôt, avec le PDF du livre de base pour vérifier les tables. Sans le fichier de règles, le créateur de monstre, les repos et les listes de choix (peuples, profils, tailles, catégories) ne sont pas proposés.
-
-| Fichier | Contenu |
-|---|---|
-| `Règles COF.json` | Le fichier de règles (`cof-dm-regles`) : listes, créateur de monstre, feuille de personnage et repos, difficulté des rencontres (`rencontre`), valeurs et états du combat (`combat`). À importer dans Paramètres → Bestiaire et règles. |
-| `Bestiaire officiel COF.json`, `Profils et voies COF.json` | Le bestiaire officiel et les profils et voies, à importer dans chaque univers. Aussi dans le vault du MJ. |
-| `exemples_monstres.json`, `exemples_personnages.json` | Fiches d'exemple de tracker_COF, retirées du dépôt. |
-| `cle-publication-cof-dm.pem` | La clé de publication des mises à jour (voir plus haut). |
+Le fichier de règles, le bestiaire et les profils et voies du MJ, et la clé de publication : listés dans `LOCAL.md`. Sans fichier de règles, le créateur de monstre, les repos et les listes de choix (peuples, profils, tailles, catégories) ne sont pas proposés ; tout le reste marche en saisie libre.
 
 ## Décisions prises (à respecter)
 
@@ -114,7 +107,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Assistant, fenêtre par fenêtre** : dés de vie → rangs de voie → PM du profil (s'il en gagne) → étapes en plus prévues par les règles à ce niveau → récapitulatif à valider. Le niveau reste lu sur la fiche ; le saisir à la main sur la fiche reste permis, sans historique.
 - **Un niveau à la fois.** La seule baisse : « Annuler la dernière montée », qui défait exactement ce qu'elle avait fait (niveau, PV, rangs).
 - **PV gagnés** : une formule du fichier de règles (dé de vie, mod. CON, valeur fixe…) ; **le dé de vie est lancé en vrai et saisi** (MJ comme joueur), borné par le dé de la feuille, le reste s'ajoute seul. **Rien n'est annoncé à la table** : le détail n'est que dans l'historique. Sans règles : PV saisis.
-- **Règles officielles** (lues dans le livre de base le 22 octobre 2026, rangées dans `Règles COF.json`, hors dépôt ; copie d'avant : `Règles COF.avant-montee.json`) : dé de vie + mod. CON, 2 points (rangs 1-2 : 1 pt, 3-5 : 2 pts), pas de rang au-dessus du niveau, voie de prestige à 2 pts par rang, report des points, PM +1 ou +2 selon le profil, capacité épique (option) aux niveaux pairs dès 12. Écartés par le MJ : valeur moyenne du dé.
+- **Règles officielles** : lues dans le livre de base et rangées dans le fichier de règles du MJ, hors dépôt (détail dans `LOCAL.md`).
 - **Rangs** : des points par niveau, le coût de chaque rang et le niveau minimal d'un rang, décrits par le fichier de règles, répartis dans les voies **déjà sur la feuille** (ajouter une voie de la bibliothèque se fait avant, en édition). Sans règles : rangs libres, sans contrôle. Les capacités débloquées sont rappelées.
 - **Historique** rangé dans la feuille (synchronisé) : une ligne par niveau (date, PV gagnés et le jet, rangs pris).
 
@@ -193,7 +186,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 31 | **Butin, lot 3** : onglet « Pot commun » de la page des joueurs (le pot de leur campagne, propositions de partage pour leur PJ, retrait, historique sans nom de rencontre), en direct ; rôle « joueur » restreint à son PJ. |
 | 32 | **Docker Hub** (lot A, en PR) : job `docker` du workflow Release (image construite et essayée à chaque passage, envoyée en `X.Y.Z` et `latest` pour un tag stable seulement ; secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) ; README : image publiée, `image:` à la place de `build:`. |
 
-### Avant le dépôt public (`COF_DM-historique`, PR 1 à 54)
+### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
 | PR | Contenu |
 |---|---|
@@ -214,11 +207,11 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Chantier en cours
 
-Voir « Où on en est ». Avant la prochaine version stable : créer les secrets Docker Hub du dépôt (et la variable `DOCKERHUB_IMAGE` si l'image ne s'appelle pas `<compte>/cof-dm`).
+Voir « Où on en est ». Image Docker publiée sur Docker Hub (`tchyze/cof-dm`, 1.2.5 republiée le 31 octobre 2026) ; secrets du dépôt en place.
 
 ### Ensuite
 
-À choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (`Règles COF.json`, hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+À choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
@@ -226,7 +219,7 @@ Aucun. Les trois notés jusqu'au 22 octobre 2026 sont corrigés (PR des correcti
 
 ### À vérifier à la main (projet 6)
 
-- **Exe Windows et AppImage** dans leur vraie fenêtre (WebView2, WebKitGTK) : seul Chrome a servi aux vérifications. L'exe tourne chez le MJ, relié à son serveur Docker.
+- **Exe Windows et AppImage** dans leur vraie fenêtre (WebView2, WebKitGTK) : seul Chrome a servi aux vérifications.
 - **Serveur derrière un vrai nginx** (HTTPS) : l'exemple du README n'a pas été essayé ; synchronisation sur une vraie coupure, et avec deux copies hors ligne en même temps.
 - **Export vers Obsidian** ouvert dans le vrai vault (propriétés, tableaux, liens).
 - **Serveur MCP** : essayé dans Claude Desktop sous Windows (19 octobre 2026) ; reste Claude Code.
@@ -235,4 +228,4 @@ Aucun. Les trois notés jusqu'au 22 octobre 2026 sont corrigés (PR des correcti
 ### Points en attente d'une décision
 
 - **Objet donné à un PJ sans feuille** (lot 2 de l'inventaire) : la feuille est aujourd'hui créée d'office, vierge (PV 1), avec cette seule ligne (`mettreDansInventaire`). Le garder, ou attendre que la feuille existe ? Question posée au MJ le 29 octobre 2026 ; fusionné en l'état (création d'office) en attendant sa réponse.
-- **Script d'import Obsidian** : en faire un vrai aller-retour (projet 31) ? Aujourd'hui, `vault_vers_cofdm.py` reste un import unique, taillé pour le vault d'origine.
+- **Script d'import Obsidian** : en faire un vrai aller-retour (projet 31) ? Aujourd'hui, `vault_vers_cofdm.py` reste un import unique, taillé pour un vault particulier.
