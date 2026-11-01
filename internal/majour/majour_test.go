@@ -7,12 +7,15 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestVersions(t *testing.T) {
@@ -157,5 +160,174 @@ func TestChercherEtInstaller(t *testing.T) {
 	}
 	if f, _ := filepath.Glob(filepath.Join(dir, ".cof-dm-maj-*")); len(f) != 0 {
 		t.Fatalf("téléchargements laissés : %v", f)
+	}
+}
+
+// verrous simule des fichiers que Windows (programme en cours) ou un antivirus tient encore : une
+// opération sur un chemin verrouillé échoue tant qu'il lui reste des refus.
+type verrous map[string]int
+
+func (v verrous) bloque(chemin string) bool {
+	if v[chemin] == 0 {
+		return false
+	}
+	if v[chemin] > 0 {
+		v[chemin]--
+	}
+	return true
+}
+
+func simulerVerrous(t *testing.T, v verrous) {
+	t.Helper()
+	r, x, p, pn := renommer, retirer, pauses, pausesNettoyage
+	t.Cleanup(func() { renommer, retirer, pauses, pausesNettoyage = r, x, p, pn })
+	pauses = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	pausesNettoyage = []time.Duration{time.Millisecond, time.Millisecond, time.Millisecond}
+	renommer = func(a, b string) error {
+		if v.bloque(a) {
+			return &os.LinkError{Op: "rename", Old: a, New: b, Err: errors.New("fichier utilisé par un autre processus")}
+		}
+		return os.Rename(a, b)
+	}
+	retirer = func(c string) error {
+		if v.bloque(c) {
+			return &os.PathError{Op: "remove", Path: c, Err: errors.New("accès refusé")}
+		}
+		return os.Remove(c)
+	}
+}
+
+func ecrire(t *testing.T, chemin, contenu string) {
+	t.Helper()
+	if err := os.WriteFile(chemin, []byte(contenu), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func lire(t *testing.T, chemin string) string {
+	t.Helper()
+	c, err := os.ReadFile(chemin)
+	if err != nil {
+		return "(absent)"
+	}
+	return string(c)
+}
+
+func TestRemplacerAncienEncoreTenu(t *testing.T) {
+	dir := t.TempDir()
+	cible, nouveau := filepath.Join(dir, "COF-DM.exe"), filepath.Join(dir, ".cof-dm-maj-1")
+	ecrire(t, cible, "v2")
+	ecrire(t, cible+suffixeAncien, "v1") // le programme d'avant la mise à jour précédente, toujours tenu
+	ecrire(t, nouveau, "v3")
+	simulerVerrous(t, verrous{cible + suffixeAncien: -1})
+	if err := Remplacer(cible, nouveau); err != nil {
+		t.Fatalf("remplacement bloqué par un ancien tenu : %v", err)
+	}
+	if lire(t, cible) != "v3" || lire(t, cible+suffixeAncien) != "v1" || lire(t, cible+suffixeAncien+"-2") != "v2" {
+		t.Fatalf("après : %q, ancien %q, ancien-2 %q", lire(t, cible), lire(t, cible+suffixeAncien), lire(t, cible+suffixeAncien+"-2"))
+	}
+}
+
+func TestRemplacerVerrouPassager(t *testing.T) {
+	dir := t.TempDir()
+	cible, nouveau := filepath.Join(dir, "COF-DM.exe"), filepath.Join(dir, ".cof-dm-maj-1")
+	ecrire(t, cible, "v1")
+	ecrire(t, nouveau, "v2")
+	// un antivirus lit le fichier neuf, puis le lâche
+	simulerVerrous(t, verrous{nouveau: 2, cible: 1})
+	if err := Remplacer(cible, nouveau); err != nil {
+		t.Fatalf("verrou passager : %v", err)
+	}
+	if lire(t, cible) != "v2" || lire(t, cible+suffixeAncien) != "v1" {
+		t.Fatalf("après : %q, ancien %q", lire(t, cible), lire(t, cible+suffixeAncien))
+	}
+}
+
+func TestRemplacerEchecRienNeChange(t *testing.T) {
+	dir := t.TempDir()
+	cible, nouveau := filepath.Join(dir, "COF-DM.exe"), filepath.Join(dir, ".cof-dm-maj-1")
+	ecrire(t, cible, "v1")
+	ecrire(t, nouveau, "v2")
+	simulerVerrous(t, verrous{nouveau: -1})
+	if err := Remplacer(cible, nouveau); err == nil || !strings.Contains(err.Error(), "non remplaçable") {
+		t.Fatalf("fichier neuf toujours tenu : %v", err)
+	}
+	if lire(t, cible) != "v1" {
+		t.Fatalf("programme après un échec : %q", lire(t, cible))
+	}
+	if _, err := os.Stat(cible + suffixeAncien); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("programme d'avant laissé en « .ancien » après un échec")
+	}
+	// le programme lui-même ne se renomme pas : rien ne bouge non plus
+	ecrire(t, nouveau, "v2")
+	simulerVerrous(t, verrous{cible: -1})
+	if err := Remplacer(cible, nouveau); err == nil || lire(t, cible) != "v1" {
+		t.Fatalf("programme tenu : %v, %q", err, lire(t, cible))
+	}
+}
+
+func TestNettoyer(t *testing.T) {
+	dir := t.TempDir()
+	cible := filepath.Join(dir, "COF-DM.exe")
+	ecrire(t, cible, "v3")
+	vieux := time.Now().Add(-2 * time.Hour)
+	for _, f := range []string{"COF-DM.exe.ancien", "COF-DM.exe.ancien-2", ".cof-dm-maj-123", ".cof-dm-maj-recent", "autre.txt", "COF-DM.exe.ancien-3"} {
+		ecrire(t, filepath.Join(dir, f), "x")
+		if f != ".cof-dm-maj-recent" {
+			if err := os.Chtimes(filepath.Join(dir, f), vieux, vieux); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	// le programme d'avant tourne encore deux essais, un autre reste tenu tout du long
+	simulerVerrous(t, verrous{filepath.Join(dir, "COF-DM.exe.ancien"): 2, filepath.Join(dir, "COF-DM.exe.ancien-3"): -1})
+	err := nettoyer(cible)
+	if err == nil || !strings.Contains(err.Error(), "ancien-3") {
+		t.Fatalf("un fichier toujours tenu doit être signalé : %v", err)
+	}
+	reste, _ := os.ReadDir(dir)
+	var noms []string
+	for _, e := range reste {
+		noms = append(noms, e.Name())
+	}
+	if strings.Join(noms, ",") != ".cof-dm-maj-recent,COF-DM.exe,COF-DM.exe.ancien-3,autre.txt" {
+		t.Fatalf("après nettoyage : %v", noms)
+	}
+	// au lancement suivant, il n'est plus tenu
+	simulerVerrous(t, verrous{})
+	if err := nettoyer(cible); err != nil {
+		t.Fatalf("lancement suivant : %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "COF-DM.exe.ancien-3")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("programme d'avant toujours là au lancement suivant")
+	}
+}
+
+func TestDossierNonModifiable(t *testing.T) {
+	if runtime.GOOS != "linux" || os.Geteuid() == 0 {
+		t.Skip("dossier en lecture seule : Linux, hors administrateur")
+	}
+	dir := t.TempDir()
+	cible := filepath.Join(dir, "COF-DM.AppImage")
+	ecrire(t, cible, "v1")
+	t.Setenv("APPIMAGE", cible)
+	if !Modifiable() {
+		t.Fatal("dossier modifiable vu comme non modifiable")
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(dir, 0o755) })
+	if Modifiable() {
+		t.Fatal("dossier en lecture seule vu comme modifiable")
+	}
+	b := nouveauBanc(t)
+	b.publier("v1.2.0", false, []byte("programme 1.2.0"), true)
+	d, _ := Chercher(Stable, "1.1.0")
+	if _, err := Installer(d); err == nil || !strings.Contains(err.Error(), "n'accepte pas de fichier neuf") {
+		t.Fatalf("installation dans un dossier en lecture seule : %v", err)
+	}
+	if lire(t, cible) != "v1" {
+		t.Fatal("programme touché")
 	}
 }

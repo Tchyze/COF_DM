@@ -27,8 +27,9 @@ const (
 
 // Fonctions du paquet majour, remplaçables dans les tests.
 var (
-	chercherMaj  = majour.Chercher
-	installerMaj = majour.Installer
+	chercherMaj   = majour.Chercher
+	installerMaj  = majour.Installer
+	modifiableMaj = majour.Modifiable
 )
 
 type misesAJour struct {
@@ -127,6 +128,9 @@ func (a *Application) vueMaj() map[string]any {
 	_, publiee := majour.Lire(a.opt.Version)
 	out := map[string]any{"version": a.opt.Version, "canal": a.canal(), "automatique": chemin != "" && publiee && a.opt.Relancer != nil,
 		"erreur": a.maj.erreur, "installation": a.maj.installant}
+	if out["automatique"] == true {
+		out["modifiable"] = modifiableMaj() // le dossier du programme accepte la nouvelle version
+	}
 	if !a.maj.verifie.IsZero() {
 		out["verifie"] = float64(a.maj.verifie.UnixNano()) / 1e9
 	}

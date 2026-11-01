@@ -306,7 +306,11 @@ func main() {
 	}
 	var app *serveur.Application
 	if !*modeServeur {
-		majour.Nettoyer() // le programme d'avant la dernière mise à jour
+		go func() { // le programme d'avant la dernière mise à jour ; il peut tourner encore un instant
+			if err := majour.Nettoyer(); err != nil {
+				log.Printf("programme d'avant la mise à jour non retiré (il le sera au prochain lancement) : %v", err)
+			}
+		}()
 		opt.Relancer = func(programme string) {
 			cmd := exec.Command(programme, os.Args[1:]...)
 			cmd.Env = append(os.Environ(), envRelance+"=1")
