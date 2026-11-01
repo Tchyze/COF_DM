@@ -64,8 +64,8 @@ func (t *tableJets) depuis(id int64, caches bool) ([]jet, int64) {
 
 func (s *Serveur) routesDes() {
 	s.jets = &tableJets{}
-	s.mux.HandleFunc("GET /api/des", s.desLire)
-	s.mux.HandleFunc("POST /api/des", s.desLancerMJ)
+	s.mux.HandleFunc("GET /api/des", s.desDirect(s.desLire))
+	s.mux.HandleFunc("POST /api/des", s.desDirect(s.desLancerMJ))
 }
 
 // routesDesJoueurs : les jets vus et lancés depuis la page des joueurs (mêmes routes partout).

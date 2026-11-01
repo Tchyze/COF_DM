@@ -258,6 +258,12 @@ func (a *Application) courantRelie() (*store.Store, *lien, *connexion) {
 	a.mu.RLock()
 	st := a.st
 	a.mu.RUnlock()
+	return a.relieDe(st)
+}
+
+// relieDe : la même chose pour un univers ouvert donné. Sans verrou : une requête en cours tient déjà
+// celui de l'application (combat en direct).
+func (a *Application) relieDe(st *store.Store) (*store.Store, *lien, *connexion) {
 	if st == nil || !st.EstCopie() {
 		return st, nil, nil
 	}
@@ -315,9 +321,16 @@ func (a *Application) noterServeur(err error) {
 
 // echanger : un échange de l'univers ouvert avec son serveur, s'il y est relié et pas en pause.
 func (a *Application) echanger() (etatSync, error) {
+	a.mu.RLock()
+	st := a.st
+	a.mu.RUnlock()
+	return a.echangerDe(st)
+}
+
+func (a *Application) echangerDe(ouvert *store.Store) (etatSync, error) {
 	a.dist.mu.Lock()
 	defer a.dist.mu.Unlock()
-	st, l, c := a.courantRelie()
+	st, l, c := a.relieDe(ouvert)
 	if l == nil {
 		return etatSync{}, store.ErrValidation{Msg: "Cet univers n'est relié à aucun serveur."}
 	}

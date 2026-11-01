@@ -289,14 +289,42 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
   // Une action part en POST ; le nouvel état revient dans la réponse (et par le WebSocket, pour les
   // autres écrans). Elles se suivent une à une, dans l'ordre où elles ont été tapées.
   let timerReco = null, timerPing = null, dernierPong = Date.now(), file = Promise.resolve();
+  let perdue = false, timerRetour = null;
+  const MSG_PERDUE = "Connexion perdue : le combat reprendra dès le retour du serveur.";
   const send = a => {
     if (ferme) return;
     if (lectureSeule()) { toast("Votre compte suit ce combat sans pouvoir y agir.", true); return; }
+    if (perdue) { toast(MSG_PERDUE, true); return; }
     file = file.then(async () => {
+      if (perdue) { toast(MSG_PERDUE, true); return; }
       try { recevoir(await api("POST", `/api/combats/${cid}/actions`, a)); }
-      catch (e) { if (!ferme) toast(e.message, true); }
+      catch (e) {
+        if (ferme) return;
+        if (e.status === 503) connexionPerdue();
+        else toast(e.message, true);
+      }
     });
   };
+  // Combat joué sur le serveur, connexion perdue : les actions sont bloquées, rien ne continue ici,
+  // et l'écran reprend seul quand le serveur répond de nouveau.
+  function connexionPerdue() {
+    if (ferme) return;
+    if (!perdue) toast(MSG_PERDUE, true);
+    perdue = true;
+    const c = $e("#conn"); c.hidden = false; c.textContent = MSG_PERDUE;
+    clearTimeout(timerRetour);
+    timerRetour = setTimeout(async () => {
+      try { const m = await api("GET", `/api/combats/${cid}`); if (!ferme) { connexionRetablie(); recevoir(m); } }
+      catch (e) { if (!ferme && e.status === 503) connexionPerdue(); }
+    }, 3000);
+  }
+  function connexionRetablie() {
+    clearTimeout(timerRetour);
+    if (!perdue) return;
+    perdue = false;
+    $e("#conn").hidden = true;
+    toast("Connexion rétablie.");
+  }
   function reconnecterVite() {
     if (ferme || (ws && ws.readyState <= 1)) return;
     clearTimeout(timerReco); retry = 0; connecter();
@@ -310,17 +338,18 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     const proto = location.protocol === "https:" ? "wss" : "ws";
     const sock = new WebSocket(`${proto}://${location.host}${lien(`/api/combats/${cid}/direct`)}`);
     ws = sock;
-    sock.onopen = () => { retry = 0; dernierPong = Date.now(); $e("#conn").hidden = true; };
+    sock.onopen = () => { retry = 0; dernierPong = Date.now(); if (!perdue) $e("#conn").hidden = true; };
     sock.onmessage = e => {
       if (ws !== sock) return;
       const m = JSON.parse(e.data);
       dernierPong = Date.now();
       if (m.type === "etat") recevoir(m);
+      else if (m.type === "connexion") { if (m.etat === "perdue") connexionPerdue(); else connexionRetablie(); }
       else if (m.type === "supprime") { ferme = true; toast("Ce combat n'existe plus.", true); retour(); }
     };
     sock.onclose = () => {
       if (ferme || ws !== sock) return;
-      const c = $e("#conn"); c.hidden = false; c.textContent = "Reconnexion…";
+      const c = $e("#conn"); c.hidden = false; c.textContent = perdue ? MSG_PERDUE : "Reconnexion…";
       clearTimeout(timerReco);
       timerReco = setTimeout(connecter, Math.min(3000, 300 * 2 ** retry++));
     };
@@ -1040,7 +1069,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
   connecter();
 
   return () => {
-    ferme = true; clearInterval(timerPing); clearTimeout(timerReco);
+    ferme = true; clearInterval(timerPing); clearTimeout(timerReco); clearTimeout(timerRetour);
     document.removeEventListener("visibilitychange", reveil); window.removeEventListener("online", reconnecterVite); window.removeEventListener("focus", reveil);
     document.removeEventListener("keydown", clavier); try { ws?.close(); } catch { /* rien */ }
     mesure.disconnect(); cancelAnimationFrame(trame); };

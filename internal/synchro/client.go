@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"github.com/Tchyze/cof_dm/internal/store"
 )
 
@@ -68,6 +70,64 @@ func hoteLocal(h string) bool {
 // Nouveau : un client pour un univers d'un serveur.
 func Nouveau(base, jeton, univers string) *Client {
 	return &Client{Base: base, Jeton: jeton, Univers: univers, http: &http.Client{Timeout: 2 * time.Minute}}
+}
+
+// delaiDirect : combat et dés en direct, le MJ attend devant son écran ; une coupure se voit vite.
+const delaiDirect = 5 * time.Second
+
+// NouveauDirect : un client pour le combat et les dés en direct.
+func NouveauDirect(base, jeton, univers string) *Client {
+	return &Client{Base: base, Jeton: jeton, Univers: univers, http: &http.Client{Timeout: delaiDirect}}
+}
+
+// Relayer transmet une requête au serveur et rend sa réponse telle quelle. Serveur muet, ou reverse
+// proxy qui ne le trouve plus : ErrInjoignable.
+func (c *Client) Relayer(methode, chemin string, corps []byte) (int, []byte, error) {
+	r, err := c.requete(methode, chemin, bytes.NewReader(corps))
+	if err != nil {
+		return 0, nil, err
+	}
+	r.Header.Set("Content-Type", "application/json")
+	rep, err := c.http.Do(r)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%w : %v", ErrInjoignable, err)
+	}
+	defer rep.Body.Close()
+	if injoignableDerriereProxy(rep.StatusCode) {
+		return 0, nil, fmt.Errorf("%w : le serveur répond %d", ErrInjoignable, rep.StatusCode)
+	}
+	b, err := io.ReadAll(rep.Body)
+	if err != nil {
+		return 0, nil, fmt.Errorf("%w : %v", ErrInjoignable, err)
+	}
+	return rep.StatusCode, b, nil
+}
+
+func injoignableDerriereProxy(code int) bool {
+	return code == http.StatusBadGateway || code == http.StatusServiceUnavailable || code == http.StatusGatewayTimeout
+}
+
+// Suivre ouvre le suivi en direct d'un combat, avec le jeton du poste. Sans en-tête Origin : ce n'est
+// pas une page d'un autre site. Ce suivi ne fait que recevoir.
+func (c *Client) Suivre(chemin string) (*websocket.Conn, error) {
+	r, err := c.requete(http.MethodGet, chemin, nil)
+	if err != nil {
+		return nil, err
+	}
+	u := *r.URL
+	u.Scheme = "ws"
+	if r.URL.Scheme == "https" {
+		u.Scheme = "wss"
+	}
+	d := websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: delaiDirect}
+	conn, rep, err := d.Dial(u.String(), r.Header)
+	if err == nil {
+		return conn, nil
+	}
+	if rep == nil || injoignableDerriereProxy(rep.StatusCode) {
+		return nil, fmt.Errorf("%w : %v", ErrInjoignable, err)
+	}
+	return nil, ErrServeur{rep.StatusCode, fmt.Sprintf("le serveur répond %d", rep.StatusCode)}
 }
 
 // Univers : un univers du serveur où le compte a un rôle.
