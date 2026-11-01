@@ -165,7 +165,7 @@ Peuple, profil, caractéristiques, voies de départ, équipement, tirés du fich
 Revenir sur une modification depuis le journal (qui garde déjà l'avant/après) ; Ctrl+Z dans la fiche ouverte.
 
 ### 29. Notifications et PWA joueurs
-Page des joueurs installable, notifications « C'est à vous ! » et « nouvelle aide de jeu » quand le téléphone est en veille.
+Page des joueurs installable, notifications « C'est à vous ! » et « nouvelle aide de jeu » quand le téléphone est en veille. L'installation est faite (toute l'application, en HTTPS) ; restent les notifications.
 
 ### 30. Journal de campagne côté joueurs
 Résumé public de chaque séance (distinct du résumé du MJ), lu et complété par les joueurs sur leur page (champ `Joueur: true`).

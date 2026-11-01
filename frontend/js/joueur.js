@@ -5,6 +5,7 @@
 // alors tout ce qu'un compte joueur a de l'application (son compte, et le choix de l'univers).
 import { $, $$, esc, api, toast, lien, universOnglet, choisirUniversOnglet } from "./ui.js";
 import { panneauCompte } from "./views/comptes.js";
+import { boutonInstaller } from "./installer.js";
 import { panneauFeuille, CARACS } from "./views/feuille.js";
 import { monterNiveau } from "./niveau.js";
 import { lignesEffets, libellePar, voieLiee } from "./capacites.js";
@@ -555,6 +556,7 @@ function fermee(titre, texte, compte = false) {
 }
 
 async function demarrer() {
+  boutonInstaller($(".pj-barre"), $("#pj-changer")); // avant tout : aussi sur les pages où l'on s'arrête
   const acces = await api("GET", "/api/acces").catch(() => ({}));
   if (acces.serveur && !acces.connecte) { fermee("Connectez-vous", `La page des joueurs s'ouvre avec votre compte : <a href="/">connectez-vous</a>.`); return; }
   const compte = !!acces.serveur && await choixUnivers(); // sur un serveur, avec un compte

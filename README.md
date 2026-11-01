@@ -83,6 +83,8 @@ Au premier lancement après avoir coché la case, Windows demande d'autoriser CO
 
 Pour jouer à distance, préférez un VPN (Tailscale, WireGuard…) à une redirection de port sur la box : l'application n'a pas de HTTPS.
 
+**L'installer comme une application.** Sur un serveur en HTTPS, le bouton « Installer sur cet appareil » (page de connexion, menu, page des joueurs) pose une icône sur l'écran d'accueil : COF DM s'ouvre alors en plein écran, sans barre d'adresse, dans le navigateur qui l'a installé. Sur Android, avec Chrome : touchez ce bouton, ou passez par le menu du navigateur. Sur iPad et iPhone, Safari n'a pas d'invitation : Partager, puis « Sur l'écran d'accueil ». Ce n'est pas un APK : rien à télécharger, et l'application suit les mises à jour du serveur. Elle a besoin du réseau : rien de vos univers ne reste sur l'appareil. Sans HTTPS (l'application de bureau ouverte au réseau local, adresse en `http://192.168…`), les navigateurs ne l'installent pas : le bouton n'apparaît pas, et la tablette utilise COF DM dans un onglet.
+
 ### Page des joueurs
 
 Chaque joueur suit la partie sur son téléphone, à l'adresse `http://<adresse>:8100/joueur.html` :

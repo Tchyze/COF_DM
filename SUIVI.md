@@ -266,6 +266,12 @@ Lot 1, avant la mise en ligne :
 - **Essayé** : authentificateur logiciel dans les tests, authentificateur virtuel du CDP dans Chrome à 1300 et 390 px ; en HTTPS derrière un vrai NPM sur un banc jetable, certificat de test accepté par une option de Chrome : clé, TOTP et WebSocket d'un joueur. 
 - **Essai du MJ** : une vraie clé et une vraie application d'authentification, sous Windows dans Chrome, sur une instance en `localhost` : enregistrement, connexion, un simple toucher sans PIN. Pas encore essayé en vrai : l'adresse HTTPS réelle, les autres navigateurs, fail2ban, Portainer.
 
+### Installation sur tablette (novembre 2026, branche `tablette-installable`, empilée sur `security/mfa-admin`)
+
+- **Application installable** : manifeste, icônes (dont une masquable pour Android), bouton « Installer sur cet appareil » sur la page de connexion, dans le menu du MJ, la page des joueurs et l'administration. Plein écran, dans le navigateur qui l'a installée. Une seule application : le rôle du compte mène à la bonne page.
+- **Sans service worker** : rien ne reste sur l'appareil, et il faut le réseau. Sans HTTPS, pas d'installation ni de bouton.
+- **Essayé** : Chrome la juge installable en contexte sûr, et non en `http` (CDP) ; bouton à 1300, 800 et 390 px, invitation du navigateur simulée. **Pas essayé** : une vraie tablette Android, l'affichage plein écran réel, les encoches.
+
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
 | PR | Contenu |

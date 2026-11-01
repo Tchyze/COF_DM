@@ -109,3 +109,30 @@ func TestUniversInconnuAnonyme(t *testing.T) {
 		t.Fatalf("compte connecté, univers inconnu : %d", c)
 	}
 }
+
+// Le manifeste et les icônes se lisent avant de se connecter : le navigateur les demande sans cookie.
+func TestManifesteServi(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := comptes.Ouvrir(filepath.Join(dir, "comptes.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := NouvelleApplication(Options{Version: "test", DossierDon: dir, Port: 8100, Comptes: reg, Frontend: fstest.MapFS{
+		"index.html": {Data: []byte("<html>")}, "manifest.webmanifest": {Data: []byte("{}")}, "icones/app-192.png": {Data: []byte("\x89PNG\r\n\x1a\n")}}})
+	if err := a.Demarrer(""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(a.Fermer)
+	anonyme := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
+	w := anonyme.brut("GET", "/manifest.webmanifest", nil)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "application/manifest+json" {
+		t.Fatalf("manifeste : %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	w = anonyme.brut("GET", "/icones/app-192.png", nil)
+	if w.Code != 200 || w.Header().Get("Content-Type") != "image/png" {
+		t.Fatalf("icône : %d %q", w.Code, w.Header().Get("Content-Type"))
+	}
+	if w := anonyme.brut("GET", "/icones/", nil); w.Code != 404 {
+		t.Fatalf("dossier des icônes : %d", w.Code)
+	}
+}

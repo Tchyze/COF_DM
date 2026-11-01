@@ -38,7 +38,7 @@ async function panneauAcces(box) {
   const adresses = a.adresses.map(u => u + "/#/table");
   const etat = (ok, texte) => `<li><span class="${ok ? "ok-pastille" : "ko-pastille"}">●</span> ${texte}</li>`;
   box.innerHTML = `<h3>Tablette et réseau</h3>
-    <p class="hint">Pour ouvrir COF DM (et l'écran du MJ) sur une tablette ou un autre appareil du même réseau. Par défaut, l'application ne répond qu'à cet ordinateur.</p>
+    <p class="hint">Pour ouvrir COF DM (et l'écran du MJ) sur une tablette ou un autre appareil du même réseau. Par défaut, l'application ne répond qu'à cet ordinateur. Elle s'y utilise dans un onglet : l'installer en plein écran demande une adresse en HTTPS, celle d'un serveur.</p>
     ${a.relie ? `<p class="alerte">L'application est reliée à un serveur : la tablette et la page des joueurs passent par lui, et le réseau local reste fermé. Pour l'ouvrir, passez en <b>Client seul</b> (zone en bas à gauche).</p>` : ""}
     <ul class="acces-etat">
       ${etat(a.reseau, a.reseau ? "L'application écoute sur le réseau local." : "L'application n'écoute que sur cet ordinateur.")}

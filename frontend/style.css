@@ -797,3 +797,9 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
   .sf-table td:first-child { flex: 1 1 100%; }
   .sf-table td:last-child { margin-left: auto; }
 }
+
+/* installée sur une tablette : le contenu reste hors des encoches */
+@media (display-mode: fullscreen), (display-mode: standalone) {
+  body { box-sizing: border-box; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+}
+.connexion .installer { align-self: flex-start; }

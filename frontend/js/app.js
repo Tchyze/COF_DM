@@ -22,6 +22,7 @@ import * as apres from "./views/apres.js";
 import { initFichier } from "./fichier.js";
 import { initEtatLien } from "./connexion.js";
 import { clesPossibles, prouverCle, messageCle } from "./webauthn.js";
+import { boutonInstaller } from "./installer.js";
 import { initBadgeMaj } from "./majour.js";
 import { initDes } from "./des.js";
 
@@ -338,6 +339,7 @@ function ecranCompte(acces) {
         <label class="champ"><span>Mot de passe</span><input type="password" id="mdp" autocomplete="current-password" required></label>
         <div><button class="primary" type="submit">Entrer</button></div>
       </form></section>`;
+  boutonInstaller($(".connexion"));
   $("#nom").focus();
   $("#connexion").onsubmit = async e => {
     e.preventDefault();
@@ -408,6 +410,7 @@ function ecranSecondFacteur(marque, facteurs) {
   // un compte joueur n'a que sa page de joueur, dans l'univers de cet onglet
   if (acces.joueur) { location.replace("/joueur.html"); return; }
   window.cofAcces = acces;
+  boutonInstaller($(".side .bas"), $("#theme"));
   window.addEventListener("cof-session", async () => {
     const a = await fetch("/api/acces", { headers: enTetesUnivers() }).then(r => r.json()).catch(() => null);
     if (a && !a.mj) location.reload();

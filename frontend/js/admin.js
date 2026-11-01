@@ -6,6 +6,7 @@ import { $, $$, esc, api, toast, armer, dateHeure, dialogue, taille } from "./ui
 import { panneauCompte } from "./views/comptes.js";
 import { panneauVersionServeur } from "./majour.js";
 import { panneauSecondFacteur, enrolement, confirmerAction } from "./views/secondfacteur.js";
+import { boutonInstaller } from "./installer.js";
 
 const MDP_MIN = 10;
 
@@ -279,6 +280,7 @@ async function route(moi) {
   if (!acces?.serveur || !acces.connecte || !acces.compte?.admin) { location.replace("/"); return; }
   const sortir = $("#adm-sortir");
   sortir.hidden = false;
+  boutonInstaller(sortir.parentNode, sortir);
   sortir.title = `Fermer la session de ${acces.compte.nom}`;
   sortir.onclick = async () => { await api("POST", "/api/acces/deconnexion").catch(() => {}); location.replace("/"); };
   if (acces.compte.doit_changer) { // le mot de passe initial, passé par les journaux : rien d'autre avant
