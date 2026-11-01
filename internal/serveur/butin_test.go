@@ -322,7 +322,7 @@ func TestButinCompteJoueur(t *testing.T) {
 	lea := creer("pj", "Léandre", map[string]any{"campagne": camp})
 	tom := creer("pj", "Tomas", map[string]any{"campagne": camp})
 	b.proxy("POST", fmt.Sprintf("/api/campagnes/%v/pot/ajouter", camp), map[string]any{"pieces": map[string]any{"po": 8}}, mj)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

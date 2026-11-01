@@ -103,7 +103,7 @@ func TestProxiesConnexion(t *testing.T) {
 	proxies, _ := LireProxies("172.30.0.0/24")
 	b := nouveauAvec(t, Options{Comptes: reg, Proxies: proxies})
 	b.s.acces.pause = 0
-	if _, err := reg.Creer("meneur", "mot-de-passe-meneur", false); err != nil {
+	if _, err := reg.Creer("meneur", "mot-de-passe-ruenem", false); err != nil {
 		t.Fatal(err)
 	}
 	essai := func(pair, xff, proto, mdp string) *httptest.ResponseRecorder {
@@ -125,10 +125,10 @@ func TestProxiesConnexion(t *testing.T) {
 		t.Fatalf("pas de cookie de session : %d", w.Code)
 		return false
 	}
-	if !secure(essai("172.30.0.2:1", "203.0.113.9", "https", "mot-de-passe-meneur")) {
+	if !secure(essai("172.30.0.2:1", "203.0.113.9", "https", "mot-de-passe-ruenem")) {
 		t.Fatal("derrière le proxy de confiance, le cookie doit porter Secure")
 	}
-	if secure(essai("198.51.100.7:1", "203.0.113.9", "https", "mot-de-passe-meneur")) {
+	if secure(essai("198.51.100.7:1", "203.0.113.9", "https", "mot-de-passe-ruenem")) {
 		t.Fatal("un client direct ne dicte pas Secure")
 	}
 	// un visiteur épuise ses essais : un autre, derrière le même proxy, n'est pas touché
@@ -140,7 +140,7 @@ func TestProxiesConnexion(t *testing.T) {
 	if w := essai("172.30.0.2:1", "203.0.113.66", "https", "faux"); w.Code != 429 {
 		t.Fatalf("essai de trop : %d", w.Code)
 	}
-	if w := essai("172.30.0.2:1", "203.0.113.9", "https", "mot-de-passe-meneur"); w.Code != 200 {
+	if w := essai("172.30.0.2:1", "203.0.113.9", "https", "mot-de-passe-ruenem"); w.Code != 200 {
 		t.Fatalf("autre visiteur derrière le proxy : %d", w.Code)
 	}
 }

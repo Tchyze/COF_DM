@@ -61,7 +61,7 @@ func nouveauBancDirect(t *testing.T) *bancDirect {
 	d.demarrer()
 	t.Cleanup(func() { d.ts.Close() })
 	d.b = nouvelleAppli(t, t.TempDir())
-	if c, v := d.b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": d.ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"}); c != 200 {
+	if c, v := d.b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": d.ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"}); c != 200 {
 		t.Fatalf("connexion : %d %v", c, v)
 	}
 	if c, v := d.b.local("POST", "/api/univers/serveur/ouvrir", map[string]any{"univers": univers}); c != 200 {
@@ -297,11 +297,11 @@ func TestEcranNeBloquePas(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	if _, err := d.a.opt.Comptes.Creer("chef", "mot-de-passe-chef", true); err != nil {
+	if _, err := d.a.opt.Comptes.Creer("chef", "mot-de-passe-fehc", true); err != nil {
 		t.Fatal(err)
 	}
 	chef := &navigateur{t: t, a: d.a, cookies: map[string]*http.Cookie{}}
-	chef.faire("POST", "/api/acces/connexion", map[string]any{"nom": "chef", "mdp": "mot-de-passe-chef"})
+	chef.faire("POST", "/api/acces/connexion", map[string]any{"nom": "chef", "mdp": "mot-de-passe-fehc"})
 	sous := func(quoi string, f func()) {
 		t.Helper()
 		fini := make(chan struct{})

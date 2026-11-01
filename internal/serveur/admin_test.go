@@ -271,7 +271,7 @@ func TestAdminUnivers(t *testing.T) {
 func reconnecter(t *testing.T, a *Application, nom string) *navigateur {
 	t.Helper()
 	n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
-	if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": "mot-de-passe-" + nom}); c != 200 {
+	if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}); c != 200 {
 		t.Fatalf("connexion de %s : %d", nom, c)
 	}
 	return n
@@ -283,7 +283,7 @@ func TestAdminComptes(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
 	chef := connecter("chef")
 	id := a.st.ID()
-	if c, v := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "Lea", "mdp": "mot-de-passe-lea"}); c != 201 || v["nom"] != "lea" || v["mdp"] != nil {
+	if c, v := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "Lea", "mdp": "mot-de-passe-ael"}); c != 201 || v["nom"] != "lea" || v["mdp"] != nil {
 		t.Fatalf("création de compte : %d %v", c, v)
 	}
 	if c, _ := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "court", "mdp": "court"}); c != 422 {
@@ -412,4 +412,29 @@ func TestJoindreJoueurs(t *testing.T) {
 
 func jsonDe(w *httptest.ResponseRecorder, v any) error {
 	return json.Unmarshal(w.Body.Bytes(), v)
+}
+
+// La règle des mots de passe, vue de l'administration : rien ne change à moitié.
+func TestAdminRegleDesMotsDePasse(t *testing.T) {
+	_, reg, connecter := serveurMulti(t)
+	chef := connecter("chef")
+	connecter("cible")
+	for _, c := range []map[string]any{
+		{"nom": "aline", "mdp": "1234567890"},
+		{"nom": "aline", "mdp": "aline-2026-paris"},
+		{"nom": "aline", "mdp": "trop-court", "admin": true},
+	} {
+		if code, v := chef.faire("POST", "/api/admin/comptes", c); code != 422 {
+			t.Fatalf("création %v : %d %v", c, code, v)
+		}
+	}
+	if code, v := chef.faire("PATCH", "/api/admin/comptes/cible", map[string]any{"mdp": "aaaaaaaaaaaa"}); code != 422 {
+		t.Fatalf("réinitialisation : %d %v", code, v)
+	}
+	if code, v := chef.faire("PATCH", "/api/admin/comptes/cible", map[string]any{"mdp": "trop-court", "admin": true}); code != 422 {
+		t.Fatalf("futur administrateur : %d %v", code, v)
+	}
+	if c, _ := reg.Lire("cible"); c.Admin {
+		t.Fatal("un refus ne change rien")
+	}
 }

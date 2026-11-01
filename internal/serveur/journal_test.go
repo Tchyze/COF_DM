@@ -50,7 +50,7 @@ func TestJournalConnexions(t *testing.T) {
 		c, _, _ := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdp}, depuis(ip))
 		return c
 	}
-	essai("203.0.113.9", "meneur", "mot-de-passe-meneur")
+	essai("203.0.113.9", "meneur", "mot-de-passe-ruenem")
 	essai("203.0.113.10", "Meneur", "MDP-FAUX-A-NE-PAS-VOIR")
 	essai("203.0.113.11", "inconnu", "MDP-FAUX-A-NE-PAS-VOIR")
 	for i := 0; i < essaisMax; i++ {
@@ -132,7 +132,7 @@ func TestJournalCompte(t *testing.T) {
 		r.Header.Set("X-Forwarded-For", "203.0.113.21")
 	})
 	b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "FAUX-ANCIEN-MDP", "nouveau": "NOUVEAU-MDP-SECRET"}, depuis)
-	b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-meneur", "nouveau": "NOUVEAU-MDP-SECRET", "retirer_jetons": true}, depuis)
+	b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-ruenem", "nouveau": "NOUVEAU-MDP-SECRET", "retirer_jetons": true}, depuis)
 	l := lignesSecurite(buf)
 	for _, attendu := range []string{
 		`securite evenement=jeton_cree jeton=` + id + ` nom="meneur" ip=203.0.113.20`,
@@ -156,7 +156,7 @@ func TestJournalCompte(t *testing.T) {
 func TestJournalReinitialisation(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
 	_ = a
-	reg.Creer("cible", "mot-de-passe-cible", false)
+	reg.Creer("cible", "mot-de-passe-elbic", false)
 	reg.NouveauJeton("cible", "poste")
 	chef := connecter("chef")
 	buf := journalDe(t)

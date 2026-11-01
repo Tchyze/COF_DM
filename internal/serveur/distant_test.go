@@ -35,7 +35,7 @@ func TestBureauRelie(t *testing.T) {
 	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": "http://jdr.example.org", "nom": "meneur", "mdp": "x"}); c != 422 || !strings.Contains(v["detail"].(string), "HTTPS") {
 		t.Fatalf("HTTP sur Internet : %d %v", c, v)
 	}
-	c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if c != 200 || len(v["univers"].([]any)) != 1 {
 		t.Fatalf("connexion : %d %v", c, v)
 	}
@@ -114,10 +114,10 @@ func TestBureauEnvoie(t *testing.T) {
 		t.Fatalf("envoyer sans connexion : %d", c)
 	}
 	// un administrateur ne se relie pas : il n'a pas de jeton
-	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"}); c != 422 || !strings.Contains(v["detail"].(string), "navigateur") {
+	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-fehc"}); c != 422 || !strings.Contains(v["detail"].(string), "navigateur") {
 		t.Fatalf("bureau relié par l'administrateur : %d %v", c, v)
 	}
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if c, _ := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{}); c != 422 {
 		t.Fatalf("envoi sans univers choisi : %d", c)
 	}
@@ -199,7 +199,7 @@ func TestBureauModes(t *testing.T) {
 	}
 
 	// connexion : mode serveur, réseau local fermé, ni tablette ni page des joueurs
-	c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if c != 200 || v["mode"] != modeServeurDistant || v["serveur"].(map[string]any)["etat"] != etatConnecte || len(v["univers"].([]any)) != 1 {
 		t.Fatalf("connexion : %d %v", c, v)
 	}
@@ -260,7 +260,7 @@ func TestBureauModes(t *testing.T) {
 	}
 
 	// retour sur le même serveur : la copie reprend, avec ce qui a été écrit entre-temps
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if c, v := b.local("POST", "/api/univers/serveur/synchroniser", nil); c != 200 || v["etat"] != etatAJour {
 		t.Fatalf("reprise : %d %v", c, v)
 	}
@@ -269,7 +269,7 @@ func TestBureauModes(t *testing.T) {
 	}
 
 	// se reconnecter remplace le jeton au lieu d'en ajouter
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if n := jetonsDe(t, reg, "meneur"); n != 1 {
 		t.Fatalf("jetons après reconnexion : %d", n)
 	}
@@ -280,7 +280,7 @@ func TestBureauModes(t *testing.T) {
 	defer ts2.Close()
 	connecter2("meneur")
 	reg2.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[a2.st.ID()] = comptes.MJ; return nil })
-	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts2.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"}); c != 200 || v["pause"] != true || v["serveur"].(map[string]any)["url"] != ts2.URL {
+	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts2.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"}); c != 200 || v["pause"] != true || v["serveur"].(map[string]any)["url"] != ts2.URL {
 		t.Fatalf("changement de serveur : %d %v", c, v)
 	}
 	if n := jetonsDe(t, reg, "meneur"); n != 0 {
@@ -365,7 +365,7 @@ func TestBureauUniversDuServeur(t *testing.T) {
 	if c, _ := b.local("POST", "/api/univers/serveur/ouvrir", map[string]any{"univers": premier}); c != 409 {
 		t.Fatalf("ouvrir en mode local : %d", c)
 	}
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "maitre", "mdp": "mot-de-passe-maitre"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "maitre", "mdp": "mot-de-passe-ertiam"})
 	liste := func() map[string]map[string]any {
 		t.Helper()
 		c, v := b.local("GET", "/api/univers/serveur/univers", nil)
@@ -432,7 +432,7 @@ func TestBureauJetonUnique(t *testing.T) {
 	b := nouvelleAppli(t, t.TempDir())
 	connexion := func() {
 		t.Helper()
-		if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "maitre", "mdp": "mot-de-passe-maitre"}); c != 200 || v["avertissement"] != nil {
+		if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "maitre", "mdp": "mot-de-passe-ertiam"}); c != 200 || v["avertissement"] != nil {
 			t.Fatalf("connexion : %d %v", c, v)
 		}
 	}

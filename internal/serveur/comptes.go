@@ -197,7 +197,7 @@ func erreurCompte(w http.ResponseWriter, err error) {
 		erreur(w, 404, "Compte ou jeton introuvable.")
 	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis):
 		erreur(w, 409, majuscule(err.Error())+".")
-	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
+	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrMdpAdmin), errors.Is(err, comptes.ErrMdpFaible), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
 		erreur(w, 422, majuscule(err.Error())+".")
 	default:
 		erreurStore(w, err)

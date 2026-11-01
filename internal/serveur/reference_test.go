@@ -105,7 +105,7 @@ func TestReferenceJoueurs(t *testing.T) {
 		}
 		lea, tom := creer("Léandre"), creer("Tomas")
 		prepare(b, ecrire, lea)
-		reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+		reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 		reg.Modifier("joueuse", func(c *comptes.Compte) error {
 			c.Admis = append(c.Admis, b.s.store.ID())
 			c.Roles[b.s.store.ID()] = comptes.Joueur
@@ -194,7 +194,7 @@ func TestReferenceEditeur(t *testing.T) {
 // L'éditeur suit les rôles : le MJ écrit, l'auditeur lit, le joueur n'y a pas accès.
 func TestReferenceEditeurRoles(t *testing.T) {
 	b, reg := bancServeur(t)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

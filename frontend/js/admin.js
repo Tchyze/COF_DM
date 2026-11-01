@@ -160,7 +160,7 @@ async function vueComptes(el, moi) {
       </div>
       <label class="t-coche"><input type="checkbox" id="n-admin"><span>Administrateur du serveur<small>Il gère univers et comptes, sans voir le contenu des univers.</small></span></label>
       <div><button class="primary" type="submit">Créer le compte</button></div>
-      <p class="hint">Transmettez le mot de passe à la personne, qui le changera dans « Mon compte ».</p>
+      <p class="hint">Transmettez le mot de passe à la personne, qui le changera dans « Mon compte ». Pour un administrateur, ${MDP_MIN + 2} caractères au moins ; ni le nom du compte, ni un mot de passe courant.</p>
     </form>`;
   const maj = () => vueComptes(el, moi);
   $$("tr[data-nom]", el).forEach(tr => {

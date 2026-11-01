@@ -36,10 +36,11 @@ const (
 func RoleValide(role string) bool { return role == MJ || role == Auditeur || role == Joueur }
 
 const (
-	iterations = 210000
-	MdpMin     = 10
-	prefixe    = "cofdm_"
-	jetonsMax  = 20
+	iterations  = 210000
+	MdpMin      = 10
+	MdpMinAdmin = 12
+	prefixe     = "cofdm_"
+	jetonsMax   = 20
 	// utiliseTous : le fichier des comptes ne s'écrit pas à chaque requête d'un poste relié
 	utiliseTous = 3600.0
 )
@@ -49,6 +50,8 @@ var (
 	ErrExiste       = errors.New("ce nom est déjà pris")
 	ErrNom          = errors.New("nom invalide : 3 à 32 caractères parmi a-z, 0-9, « - » et « _ »")
 	ErrMdp          = errors.New("le mot de passe doit faire au moins 10 caractères")
+	ErrMdpAdmin     = errors.New("le mot de passe d'un administrateur doit faire au moins 12 caractères")
+	ErrMdpFaible    = errors.New("ce mot de passe est trop facile à deviner : évitez le nom du compte, les répétitions et les mots de passe courants")
 	ErrRole         = errors.New("rôle inconnu : mj, auditeur ou joueur")
 	ErrDernierAdmin = errors.New("il doit rester un administrateur actif")
 	ErrTropDeJetons = errors.New("trop de jetons : retirez-en un d'abord")
@@ -239,13 +242,49 @@ func (r *Registre) Lire(nom string) (Compte, bool) {
 	return copie(c), true
 }
 
+// mdpCourants : les plus essayés de ceux qui passent la longueur minimale (en minuscules).
+var mdpCourants = map[string]bool{
+	"0123456789": true, "1234567890": true, "12345678910": true, "123456789a": true, "a123456789": true, "0987654321": true,
+	"1234512345": true, "1122334455": true, "1q2w3e4r5t": true, "1qaz2wsx3edc": true, "qwertyuiop": true, "azertyuiop": true,
+	"azerty1234": true, "azerty12345": true, "azerty123456": true, "qwerty1234": true, "qwerty12345": true, "qwerty123456": true,
+	"password12": true, "password123": true, "password1234": true, "passw0rd123": true, "motdepasse": true, "motdepasse1": true,
+	"motdepasse12": true, "motdepasse123": true, "motdepasse1234": true, "administrateur": true, "administrator": true,
+	"adminadmin": true, "admin12345": true, "admin123456": true, "changeme123": true, "letmein1234": true, "iloveyou12": true,
+	"iloveyou123": true, "jetaime1234": true, "bonjour1234": true, "soleil1234": true, "welcome123": true, "football123": true,
+	"dragon1234": true, "dragon12345": true, "chroniques": true, "chroniquesoubliees": true, "maitredujeu": true, "donjons1234": true,
+}
+
+// MdpAcceptable : la règle d'un nouveau mot de passe. Elle ne vaut qu'à la création et au changement :
+// un compte existant se connecte toujours avec le sien.
+func MdpAcceptable(nom, mdp string, admin bool) error {
+	n := len([]rune(mdp))
+	switch {
+	case n < MdpMin:
+		return ErrMdp
+	case admin && n < MdpMinAdmin:
+		return ErrMdpAdmin
+	}
+	bas := strings.ToLower(mdp)
+	repete := true
+	for _, x := range bas {
+		if x != []rune(bas)[0] {
+			repete = false
+			break
+		}
+	}
+	if repete || mdpCourants[bas] || (nom != "" && strings.Contains(bas, strings.ToLower(nom))) {
+		return ErrMdpFaible
+	}
+	return nil
+}
+
 func (r *Registre) Creer(nom, mdp string, admin bool) (Compte, error) {
 	nom = Normaliser(nom)
 	if !reNom.MatchString(nom) {
 		return Compte{}, ErrNom
 	}
-	if len([]rune(mdp)) < MdpMin {
-		return Compte{}, ErrMdp
+	if err := MdpAcceptable(nom, mdp, admin); err != nil {
+		return Compte{}, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -365,11 +404,11 @@ func (r *Registre) ReinitialiserMdp(nom, mdp string) error {
 // ChangerMdp change le mot de passe, et retire tous les jetons du compte si retirerJetons. Renvoie le
 // nombre de jetons retirés ; en cas d'erreur, rien n'a changé.
 func (r *Registre) ChangerMdp(nom, mdp string, retirerJetons bool) (int, error) {
-	if len([]rune(mdp)) < MdpMin {
-		return 0, ErrMdp
-	}
 	retires := 0
 	_, err := r.Modifier(nom, func(c *Compte) error {
+		if err := MdpAcceptable(c.Nom, mdp, c.Admin); err != nil {
+			return err
+		}
 		c.Mdp = empreinteMdp(mdp)
 		c.Version++
 		if retirerJetons {

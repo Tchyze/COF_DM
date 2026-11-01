@@ -125,7 +125,7 @@ func TestFeuille(t *testing.T) {
 func TestFeuilleRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
-		reg.Creer(nom, "mot-de-passe-"+nom, false)
+		reg.Creer(nom, mdpEssai(nom), false)
 		reg.Modifier(nom, func(c *comptes.Compte) error {
 			c.Admis = append(c.Admis, b.s.store.ID())
 			c.Roles[b.s.store.ID()] = comptes.Joueur

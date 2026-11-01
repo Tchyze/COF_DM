@@ -190,7 +190,7 @@ func TestCombat(t *testing.T) {
 // Le combat suit les rôles : le MJ le joue, l'auditeur le regarde, le joueur n'y a pas accès.
 func TestCombatRoles(t *testing.T) {
 	b, reg := bancServeur(t)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

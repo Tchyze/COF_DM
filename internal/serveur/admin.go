@@ -495,6 +495,17 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		}
 	}
 	nom := r.PathValue("nom")
+	if in.Mdp != nil { // refusé avant tout le reste : rien ne change à moitié, et un futur administrateur y passe
+		cible, _ := a.opt.Comptes.Lire(nom)
+		admin := cible.Admin
+		if in.Admin != nil {
+			admin = *in.Admin
+		}
+		if err := comptes.MdpAcceptable(comptes.Normaliser(nom), *in.Mdp, admin); err != nil {
+			erreurCompte(w, err)
+			return
+		}
+	}
 	c, err := a.opt.Comptes.Modifier(nom, func(x *comptes.Compte) error {
 		if in.Admin != nil {
 			x.Admin = *in.Admin

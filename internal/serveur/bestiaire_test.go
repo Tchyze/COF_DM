@@ -162,7 +162,7 @@ func TestBestiaire(t *testing.T) {
 // Le bestiaire suit les rôles : le MJ le modifie, l'auditeur le lit, le joueur ne le voit pas.
 func TestBestiaireRoles(t *testing.T) {
 	b, reg := bancServeur(t)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

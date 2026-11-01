@@ -15,7 +15,7 @@ func jetonAccepte(b *banc, jeton string) int {
 func TestJetonsRetiresParAdministrateur(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
 	_ = a
-	if _, err := reg.Creer("cible", "mot-de-passe-cible", false); err != nil {
+	if _, err := reg.Creer("cible", "mot-de-passe-elbic", false); err != nil {
 		t.Fatal(err)
 	}
 	clair, _, err := reg.NouveauJeton("cible", "poste")
@@ -34,7 +34,7 @@ func TestJetonsRetiresParAdministrateur(t *testing.T) {
 // Un autre changement du compte par l'administrateur ne touche pas aux jetons.
 func TestJetonsGardesSansMdp(t *testing.T) {
 	_, reg, connecter := serveurMulti(t)
-	reg.Creer("cible", "mot-de-passe-cible", false)
+	reg.Creer("cible", "mot-de-passe-elbic", false)
 	clair, _, _ := reg.NouveauJeton("cible", "poste")
 	if c, v := connecter("chef").faire("PATCH", "/api/admin/comptes/cible", map[string]any{"inactif": false}); c != 200 {
 		t.Fatalf("%d %v", c, v)
@@ -50,7 +50,7 @@ func TestJetonsChangementParTitulaire(t *testing.T) {
 	b, reg := bancServeur(t)
 	mj := b.connecter("meneur")
 	garde, _, _ := reg.NouveauJeton("meneur", "garde")
-	if c, v, _ := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-meneur", "nouveau": "deuxieme-mot-de-passe"}, mj); c != 200 || v["jetons_retires"] != float64(0) {
+	if c, v, _ := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-ruenem", "nouveau": "deuxieme-mot-de-passe"}, mj); c != 200 || v["jetons_retires"] != float64(0) {
 		t.Fatalf("sans retrait : %d %v", c, v)
 	}
 	if c := jetonAccepte(b, garde); c != 200 {

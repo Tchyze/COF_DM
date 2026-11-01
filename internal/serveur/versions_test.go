@@ -90,7 +90,7 @@ func TestBureauVersionsServeur(t *testing.T) {
 	donner(reg, "meneur", univers, comptes.MJ)
 	donner(reg, "meneur", vide, comptes.MJ)
 	b := nouvelleAppli(t, t.TempDir())
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 
 	// serveur plus récent : pas de copie, rien d'écrit ici
 	d.poser(map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole, "modele": store.VersionModele + 1})
@@ -142,7 +142,7 @@ func TestBureauVersionsEchange(t *testing.T) {
 	meneur := connecter("meneur")
 	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.MJ; return nil })
 	b := nouvelleAppli(t, t.TempDir())
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if c, v := b.local("POST", "/api/univers/serveur/relier", map[string]any{"univers": univers, "copie": "Portable"}); c != 200 {
 		t.Fatalf("relier : %d %v", c, v)
 	}

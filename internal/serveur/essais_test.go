@@ -25,11 +25,11 @@ func TestEssaisTitulaireNonBloque(t *testing.T) {
 				t.Fatalf("%s, essai %d : %d", ip, i, c)
 			}
 		}
-		if c := essaiDepuis(b, ip, "meneur", "mot-de-passe-meneur"); c != 429 {
+		if c := essaiDepuis(b, ip, "meneur", "mot-de-passe-ruenem"); c != 429 {
 			t.Fatalf("%s a épuisé ses essais sur ce nom : %d", ip, c)
 		}
 	}
-	if c := essaiDepuis(b, "203.0.113.50", "meneur", "mot-de-passe-meneur"); c != 200 {
+	if c := essaiDepuis(b, "203.0.113.50", "meneur", "mot-de-passe-ruenem"); c != 200 {
 		t.Fatalf("le titulaire, depuis une autre adresse : %d", c)
 	}
 }
@@ -43,10 +43,10 @@ func TestEssaisQuotaAdresse(t *testing.T) {
 			t.Fatalf("essai %d : %d", i, c)
 		}
 	}
-	if c := essaiDepuis(b, "198.51.100.1", "meneur", "mot-de-passe-meneur"); c != 429 {
+	if c := essaiDepuis(b, "198.51.100.1", "meneur", "mot-de-passe-ruenem"); c != 429 {
 		t.Fatalf("quota de l'adresse dépassé : %d", c)
 	}
-	if c := essaiDepuis(b, "198.51.100.2", "meneur", "mot-de-passe-meneur"); c != 200 {
+	if c := essaiDepuis(b, "198.51.100.2", "meneur", "mot-de-passe-ruenem"); c != 200 {
 		t.Fatalf("autre adresse : %d", c)
 	}
 }
@@ -63,7 +63,7 @@ func TestEssaisCoupleNeConsommePasLeQuota(t *testing.T) {
 			t.Fatalf("essai %d : %d", i, c)
 		}
 	}
-	if c := essaiDepuis(b, "198.51.100.1", "audit", "mot-de-passe-audit"); c != 200 {
+	if c := essaiDepuis(b, "198.51.100.1", "audit", "mot-de-passe-tidua"); c != 200 {
 		t.Fatalf("autre compte depuis la même adresse : %d", c)
 	}
 }
@@ -77,10 +77,10 @@ func TestEssaisIPv6Par64(t *testing.T) {
 			t.Fatalf("essai %d : %d", i, c)
 		}
 	}
-	if c := essaiDepuis(b, "2001:db8:1:2:ffff::9", "meneur", "mot-de-passe-meneur"); c != 429 {
+	if c := essaiDepuis(b, "2001:db8:1:2:ffff::9", "meneur", "mot-de-passe-ruenem"); c != 429 {
 		t.Fatalf("même /64 : %d", c)
 	}
-	if c := essaiDepuis(b, "2001:db8:1:3::1", "meneur", "mot-de-passe-meneur"); c != 200 {
+	if c := essaiDepuis(b, "2001:db8:1:3::1", "meneur", "mot-de-passe-ruenem"); c != 200 {
 		t.Fatalf("autre /64 : %d", c)
 	}
 }
@@ -128,7 +128,7 @@ func TestEssaisRalentissementParNom(t *testing.T) {
 		}
 	}
 	debut := time.Now()
-	if c := essaiDepuis(b, "203.0.113.50", "meneur", "mot-de-passe-meneur"); c != 200 {
+	if c := essaiDepuis(b, "203.0.113.50", "meneur", "mot-de-passe-ruenem"); c != 200 {
 		t.Fatalf("le titulaire est ralenti, pas refusé : %d", c)
 	}
 	if time.Since(debut) < 20*time.Millisecond {
@@ -144,7 +144,7 @@ func TestEssaisChangementMdpNonBloque(t *testing.T) {
 	for i := 0; i <= essaisMaxMdp; i++ {
 		essaiDepuis(b, "198.51.100."+strconv.Itoa(i+1), "meneur", "faux")
 	}
-	if c, v, _ := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-meneur", "nouveau": "un-nouveau-mot-de-passe"}, mj); c != 200 {
+	if c, v, _ := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-ruenem", "nouveau": "un-nouveau-mot-de-passe"}, mj); c != 200 {
 		t.Fatalf("changement de mot de passe : %d %v", c, v)
 	}
 }

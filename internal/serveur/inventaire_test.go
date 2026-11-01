@@ -241,7 +241,7 @@ func TestInventaireCasseCompteJoueur(t *testing.T) {
 			secret := creer("objet", "SECRET-NOM", map[string]any{"equipement": chiffres})
 			volable := creer("objet", "VOLABLE-NOM", map[string]any{"detenteur": autre})
 			b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", pj), map[string]any{"partage": true}, mj)
-			if _, err := reg.Creer("joueuse", "mot-de-passe-joueuse", false); err != nil {
+			if _, err := reg.Creer("joueuse", "mot-de-passe-esueuoj", false); err != nil {
 				t.Fatal(err)
 			}
 			reg.Modifier("joueuse", func(c *comptes.Compte) error {

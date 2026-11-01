@@ -29,7 +29,7 @@ func TestRegistre(t *testing.T) {
 	if _, err := r.Creer("court", "trop-court", false); !errors.Is(err, ErrMdp) && len("trop-court") < MdpMin {
 		t.Fatalf("mot de passe court : %v", err)
 	}
-	r.Creer("chef", "mot-de-passe-du-chef", true)
+	r.Creer("chef", "mot-de-passe-du-fehc", true)
 	if _, err := r.Modifier("aline", func(c *Compte) error { c.Roles["u1"] = "roi"; return nil }); !errors.Is(err, ErrRole) {
 		t.Fatalf("rôle inconnu : %v", err)
 	}
@@ -95,8 +95,8 @@ func TestRegistre(t *testing.T) {
 // L'administrateur n'entre dans aucun univers ; un compte n'y est joueur qu'une fois admis par lui.
 func TestAdminEtAdmis(t *testing.T) {
 	r, _ := Ouvrir(filepath.Join(t.TempDir(), "comptes.json"))
-	r.Creer("chef", "mot-de-passe-du-chef", true)
-	r.Creer("lea", "mot-de-passe-de-lea", false)
+	r.Creer("chef", "mot-de-passe-du-fehc", true)
+	r.Creer("lea", "mot-de-passe-de-ael", false)
 	if _, err := r.Modifier("chef", func(c *Compte) error { c.Roles["u1"] = MJ; return nil }); !errors.Is(err, ErrAdmin) {
 		t.Fatalf("rôle d'un administrateur : %v", err)
 	}
@@ -176,7 +176,7 @@ func TestGraineDuCompte(t *testing.T) {
 	if c2, _ := r2.Lire("ancien"); c2.Graine != c.Graine {
 		t.Fatal("la graine doit rester la même d'une ouverture à l'autre")
 	}
-	n1, err := r.Creer("neuf", "mot-de-passe-neuf", false)
+	n1, err := r.Creer("neuf", "mot-de-passe-fuen", false)
 	if err != nil || n1.Graine == "" {
 		t.Fatalf("%+v %v", n1, err)
 	}
@@ -189,7 +189,7 @@ func TestGraineDuCompte(t *testing.T) {
 	if err := r.Supprimer("neuf"); err != nil {
 		t.Fatal(err)
 	}
-	n2, err := r.Creer("neuf", "mot-de-passe-neuf", false)
+	n2, err := r.Creer("neuf", "mot-de-passe-fuen", false)
 	if err != nil || n2.Graine == n1.Graine {
 		t.Fatalf("compte recréé : %+v %v", n2, err)
 	}
