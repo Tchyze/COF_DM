@@ -351,11 +351,11 @@ func (s *Serveur) etatAcces(w http.ResponseWriter, r *http.Request) {
 	mj := !anonyme(r)
 	out := map[string]any{"mj": mj, "local": local(r), "mdp_defini": s.acces.mdpDefini()}
 	if mj {
-		out["reseau"] = s.opt.Reseau               // l'application écoute sur le réseau en ce moment
-		out["reseau_voulu"] = s.reseauVoulu.Load() // réglage enregistré, appliqué au prochain lancement
-		out["reseau_force"] = s.opt.ReseauForce    // imposé par -reseau
-		out["reglable"] = s.opt.Config != nil      // le réglage peut s'enregistrer
-		out["adresses"] = Adresses(s.opt.Port)     // à ouvrir sur la tablette
+		out["reseau"] = s.opt.ecouteReseau()     // l'application écoute sur le réseau en ce moment
+		out["reseau_voulu"] = s.opt.voulu.Load() // réglage enregistré
+		out["reseau_force"] = s.opt.ReseauForce  // imposé par -reseau
+		out["reglable"] = s.opt.Config != nil    // le réglage peut s'enregistrer
+		out["adresses"] = Adresses(s.opt.Port)   // à ouvrir sur la tablette
 		out["page_joueurs"] = s.pageJoueursOuverte()
 		out["relie"] = s.relie() // reliée à un serveur : le réseau local reste fermé
 		out["edition_joueurs"] = s.editionJoueurs()
@@ -425,7 +425,9 @@ func (s *Serveur) changerMdp(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, map[string]any{"ok": true, "mdp_defini": req.Nouveau != ""})
 }
 
-// changerReseau : {"reseau": true} ouvre l'application au réseau local au prochain lancement.
+// changerReseau : {"reseau": true} ouvre aussitôt l'application au réseau local, {"reseau": false}
+// la referme et coupe les appareils du réseau. -reseau garde l'écoute ouverte jusqu'à la fin ; reliée
+// à un serveur, l'application n'ouvre rien.
 func (s *Serveur) changerReseau(w http.ResponseWriter, r *http.Request) {
 	if !surPlace(w, r) {
 		return
@@ -445,17 +447,43 @@ func (s *Serveur) changerReseau(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 409, msgReseauRelie)
 		return
 	}
+	avant := s.opt.ecouteReseau()
+	if err := s.appliquerReseau(req.Reseau); err != nil {
+		erreur(w, 409, majuscule(err.Error())+".")
+		return
+	}
 	if err := s.opt.Config(req.Reseau); err != nil {
+		_ = s.appliquerReseau(avant)
 		erreur(w, 500, "Enregistrement impossible : "+err.Error())
 		return
 	}
-	s.reseauVoulu.Store(req.Reseau)
+	s.opt.voulu.Store(req.Reseau)
 	detail := "ouverture au réseau local activée"
 	if !req.Reseau {
 		detail = "ouverture au réseau local désactivée"
 	}
-	s.store.Noter("accès", detail+" (au prochain lancement)", auteurDe(r))
+	s.store.Noter("accès", detail, auteurDe(r))
 	s.etatAcces(w, r)
+}
+
+// appliquerReseau ouvre ou referme l'écoute, sauf si -reseau l'impose.
+func (s *Serveur) appliquerReseau(ouvrir bool) error {
+	if s.opt.ChangerReseau == nil || s.opt.ReseauForce {
+		return nil
+	}
+	return s.opt.ChangerReseau(ouvrir)
+}
+
+// adresseEcoute : l'adresse d'écoute en ce moment, affichée dans les paramètres.
+func (s *Serveur) adresseEcoute() string {
+	if s.opt.ChangerReseau == nil {
+		return s.opt.Adresse
+	}
+	hote := "127.0.0.1"
+	if s.opt.ecouteReseau() {
+		hote = "0.0.0.0"
+	}
+	return fmt.Sprintf("%s:%d", hote, s.opt.Port)
 }
 
 // qr : le QR code d'une adresse de l'application, à scanner avec la tablette.

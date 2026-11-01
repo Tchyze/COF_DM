@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -223,6 +224,142 @@ func ecouter(hote string, port, essais int) (net.Listener, int, error) {
 	return nil, 0, dernier
 }
 
+// ecoute : la porte de l'application, que le MJ ouvre au réseau local et referme sans relance.
+// Passer de 127.0.0.1 à toutes les adresses demande de fermer l'une pour ouvrir l'autre (Linux
+// refuse les deux à la fois) ; les connexions déjà établies, dont celle de la fenêtre, n'en souffrent
+// pas. Celles du réseau sont suivies, WebSocket compris, pour être coupées quand le MJ referme.
+type ecoute struct {
+	srv    *http.Server
+	port   int
+	mu     sync.Mutex
+	ln     net.Listener // nil : ni l'ouverture ni le retour n'ont pu reprendre le port
+	ouvert bool
+	reseau map[*connReseau]struct{}
+}
+
+func nouvelleEcoute(ln net.Listener, port int, ouvert bool) *ecoute {
+	return &ecoute{ln: ln, port: port, ouvert: ouvert, reseau: map[*connReseau]struct{}{}}
+}
+
+func hoteEcoute(ouvert bool) string {
+	if ouvert {
+		return "0.0.0.0"
+	}
+	return "127.0.0.1"
+}
+
+func (e *ecoute) estOuvert() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.ouvert
+}
+
+// servir sert ln jusqu'à ce qu'il soit fermé (bascule ou fin de l'application).
+func (e *ecoute) servir(ln net.Listener) {
+	go func() {
+		err := e.srv.Serve(&ecouteSuivie{ln, e})
+		if err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+			log.Printf("serveur arrêté : %v", err)
+		}
+	}()
+}
+
+// changer ouvre ou referme aussitôt. Si le port ne peut pas s'ouvrir au réseau, l'application reste
+// comme avant et le dit ; refermer coupe tous les appareils du réseau.
+func (e *ecoute) changer(ouvrir bool) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if ouvrir == e.ouvert && e.ln != nil {
+		return nil
+	}
+	if e.ln != nil {
+		e.ln.Close()
+		e.ln = nil
+	}
+	if !ouvrir {
+		for c := range e.reseau {
+			c.Conn.Close()
+		}
+		clear(e.reseau)
+		e.ouvert = false
+	}
+	ln, _, err := ecouter(hoteEcoute(ouvrir), e.port, 1)
+	if err != nil && ouvrir {
+		log.Printf("ouverture au réseau impossible : %v", err)
+		ln, err = e.reprendre(e.ouvert)
+		if err == nil {
+			err = fmt.Errorf("le port %d est déjà pris sur cet ordinateur : fermez l'autre programme, puis réessayez", e.port)
+		}
+		e.ln = ln
+		if ln != nil {
+			e.servir(ln)
+		}
+		return err
+	}
+	if err != nil {
+		ln, err = e.reprendre(false)
+	}
+	if err != nil {
+		return fmt.Errorf("le port %d n'a pas pu être repris (%v)", e.port, err)
+	}
+	e.ln, e.ouvert = ln, ouvrir
+	e.servir(ln)
+	return nil
+}
+
+// reprendre : le port vient d'être lâché, un autre programme a pu s'y glisser un instant.
+func (e *ecoute) reprendre(ouvert bool) (net.Listener, error) {
+	var err error
+	for range 10 {
+		var ln net.Listener
+		if ln, _, err = ecouter(hoteEcoute(ouvert), e.port, 1); err == nil {
+			return ln, nil
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	return nil, err
+}
+
+// ecouteSuivie repère les connexions du réseau à leur arrivée.
+type ecouteSuivie struct {
+	net.Listener
+	e *ecoute
+}
+
+func (l *ecouteSuivie) Accept() (net.Conn, error) {
+	c, err := l.Listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	a, ok := c.RemoteAddr().(*net.TCPAddr)
+	if ok && a.IP.IsLoopback() {
+		return c, nil
+	}
+	s := &connReseau{c, l.e}
+	l.e.mu.Lock()
+	defer l.e.mu.Unlock()
+	if !l.e.ouvert { // arrivée pendant que le MJ refermait
+		c.Close()
+		return nil, net.ErrClosed
+	}
+	l.e.reseau[s] = struct{}{}
+	return s, nil
+}
+
+// connReseau : une connexion d'un appareil du réseau. Le serveur HTTP et les WebSocket la ferment
+// par cette méthode, ce qui la retire du suivi.
+type connReseau struct {
+	net.Conn
+	e *ecoute
+}
+
+func (c *connReseau) Close() error {
+	c.e.mu.Lock()
+	delete(c.e.reseau, c)
+	c.e.mu.Unlock()
+	return c.Conn.Close()
+}
+
 func main() {
 	headless := flag.Bool("headless", false, "serveur seul, sans fenêtre (l'interface s'ouvre dans le navigateur)")
 	portFlag := flag.Int("port", 0, "port d'écoute (par défaut : config.json, sinon 8100)")
@@ -306,11 +443,13 @@ func main() {
 	if err != nil {
 		fatal("Le port %d est déjà utilisé (%v). Fermez l'autre programme ou changez de port.", cfg.Port, err)
 	}
+	porte := nouvelleEcoute(ln, port, hote != "127.0.0.1")
 
 	sub, _ := fs.Sub(frontend, "frontend")
 	synchro.VersionApplication = version
 	opt := serveur.Options{Version: version, DossierDon: dossier, Reglages: reg, Frontend: sub, Adresse: fmt.Sprintf("%s:%d", hote, port),
-		Port: port, Reseau: hote != "127.0.0.1", ReseauForce: *reseau && hote != "127.0.0.1", ReseauVoulu: cfg.Reseau}
+		Port: port, Reseau: hote != "127.0.0.1", ReseauForce: *reseau && !relie, ReseauVoulu: cfg.Reseau,
+		ReseauOuvert: porte.estOuvert, ChangerReseau: porte.changer}
 	if dialogueDisponible() {
 		opt.Dialogue = dialogueFichier
 	}
@@ -329,6 +468,7 @@ func main() {
 	}
 	if *modeServeur {
 		opt.Dialogue, opt.Config, opt.VeilleMaj = nil, nil, true
+		opt.ChangerReseau = nil // un serveur reste derrière son reverse proxy
 		if opt.Comptes, err = comptes.Ouvrir(filepath.Join(dossier, "comptes.json")); err != nil {
 			fatal("Impossible de lire les comptes : %v", err)
 		}
@@ -371,11 +511,8 @@ func main() {
 		log.Printf("port non publié pour cof-dm -mcp : %v", err)
 	}
 	defer retirerPort(dossier)
-	go func() {
-		if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("serveur arrêté : %v", err)
-		}
-	}()
+	porte.srv = srv
+	porte.servir(ln)
 	url := fmt.Sprintf("http://127.0.0.1:%d/", port)
 	log.Printf("COF DM %s sur %s, données dans %s", version, url, dossier)
 	if *modeServeur && hote != "127.0.0.1" {

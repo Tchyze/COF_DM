@@ -43,10 +43,15 @@ type Options struct {
 	Frontend    fs.FS
 	Adresse     string           // adresse d'écoute, affichée dans les paramètres
 	Port        int              // port d'écoute
-	Reseau      bool             // l'application écoute sur le réseau local
+	Reseau      bool             // l'application écoute sur le réseau local (au lancement)
 	ReseauForce bool             // … parce que -reseau l'impose
-	ReseauVoulu bool             // réglage enregistré (appliqué au lancement)
+	ReseauVoulu bool             // réglage enregistré
 	Config      func(bool) error // enregistre le réglage ; nil : non modifiable
+	// ReseauOuvert et ChangerReseau : l'écoute en ce moment, et son ouverture ou sa fermeture aussitôt
+	// (qui coupe les appareils du réseau). nil : l'écoute reste celle du lancement.
+	ReseauOuvert  func() bool
+	ChangerReseau func(bool) error
+	voulu         *atomic.Bool // le réglage, partagé par l'Application et les Serveurs des univers ouverts
 	// Relie : l'application de bureau est reliée à un serveur ; elle ne répond alors plus au réseau
 	// local (ni tablette, ni page des joueurs), même si elle y écoute. nil : jamais reliée.
 	Relie func() bool
@@ -70,18 +75,17 @@ type Options struct {
 }
 
 type Serveur struct {
-	opt         Options
-	store       *store.Store
-	reg         Reglages
-	mux         *http.ServeMux
-	acces       *acces
-	joueur      *http.ServeMux // mode serveur : les seules routes ouvertes au rôle « joueur »
-	salles      *salles        // combats suivis ou joués
-	joueurs     *diffusion     // appareils qui suivent la page des joueurs
-	libre       *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
-	jets        *tableJets     // lanceur de dés : les derniers jets de la partie
-	potMu       sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
-	reseauVoulu atomic.Bool
+	opt     Options
+	store   *store.Store
+	reg     Reglages
+	mux     *http.ServeMux
+	acces   *acces
+	joueur  *http.ServeMux // mode serveur : les seules routes ouvertes au rôle « joueur »
+	salles  *salles        // combats suivis ou joués
+	joueurs *diffusion     // appareils qui suivent la page des joueurs
+	libre   *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
+	jets    *tableJets     // lanceur de dés : les derniers jets de la partie
+	potMu   sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
 }
 
 func Nouveau(st *store.Store, opt Options) *Serveur {
@@ -98,9 +102,24 @@ func Nouveau(st *store.Store, opt Options) *Serveur {
 	if s.acces = opt.acces; s.acces == nil {
 		s.acces = nouvelAcces(s.reg, opt.Comptes)
 	}
-	s.reseauVoulu.Store(opt.ReseauVoulu)
+	s.opt.partagerVoulu()
 	s.routes()
 	return s
+}
+
+func (o *Options) partagerVoulu() {
+	if o.voulu == nil {
+		o.voulu = new(atomic.Bool)
+		o.voulu.Store(o.ReseauVoulu)
+	}
+}
+
+// ecouteReseau : l'application écoute sur le réseau local en ce moment.
+func (o *Options) ecouteReseau() bool {
+	if o.ReseauOuvert != nil {
+		return o.ReseauOuvert()
+	}
+	return o.Reseau
 }
 
 // relie : l'application de bureau est reliée à un serveur (voir distant.go).
@@ -160,7 +179,7 @@ func (s *Serveur) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	switch {
 	case local(r):
-	case !s.opt.Reseau || !hoteDuReseau(r):
+	case !s.opt.ecouteReseau() || !hoteDuReseau(r):
 		erreur(w, 401, "Accès réservé : utilisez l'application sur l'ordinateur du MJ, ou un jeton d'API.")
 		return
 	case s.acces.session(r):
@@ -1047,7 +1066,7 @@ func (s *Serveur) parametres(w http.ResponseWriter, r *http.Request) {
 		j = ""
 	}
 	univers := map[string]any{"nom": nomUnivers(s.store.Chemin()), "id": s.store.ID()}
-	out := map[string]any{"jeton": j, "adresse": s.opt.Adresse, "version": s.opt.Version, "univers": univers}
+	out := map[string]any{"jeton": j, "adresse": s.adresseEcoute(), "version": s.opt.Version, "univers": univers}
 	if prive {
 		univers["chemin"] = s.store.Chemin()
 		out["donnees"], out["sauvegardes"] = s.opt.DossierDon, s.opt.Sauvegardes
