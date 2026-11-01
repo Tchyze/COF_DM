@@ -99,7 +99,7 @@ type compteLie struct {
 	Role string `json:"role,omitempty"` // mj, auditeur, joueur ; vide : admis comme joueur, pas encore joint
 }
 
-// fichesAdmin : les univers servis puis archivés, par nom (verrou tenu).
+// fichesAdmin : les univers servis puis archivés, par nom (a.mu ou a.gestion tenu).
 func (a *Application) fichesAdmin() []ficheAdmin {
 	var l []ficheAdmin
 	for _, o := range a.ordre() {
@@ -139,8 +139,9 @@ func (a *Application) ficheAdmin(id string) (ficheAdmin, bool) {
 
 func (a *Application) adminUnivers(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	repondre(w, 200, a.fichesAdmin())
+	l := a.fichesAdmin()
+	a.mu.RUnlock()
+	repondre(w, 200, l)
 }
 
 // adminCreerUnivers : {"nom": "…"} crée un univers vide dans le dossier du serveur. Son contenu
@@ -200,8 +201,8 @@ func (a *Application) adminModifierUnivers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	id := r.PathValue("id")
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
 	f, ok := a.ficheAdmin(id)
 	if !ok {
 		erreur(w, 404, "Univers inconnu.")
@@ -232,26 +233,6 @@ func (a *Application) adminModifierUnivers(w http.ResponseWriter, r *http.Reques
 	repondre(w, 200, f)
 }
 
-// retirer ferme un univers servi, après sa sauvegarde automatique (verrou d'écriture tenu). Si
-// c'était l'univers par défaut, un autre le devient.
-func (a *Application) retirer(o *universOuvert) {
-	if _, err := sauvegardeAuto(o.st, a.dossierSauvegardes(o.st)); err != nil {
-		log.Printf("sauvegarde automatique : %v", err)
-	}
-	if o.srv != nil {
-		o.srv.Fermer()
-	}
-	_ = o.st.Fermer()
-	delete(a.tous, o.st.ID())
-	if a.st == o.st {
-		a.st, a.srv = nil, nil
-		if l := a.ordre(); len(l) > 0 {
-			a.st, a.srv = l[0].st, l[0].srv
-			_ = a.reg.SetMeta(regUnivers, a.st.Chemin())
-		}
-	}
-}
-
 // dernier : c'est le seul univers servi ; il reste, pour que le serveur ait toujours où répondre.
 func (a *Application) dernier(f ficheAdmin) bool {
 	return f.ouvert != nil && len(a.tous) == 1
@@ -270,7 +251,10 @@ func (a *Application) archiver(f ficheAdmin) (int, string) {
 	if _, err := os.Stat(cible); err == nil {
 		return 409, "Un univers archivé porte déjà ce nom : renommez celui-ci d'abord."
 	}
-	a.retirer(f.ouvert)
+	if !a.retirer(f.ouvert) {
+		return 409, msgOccupe
+	}
+	defer a.fermetureFinie(f.ID)
 	if err := os.Rename(f.chemin, cible); err != nil {
 		a.rouvrir(f.chemin)
 		return 500, "Archivage impossible : " + err.Error()
@@ -303,7 +287,7 @@ func (a *Application) desarchiver(f ficheAdmin) (int, string) {
 	return 0, ""
 }
 
-// rouvrir ouvre un fichier d'univers du dossier du serveur (verrou d'écriture tenu).
+// rouvrir ouvre un fichier d'univers du dossier du serveur (a.gestion tenu).
 func (a *Application) rouvrir(chemin string) *universOuvert {
 	st, err := store.Ouvrir(chemin)
 	if err != nil {
@@ -333,16 +317,17 @@ func (a *Application) renommer(f ficheAdmin, nom, auteur string) (int, string) {
 		_ = a.noterArchives(m)
 		return 0, ""
 	}
-	defaut := a.st == f.ouvert.st
-	a.retirer(f.ouvert)
+	if !a.retirer(f.ouvert) {
+		return 409, msgOccupe
+	}
+	defer a.fermetureFinie(f.ID)
 	echec := os.Rename(f.chemin, chemin)
 	if echec != nil {
 		chemin = f.chemin // rouvert tel quel
 	}
 	o := a.rouvrir(chemin)
-	if o != nil && defaut {
-		a.st, a.srv = o.st, o.srv
-		_ = a.reg.SetMeta(regUnivers, chemin)
+	if o != nil && f.ouvert.defaut {
+		a.redevenirDefaut(o)
 	}
 	a.noterServis()
 	if echec != nil {
@@ -367,8 +352,8 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	id := r.PathValue("id")
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
 	f, ok := a.ficheAdmin(id)
 	if !ok {
 		erreur(w, 404, "Univers inconnu.")
@@ -389,13 +374,20 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 	}
 	sauvegarde := ""
 	if f.ouvert != nil {
+		if !a.suspendre(f.ouvert) {
+			erreur(w, 409, msgOccupe)
+			return
+		}
+		defer a.fermetureFinie(id)
+		// quand plus rien n'écrit : la sauvegarde a tout ce que l'univers contenait
 		s, err := sauvegarder(f.ouvert.st, dossier, "avant-suppression")
 		if err != nil {
+			a.remettre(f.ouvert)
 			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
 			return
 		}
 		sauvegarde = s
-		a.retirer(f.ouvert)
+		a.clore(f.ouvert)
 	} else {
 		sauvegarde = filepath.Join(dossier, nomSauvegarde("avant-suppression"))
 		if err := copierFichier(f.chemin, sauvegarde); err != nil {

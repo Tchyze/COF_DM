@@ -216,7 +216,7 @@ func (a *Application) ecrireConnexion(c *connexion) error {
 func (a *Application) liens() map[string]lien { return lireLiens(a.reg) }
 
 // noterFichierCopie retient où est rangée la copie qui vient d'ouvrir, pour la rouvrir depuis la
-// liste des univers du serveur (verrou d'écriture tenu).
+// liste des univers du serveur (a.gestion tenu).
 func (a *Application) noterFichierCopie(st *store.Store) {
 	if !st.EstCopie() {
 		return
@@ -261,8 +261,8 @@ func (a *Application) courantRelie() (*store.Store, *lien, *connexion) {
 	return a.relieDe(st)
 }
 
-// relieDe : la même chose pour un univers ouvert donné. Sans verrou : une requête en cours tient déjà
-// celui de l'application (combat en direct).
+// relieDe : la même chose pour un univers ouvert donné. Elle ne lit que les réglages de ce poste, sans
+// verrou de l'application : une requête en cours l'appelle (combat en direct).
 func (a *Application) relieDe(st *store.Store) (*store.Store, *lien, *connexion) {
 	if st == nil || !st.EstCopie() {
 		return st, nil, nil
@@ -523,9 +523,10 @@ func (a *Application) routeConnexionDistante(w http.ResponseWriter, r *http.Requ
 // coupés ; même si elle reste ouverte (-reseau), plus rien du réseau n'entre (voir Serveur.ServeHTTP).
 func (a *Application) fermerReseau() {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	if a.srv != nil && a.srv.joueurs != nil {
-		a.srv.joueurs.fermer()
+	srv := a.srv
+	a.mu.RUnlock()
+	if srv != nil && srv.joueurs != nil {
+		srv.joueurs.fermer()
 	}
 	if a.opt.ChangerReseau != nil && !a.opt.ReseauForce {
 		if err := a.opt.ChangerReseau(false); err != nil {
@@ -889,12 +890,15 @@ func (a *Application) routeEnvoyer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	chemin := st.Chemin()
-	a.mu.Lock()
-	if a.st == st {
-		a.fermerCourant()
+	a.gestion.Lock()
+	err = nil
+	if a.st == st && !a.fermerCourant() {
+		err = errOccupe
 	}
-	err = os.Rename(recue, chemin)
-	a.mu.Unlock()
+	if err == nil {
+		err = os.Rename(recue, chemin)
+	}
+	a.gestion.Unlock()
 	if err != nil {
 		// l'original est resté en place : il est rouvert tel quel
 		log.Printf("remplacement par la copie : %v", err)

@@ -31,10 +31,14 @@ type Application struct {
 	mux *http.ServeMux
 	fin chan struct{}
 
-	mu            sync.RWMutex // en écriture : le temps d'ouvrir, de fermer ou de remplacer un univers
+	gestion        sync.Mutex    // une seule opération à la fois sur les univers (fermeture.go)
+	delaiFermeture time.Duration // ce qu'une fermeture attend les requêtes en cours
+
+	mu            sync.RWMutex // quelques instructions seulement, jamais pendant une requête (fermeture.go)
 	st            *store.Store // l'univers courant ; sur un serveur, celui qui sert par défaut
 	srv           *Serveur
 	tous          map[string]*universOuvert // les univers ouverts, par identifiant : un seul, sauf sur un serveur
+	fermetures    map[string]bool           // les univers qu'une opération a retirés du service, et qui répondent 503
 	avertissement string                    // à montrer au MJ (univers introuvable au lancement…)
 	dist          *distant                  // application de bureau : le lien avec un serveur
 	maj           *misesAJour               // application de bureau : les mises à jour
@@ -43,8 +47,10 @@ type Application struct {
 
 // universOuvert : un univers ouvert et le serveur de son API.
 type universOuvert struct {
-	st  *store.Store
-	srv *Serveur
+	st       *store.Store
+	srv      *Serveur
+	requetes requetes // le travail en cours : une fermeture l'attend (fermeture.go)
+	defaut   bool     // il servait par défaut quand il a été suspendu
 }
 
 const (
@@ -68,7 +74,8 @@ func NouvelleApplication(opt Options) *Application {
 		opt.acces = nouvelAcces(opt.Reglages, opt.Comptes, opt.Proxies)
 	}
 	opt.partagerVoulu()
-	a := &Application{opt: opt, reg: opt.Reglages, mux: http.NewServeMux(), fin: make(chan struct{}), tous: map[string]*universOuvert{}}
+	a := &Application{opt: opt, reg: opt.Reglages, mux: http.NewServeMux(), fin: make(chan struct{}), tous: map[string]*universOuvert{},
+		fermetures: map[string]bool{}, delaiFermeture: delaiFermeture}
 	if opt.Comptes == nil {
 		a.opt.Relie = a.Relie
 		a.opt.app = a
@@ -218,8 +225,8 @@ func (a *Application) ouvrir(chemin string, creer bool) (*universOuvert, error) 
 	case err != nil && !creer:
 		return nil, store.ErrValidation{Msg: "Fichier introuvable : " + chemin}
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
 	if o := a.parChemin(chemin); o != nil {
 		return o, nil
 	}
@@ -237,7 +244,13 @@ func (a *Application) ouvrir(chemin string, creer bool) (*universOuvert, error) 
 	_ = st.RetirerMeta(reglagesAppli...)
 	_ = st.RetirerMeta(reglagesPerimes...)
 	if !a.multi() {
-		a.fermerCourant()
+		if !a.fermerCourant() {
+			_ = st.Fermer()
+			if nouveau {
+				_ = os.Remove(chemin)
+			}
+			return nil, errOccupe
+		}
 	} else if deja, pris := a.tous[st.ID()]; pris { // la copie d'un univers porte son identifiant
 		_ = st.Fermer()
 		return nil, store.ErrValidation{Msg: "Cet univers est déjà ouvert sous le nom « " + nomUnivers(deja.st.Chemin()) + " » : ce fichier en est une copie."}
@@ -245,7 +258,7 @@ func (a *Application) ouvrir(chemin string, creer bool) (*universOuvert, error) 
 	return a.installer(st), nil
 }
 
-// parChemin : l'univers ouvert qui tient dans ce fichier (verrou tenu).
+// parChemin : l'univers ouvert qui tient dans ce fichier (a.mu ou a.gestion tenu).
 func (a *Application) parChemin(chemin string) *universOuvert {
 	for _, o := range a.tous {
 		if memeFichier(o.st.Chemin(), chemin) {
@@ -279,14 +292,20 @@ func memeFichier(x, y string) bool {
 	return err1 == nil && err2 == nil && os.SameFile(ix, iy)
 }
 
-// installer fait de st l'univers courant (verrou d'écriture tenu).
+// installer sert l'univers st, et en fait l'univers courant s'il n'y en a pas d'autre (a.gestion
+// tenu). Sa sauvegarde automatique se fait une fois a.mu rendu.
 func (a *Application) installer(st *store.Store) *universOuvert {
 	opt := a.opt
 	opt.Reglages, opt.Sauvegardes = a.reg, a.dossierSauvegardes(st)
-	o := &universOuvert{st, Nouveau(st, opt)}
+	o := &universOuvert{st: st, srv: Nouveau(st, opt)}
+	a.mu.Lock()
 	a.tous[st.ID()] = o
-	if !a.multi() || a.st == nil {
+	courant := !a.multi() || a.st == nil
+	if courant {
 		a.st, a.srv = o.st, o.srv
+	}
+	a.mu.Unlock()
+	if courant {
 		_ = a.reg.SetMeta(regUnivers, st.Chemin())
 		a.noterRecent(st.Chemin())
 		a.noterFichierCopie(st)
@@ -300,41 +319,50 @@ func (a *Application) installer(st *store.Store) *universOuvert {
 	return o
 }
 
-// fermerCourant sauvegarde l'univers courant s'il a changé, puis le ferme (verrou d'écriture tenu).
-func (a *Application) fermerCourant() {
+// fermerCourant sauvegarde l'univers courant s'il a changé, puis le ferme (a.gestion tenu). Faux : il
+// sert encore des requêtes, il reste ouvert.
+func (a *Application) fermerCourant() bool {
 	if a.st == nil {
-		return
+		return true
 	}
-	if _, err := sauvegardeAuto(a.st, a.dossierSauvegardes(a.st)); err != nil {
-		log.Printf("sauvegarde automatique : %v", err)
+	id := a.st.ID()
+	if !a.retirer(a.tous[id]) {
+		return false
 	}
-	if a.srv != nil {
-		a.srv.Fermer()
-	}
-	_ = a.st.Fermer()
-	delete(a.tous, a.st.ID())
-	a.st, a.srv = nil, nil
+	a.fermetureFinie(id)
+	return true
 }
 
-// Fermer sauvegarde et ferme l'univers ouvert, à l'arrêt de l'application.
+// Fermer sauvegarde et ferme les univers ouverts, à l'arrêt de l'application : les requêtes en cours
+// ont un court délai pour finir (une écriture interrompue est annulée par SQLite), une opération
+// sur un univers renonce à attendre les siennes.
 func (a *Application) Fermer() {
 	a.mu.Lock()
-	defer a.mu.Unlock()
 	select {
 	case <-a.fin:
 	default:
 		close(a.fin)
 	}
-	a.fermerCourant()
-	for id, o := range a.tous { // sur un serveur : les autres univers
+	a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
+	a.mu.Lock()
+	ouverts := a.tous
+	a.tous, a.st, a.srv = map[string]*universOuvert{}, nil, nil
+	a.mu.Unlock()
+	delai := a.delaiFermeture
+	if a.multi() {
+		delai = min(delai, delaiArret)
+	}
+	limite := time.Now().Add(delai)
+	for _, o := range ouverts {
+		if !o.requetes.attendre(time.Until(limite), nil) {
+			log.Printf("arrêt : univers « %s » fermé malgré des requêtes en cours", nomUnivers(o.st.Chemin()))
+		}
 		if _, err := sauvegardeAuto(o.st, a.dossierSauvegardes(o.st)); err != nil {
 			log.Printf("sauvegarde automatique : %v", err)
 		}
-		if o.srv != nil {
-			o.srv.Fermer()
-		}
-		_ = o.st.Fermer()
-		delete(a.tous, id)
+		a.clore(o)
 	}
 }
 
@@ -348,12 +376,23 @@ func (a *Application) veiller() {
 			return
 		case <-t.C:
 			a.mu.RLock()
-			for _, o := range a.tous {
+			l := a.ordre()
+			a.mu.RUnlock()
+			for _, o := range l {
+				a.mu.RLock()
+				servi := a.tous[o.st.ID()] == o
+				if servi {
+					o.requetes.entrer()
+				}
+				a.mu.RUnlock()
+				if !servi {
+					continue
+				}
 				if _, err := sauvegardeAuto(o.st, a.dossierSauvegardes(o.st)); err != nil {
 					log.Printf("sauvegarde automatique : %v", err)
 				}
+				o.requetes.sortir()
 			}
-			a.mu.RUnlock()
 		}
 	}
 }
@@ -393,21 +432,37 @@ func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.RLock()
-	defer a.mu.RUnlock()
 	if a.srv == nil {
+		a.mu.RUnlock()
 		erreur(w, 503, "Aucun univers n'est ouvert.")
 		return
 	}
-	if a.multi() {
-		a.servirMulti(w, r)
+	if a.multi() && (r.URL.Path == "/api/mes-univers" || strings.HasPrefix(r.URL.Path, "/api/mes-univers/")) {
+		a.mu.RUnlock()
+		a.mesUnivers(w, r)
 		return
 	}
-	a.srv.ServeHTTP(w, r)
+	// le verrou ne sert qu'à choisir l'univers : la requête, compte tenu, se déroule sans lui
+	o, code, msg := a.tous[a.st.ID()], 0, ""
+	if a.multi() {
+		o, code, msg = a.choisir(r)
+	}
+	if code == 0 {
+		o.requetes.entrer()
+	}
+	a.mu.RUnlock()
+	if code != 0 {
+		enTetes(w)
+		erreur(w, code, msg)
+		return
+	}
+	defer o.requetes.sortir()
+	o.srv.ServeHTTP(w, r)
 }
 
-// servirSuivi : un écran en direct reste branché longtemps. Il ne garde pas le verrou de l'application :
-// fermer ou changer un univers l'attendrait sans fin, et toutes les requêtes avec. La fermeture d'un
-// univers coupe ses écrans (Serveur.Fermer).
+// servirSuivi : un écran en direct reste branché longtemps. Il n'entre pas dans le compte des requêtes
+// de l'univers : fermer ou changer d'univers l'attendrait sans fin. La fermeture d'un univers coupe
+// ses écrans (Serveur.Fermer).
 func (a *Application) servirSuivi(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
 	srv, code, msg := a.srv, 0, ""
@@ -513,14 +568,21 @@ func decrire(chemin string) ficheUnivers {
 
 func (a *Application) etat(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
+	o := a.vise(r)
+	avertissement := a.avertissement
+	var accessibles []*universOuvert
 	if a.multi() {
-		a.etatSurServeur(w, r)
+		c, _ := compteDe(r)
+		accessibles = a.accessibles(c)
+	}
+	a.mu.RUnlock()
+	if a.multi() {
+		a.etatSurServeur(w, r, o, accessibles)
 		return
 	}
-	out := map[string]any{"dossier": a.DossierUnivers(), "parcourir": a.opt.Dialogue != nil, "avertissement": a.avertissement, "serveur": a.multi()}
+	out := map[string]any{"dossier": a.DossierUnivers(), "parcourir": a.opt.Dialogue != nil, "avertissement": avertissement, "serveur": a.multi()}
 	courant := ""
-	if o := a.vise(r); o != nil {
+	if o != nil {
 		courant = o.st.Chemin()
 		c := decrire(courant)
 		c.ID = o.st.ID()
@@ -552,14 +614,17 @@ func (a *Application) etat(w http.ResponseWriter, r *http.Request) {
 }
 
 // etatSurServeur : l'univers visé et ses sauvegardes, pour son MJ, sans chemin du serveur ; les
-// autres univers du compte (d'où reprendre une bibliothèque). Verrou tenu.
-func (a *Application) etatSurServeur(w http.ResponseWriter, r *http.Request) {
+// autres univers du compte (d'où reprendre une bibliothèque). Rien n'y lit la base : ni verrou ni compte.
+func (a *Application) etatSurServeur(w http.ResponseWriter, r *http.Request, o *universOuvert, accessibles []*universOuvert) {
 	c, _ := compteDe(r)
-	o := a.vise(r)
+	if o == nil {
+		erreur(w, 503, msgFermeture)
+		return
+	}
 	courant := decrire(o.st.Chemin())
 	courant.Chemin, courant.ID = "", o.st.ID()
 	autres := []ficheUnivers{}
-	for _, x := range a.accessibles(c) {
+	for _, x := range accessibles {
 		if role := c.Role(x.st.ID()); x != o && (role == comptes.MJ || role == comptes.Auditeur) {
 			f := decrire(x.st.Chemin())
 			f.Chemin, f.ID = "", x.st.ID()
@@ -681,16 +746,20 @@ func (a *Application) routeCopie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.mu.RLock()
-	defer a.mu.RUnlock()
 	o := a.vise(r)
 	if o == nil {
+		a.mu.RUnlock()
 		erreur(w, 503, "Aucun univers n'est ouvert.")
 		return
 	}
 	if a.parChemin(chemin) != nil {
+		a.mu.RUnlock()
 		erreur(w, 422, "C'est le fichier de l'univers ouvert : choisissez un autre nom.")
 		return
 	}
+	o.requetes.entrer()
+	a.mu.RUnlock()
+	defer o.requetes.sortir()
 	if _, err := os.Stat(chemin); err == nil && !in.Remplacer {
 		erreur(w, 409, "Un fichier porte déjà ce nom : "+chemin)
 		return
@@ -758,8 +827,8 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 422, "Sauvegarde inconnue.")
 		return
 	}
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
 	o := a.vise(r)
 	if o == nil {
 		erreur(w, 503, "Aucun univers n'est ouvert.")
@@ -781,20 +850,21 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 	}
 	essai.Noter("restauration", "univers remis dans l'état de la sauvegarde "+in.Fichier, auteurDe(r))
 	_ = essai.Fermer()
+	if !a.suspendre(o) {
+		_ = os.Remove(tmp)
+		erreur(w, 409, msgOccupe)
+		return
+	}
+	defer a.fermetureFinie(o.st.ID())
+	// quand plus rien n'écrit : la sauvegarde d'avant a tout ce que l'univers contenait
 	avant, err := sauvegarder(o.st, dossier, "avant-restauration")
 	if err != nil {
+		a.remettre(o)
 		_ = os.Remove(tmp)
 		erreur(w, 500, "Sauvegarde impossible, rien n'a été modifié : "+err.Error())
 		return
 	}
-	if o.srv != nil {
-		o.srv.Fermer()
-	}
-	_ = o.st.Fermer()
-	delete(a.tous, o.st.ID())
-	if a.st == o.st {
-		a.st, a.srv = nil, nil
-	}
+	a.clore(o)
 	echec := os.Rename(tmp, chemin)
 	if echec != nil {
 		_ = os.Remove(tmp) // l'univers n'a pas été touché : il est rouvert tel quel
@@ -804,7 +874,9 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 500, "L'univers ne s'ouvre plus : "+err.Error()+" (état précédent : "+avant+")")
 		return
 	}
-	a.installer(st)
+	if rouvert := a.installer(st); o.defaut {
+		a.redevenirDefaut(rouvert)
+	}
 	if echec != nil {
 		erreur(w, 500, "Restauration impossible, rien n'a été modifié : "+echec.Error())
 		return
@@ -817,16 +889,27 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 func (a *Application) bibliothequeSurServeur(w http.ResponseWriter, r *http.Request, id string) {
 	c, _ := compteDe(r)
 	a.mu.RLock()
-	defer a.mu.RUnlock()
 	cible, source := a.vise(r), a.tous[id]
 	if role := c.Role(id); source == nil || (role != comptes.MJ && role != comptes.Auditeur) {
+		a.mu.RUnlock()
 		erreur(w, 404, "Univers inconnu, ou que votre compte ne lit pas.")
 		return
 	}
+	if cible == nil {
+		a.mu.RUnlock()
+		erreur(w, 503, msgFermeture)
+		return
+	}
 	if source == cible {
+		a.mu.RUnlock()
 		erreur(w, 422, "C'est l'univers ouvert : choisissez-en un autre.")
 		return
 	}
+	cible.requetes.entrer()
+	source.requetes.entrer()
+	a.mu.RUnlock()
+	defer cible.requetes.sortir()
+	defer source.requetes.sortir()
 	b, err := source.srv.bibliotheque()
 	if err != nil {
 		erreurStore(w, err)
@@ -878,18 +961,27 @@ func (a *Application) routeBibliotheque(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	a.mu.RLock()
-	defer a.mu.RUnlock()
 	cible := a.vise(r)
 	if cible == nil {
+		a.mu.RUnlock()
 		erreur(w, 503, "Aucun univers n'est ouvert.")
 		return
 	}
 	if memeFichier(cible.st.Chemin(), chemin) {
+		a.mu.RUnlock()
 		erreur(w, 422, "C'est l'univers ouvert : choisissez-en un autre.")
 		return
 	}
+	autre := a.parChemin(chemin)
+	cible.requetes.entrer()
+	if autre != nil {
+		autre.requetes.entrer()
+		defer autre.requetes.sortir()
+	}
+	a.mu.RUnlock()
+	defer cible.requetes.sortir()
 	var b Bibliotheque
-	switch o := a.parChemin(chemin); {
+	switch o := autre; {
 	case o != nil:
 		b, err = o.srv.bibliotheque()
 	default: // sur l'ordinateur du MJ : l'autre univers est lu, puis refermé

@@ -77,8 +77,9 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 ### Combat
 
 - Combats dans `documents` (collection `combats`). Toute action passe par `POST /api/combats/{id}/actions` ; le WebSocket `…/direct` ne fait que recevoir (vérifie `Origin`), jamais appliquer.
-- **Combat et dés en direct** (`direct.go`) : copie reliée et connectée, le combat tourne sur le serveur et le bureau y relaie routes et suivi, avec le jeton du poste. Connexion perdue : `503`, rien ne continue en local, reprise seule. Lancé hors connexion : reste local, part une fois terminé. Sous verrou de l'application, n'y jamais reprendre `a.mu` (`relieDe`, `echangerDe`).
-- Un WebSocket ne garde pas `a.mu` (`servirSuivi`) : il bloquerait tout le serveur à la première écriture. Fermer un univers coupe ses écrans (`Serveur.Fermer`).
+- **Combat et dés en direct** (`direct.go`) : copie reliée et connectée, le combat tourne sur le serveur et le bureau y relaie routes et suivi, avec le jeton du poste. Connexion perdue : `503`, rien ne continue en local, reprise seule. Lancé hors connexion : reste local, part une fois terminé.
+- **Verrous de l'application** (`fermeture.go`) : `a.mu` quelques instructions seulement, jamais pendant une requête, une lecture du réseau, une sauvegarde ou une ouverture de base. `a.gestion` sérialise les opérations sur les univers et se prend avant `a.mu`. Une requête est comptée dans son univers (`requetes`), et une fermeture l'attend sans verrou (`suspendre`) ; ce qui lit une base hors d'une requête servie se compte aussi. Une route servie par un `Serveur` ne prend jamais `a.gestion`.
+- Un WebSocket n'est pas compté (`servirSuivi`) : une fermeture l'attendrait sans fin. Fermer un univers coupe ses écrans (`Serveur.Fermer`).
 - La fiche d'un combattant est lue par le serveur (`ficheCombat`), jamais fournie par l'écran. PV et chance des PJ reportés sur la feuille hors journal (qui note début et fin).
 - Écran (`views/combat.js`, `combat.css`) : styles sous `.combat`, adaptation par requêtes de conteneur sur `.combat-hote` (jamais la taille de la fenêtre), aucune valeur du jeu écrite : tout vient de `GET /api/regles`, et il reste utilisable sans.
 

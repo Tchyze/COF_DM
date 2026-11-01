@@ -333,6 +333,8 @@ func erreurStore(w http.ResponseWriter, err error) {
 		erreur(w, 404, "Fiche introuvable.")
 	case errors.Is(err, store.ErrConflit):
 		erreur(w, 409, "Cette fiche a été modifiée ailleurs depuis que vous l'avez ouverte. Rechargez-la avant d'enregistrer.")
+	case errors.Is(err, errOccupe):
+		erreur(w, 409, msgOccupe)
 	default:
 		// le détail (chemins de fichiers, requêtes) reste dans le journal : la réponse peut partir
 		// sur le réseau, vers un joueur
