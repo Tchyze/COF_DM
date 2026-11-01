@@ -176,7 +176,7 @@ server {
         limit_req zone=cof_login burst=5 nodelay;
         proxy_pass http://127.0.0.1:8100;
     }
-    location = /api/acces/second-facteur {
+    location ~ ^/api/acces/second-facteur(/defi)?$ {
         limit_req zone=cof_login burst=5 nodelay;
         proxy_pass http://127.0.0.1:8100;
     }
@@ -254,12 +254,13 @@ securite evenement=<événement> [champ=valeur…] nom="<compte>" ip=<adresse du
 | `second_facteur_echec facteur=…` | Un code faux ou déjà utilisé. Celui qui se trompe a le mot de passe : c'est le titulaire, ou quelqu'un qui le lui a pris. |
 | `limite_atteinte portee=2f_adresse` ou `portee=2f_couple` | Un essai refusé : quota de l'adresse, ou de ce compte depuis cette adresse. |
 | `limite_atteinte portee=2f_compte` | Le TOTP de ce compte s'arrête pour un temps, d'où que viennent les essais. Le visiteur peut être le vrai titulaire : ne pas bannir sur cette ligne. **Si ce n'est pas vous, votre mot de passe est connu : changez-le.** |
+| `cle_compteur_incoherent` | Une clé dont le compteur ne monte pas : elle a peut-être été copiée. Refusée. |
 | `limite_atteinte portee=2f_preuve`, `portee=confirmation`, `confirmation_echec` | Trop d'erreurs à cette étape de connexion ; mot de passe faux pour confirmer une action sensible, dans une session déjà ouverte : à regarder de près. |
-| `second_facteur_active facteur=…`, `second_facteur_retire facteur=…` | Un facteur enregistré ou retiré par son titulaire. |
+| `second_facteur_active facteur=…`, `second_facteur_retire facteur=… [cle=…]` | Un facteur enregistré ou retiré par son titulaire : `totp` ou `cle`. |
 | `second_facteur_reinitialise par="…"`, `second_facteur_reinitialise_local` | Tous les facteurs retirés par un autre administrateur, ou par la commande locale (`ip=local`, écrit au prochain démarrage du serveur). |
 | `secours_utilise restants=…`, `secours_regeneres` | Un code de secours consommé ; tous remplacés. |
 
-Ni mot de passe, ni jeton, ni code, ni secret n'y figurent. L'adresse est celle des proxys de confiance : tant que `-proxies` n'est pas juste, elle est fausse. Un nom saisi par erreur à la place du mot de passe y resterait lisible : ce journal se garde comme une donnée sensible. Ces adresses sont des données personnelles : fixez une durée de conservation.
+Ni mot de passe, ni jeton, ni code, ni secret, ni défi n'y figurent. L'adresse est celle des proxys de confiance : tant que `-proxies` n'est pas juste, elle est fausse. Un nom saisi par erreur à la place du mot de passe y resterait lisible : ce journal se garde comme une donnée sensible. Ces adresses sont des données personnelles : fixez une durée de conservation.
 
 **Filtre fail2ban d'exemple** (non essayé sur un vrai fail2ban : seule l'expression a été vérifiée sur des lignes du journal). `/etc/fail2ban/filter.d/cof-dm.conf` :
 
@@ -286,19 +287,25 @@ chain     = DOCKER-USER
 
 ### Double authentification des administrateurs
 
-Sur un serveur, un administrateur prouve un second facteur à la connexion, en plus de son mot de passe : une application d'authentification (TOTP), sans service externe. Les comptes MJ, auditeur et joueur, et les postes de bureau reliés, ne changent pas.
+Sur un serveur, un administrateur prouve un second facteur à la connexion, en plus de son mot de passe : une application d'authentification (TOTP), une clé de sécurité (YubiKey ou autre clé FIDO2), ou les deux, sans service externe. Pas de Yubico OTP. Les comptes MJ, auditeur et joueur, et les postes de bureau reliés, ne changent pas.
 
 **À la première connexion après la mise à jour :**
 
 1. Les sessions d'administrateur en cours tombent. Celles des autres comptes restent.
-2. Le mot de passe seul ne donne accès qu'à « Mon compte », pour enregistrer un facteur : il reste à scanner le QR code, ou saisir le secret, dans une application d'authentification, puis à donner un code. S'il faut aussi changer le mot de passe initial, cela vient d'abord.
+2. Le mot de passe seul ne donne accès qu'à « Mon compte », pour enregistrer un facteur : une clé de sécurité, si le serveur connaît son adresse (ci-dessous) ; ou une application d'authentification, en scannant le QR code ou en saisissant le secret, puis en donnant un code. S'il faut aussi changer le mot de passe initial, cela vient d'abord.
 3. Dix codes de secours s'affichent, une seule fois : rangez-les hors de cet appareil.
 
 **Faites-le juste après la mise à jour.** D'ici là, quiconque connaît votre mot de passe peut enregistrer son facteur à votre place. Au moindre doute sur ce mot de passe, changez-le d'abord. Un compte administrateur créé pour quelqu'un d'autre est dans le même cas : son créateur connaît le mot de passe initial.
 
-**Actions confirmées.** Une session ouverte ne suffit pas pour tout : le mot de passe et un second facteur sont redemandés pour enregistrer, remplacer ou retirer un facteur, régénérer les codes de secours, créer un administrateur ou en promouvoir un, changer le mot de passe d'un autre administrateur, le supprimer ou réinitialiser son second facteur.
+**Actions confirmées.** Une session ouverte ne suffit pas pour tout : le mot de passe et un second facteur sont redemandés pour enregistrer, remplacer ou retirer un facteur, régénérer les codes de secours (renommer une clé, non), créer un administrateur ou en promouvoir un, changer le mot de passe d'un autre administrateur, le supprimer ou réinitialiser son second facteur.
 
-**Si vous avez perdu votre téléphone :** connectez-vous avec un code de secours, puis, dans « Mon compte », enregistrez une nouvelle application : elle remplace l'ancienne. Sans code de secours, un autre administrateur réinitialise votre second facteur (« Comptes » de son administration) : ce n'est jamais possible sur son propre compte.
+**Clés de sécurité.** Il faut dire au serveur son adresse publique, par l'option `-origine` ou la variable `COF_DM_ORIGINE`, par exemple `https://jdr.exemple.org`, avec le port s'il n'est pas 443. Sans elle, l'application d'authentification reste seule proposée. Elle n'est jamais déduite d'un en-tête : derrière un proxy, l'hôte reçu peut différer de ce que le navigateur voit. Le HTTPS est obligatoire : les navigateurs n'offrent pas ces clés autrement, sauf sur `localhost`. Le proxy n'a rien de plus à faire : `-proxies`, le HTTPS et les limites restent ceux de son guide. Enregistrez **deux clés** et rangez la deuxième ailleurs : elles se valent toutes, et « Mon compte » permet de les nommer et de les retirer. Toute clé FIDO2 est acceptée : le serveur ne vérifie pas le modèle, il ne peut pas prouver qu'il s'agit d'une YubiKey, et un autre authentificateur du navigateur (Windows Hello, une passkey) serait accepté aussi. Le code PIN n'est pas demandé : la clé vient en plus du mot de passe, il suffit de la toucher.
+
+**Si le domaine change.** Une clé est liée à son domaine pour toujours : à une nouvelle adresse, elle ne répond plus, et cela ne se répare pas. Avant de changer d'adresse, vérifiez que vous avez une application d'authentification ou vos codes de secours, qui ne dépendent pas du domaine ; connectez-vous avec, à la nouvelle adresse, puis réenregistrez vos clés et retirez les anciennes. Si seul le sous-domaine peut changer, `-rp-id exemple.org` (ou `COF_DM_RP_ID`) lie dès le départ les clés au domaine parent : elles resteront valables sur tous ses sous-domaines. Cette option ne s'ajoute pas après coup à des clés déjà enregistrées, et elle n'accepte que l'hôte de `-origine` ou un de ses domaines parents.
+
+**Une clé refusée pour son compteur.** Une clé compte ses usages. Si le nombre reçu ne monte pas, elle a peut-être été copiée : elle est refusée et `cle_compteur_incoherent` entre au journal. Connectez-vous avec un autre facteur, retirez cette clé, et changez votre mot de passe si vous ne l'expliquez pas. Une clé qui ne compte pas (toujours zéro) reste acceptée.
+
+**Si vous avez perdu votre téléphone ou votre clé :** connectez-vous avec un autre facteur ou un code de secours, puis, dans « Mon compte », enregistrez-en un nouveau. Une nouvelle application remplace l'ancienne ; une clé perdue se retire, une fois qu'il reste un autre facteur. Sans code de secours, un autre administrateur réinitialise votre second facteur (« Comptes » de son administration) : ce n'est jamais possible sur son propre compte.
 
 **Dernier recours, si plus aucun administrateur n'a de facteur.** Il faut la main sur la machine : aucune route réseau n'y mène. Le serveur doit être arrêté : la commande le vérifie et refuse sinon.
 
@@ -310,11 +317,13 @@ docker compose start cof-dm
 
 `admin` est le nom du compte. Tous ses facteurs et ses codes de secours sont retirés, ses sessions fermées ; son mot de passe ne change pas, et il repasse par l'enrôlement. Le prochain démarrage écrit `second_facteur_reinitialise_local` au journal de sécurité. Dans Portainer, la même commande se lance dans un conteneur jetable de la même image, sur le même volume, la stack étant arrêtée.
 
-**Ce que protège le chiffrement.** Le secret TOTP est chiffré dans `comptes.json` avec une clé rangée à côté, dans `comptes.cle`. Cela protège d'une fuite de `comptes.json` seul, pas de qui lit tout le volume : celui-là a aussi le secret qui signe les sessions (`reglages.json`), et n'a pas besoin du TOTP. Le second facteur protège d'un mot de passe volé, pas d'un accès à la machine. Les codes de secours ne sont gardés que sous forme d'empreinte.
+**Ce que protège le chiffrement.** Le secret TOTP est chiffré dans `comptes.json` avec une clé rangée à côté, dans `comptes.cle`. Cela protège d'une fuite de `comptes.json` seul, pas de qui lit tout le volume : celui-là a aussi le secret qui signe les sessions (`reglages.json`), et n'a pas besoin du TOTP. Le second facteur protège d'un mot de passe volé, pas d'un accès à la machine. Les codes de secours ne sont gardés que sous forme d'empreinte. D'une clé de sécurité, il n'y a sur le serveur que sa clé publique : rien à voler.
 
 **Sauvegardes et retour en arrière.** Gardez `comptes.cle` avec `comptes.json` : restauré sans sa clé, le TOTP ne se relit plus, et il faut un code de secours, un autre administrateur ou la commande locale. **Une version antérieure ne connaît pas le second facteur** : elle demande le mot de passe seul, et **efface les facteurs de `comptes.json` à sa première écriture**. Avant une mise à jour, copiez ces deux fichiers si vous voulez pouvoir revenir en arrière.
 
 **L'heure du serveur** doit être juste : un code est accepté trente secondes de part et d'autre.
+
+**Essayer une vraie YubiKey**, sur votre adresse HTTPS ou sur `http://localhost` avec `-origine http://localhost:<port>` : enregistrez-la, déconnectez-vous, reconnectez-vous en la touchant, puis enregistrez une deuxième clé et retirez la première. Une clé refusée à l'enregistrement dit pourquoi à l'écran ; « cette adresse n'est pas celle que le serveur connaît » renvoie à `-origine`.
 
 ### Avec Docker
 
@@ -422,7 +431,7 @@ location = /api/acces/connexion {
   limit_req zone=cof_login burst=5 nodelay;
   include conf.d/include/proxy.conf;
 }
-location = /api/acces/second-facteur {
+location ~ ^/api/acces/second-facteur(/defi)?$ {
   limit_req zone=cof_login burst=5 nodelay;
   include conf.d/include/proxy.conf;
 }

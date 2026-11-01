@@ -22,7 +22,6 @@ import (
 const (
 	origineEssai = "https://jdr.exemple.org"
 	domaineEssai = "jdr.exemple.org"
-	mdpCleEssai  = "une-phrase-bien-longue"
 )
 
 // cleLogicielle : un authentificateur FIDO2 en mémoire. Elle répond à ce qu'on lui demande, y compris de
