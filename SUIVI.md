@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 2).
+Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 3).
 
 ## Où on en est
 
 - **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, pas encore poussée. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
-- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lots 1 et 2 finis, à essayer par le MJ ; lot 3 à venir. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
+- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lots 1 à 3 finis, à essayer par le MJ avant la PR ; réglages GitHub (F-12) encore à faire. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -235,6 +235,16 @@ Lot 1, avant la mise en ligne :
 - **Imports et sauvegardes (F-09)** : limite de traitements lourds, corps reçus sur disque, texte plafonné avant décodage, images lues une à une ; quotas et purge sur un serveur (`limites.go`), rien sur le bureau.
 - **Débit (F-10)** : propositions de partage plafonnées par PJ, débit des jets de dés.
 - **Mots de passe (F-11, F-15)** : règle des nouveaux mots de passe, comptes existants non bloqués ; mot de passe initial à changer d'abord, ou donné par un secret Docker.
+
+**Lot 3, durcissement.**
+
+- **Comptes (F-13, F-14)** : empreinte versionnée à 600 000 itérations, migrée à la connexion réussie ; session d'administrateur de 12 heures ; son propre mot de passe passe par « Mon compte ». Le TOTP reste une proposition, non codée.
+- **En-têtes (F-17, F-20)** : images en cache privé, JSON en `no-store`, `Permissions-Policy`.
+- **Dépôt (F-21, F-22)** : Dependabot, govulncheck, gitleaks et analyse de l'image en CI ; secrets exclus de Git et de l'image.
+- **Serveur (F-23, F-24, F-26)** : pot et documents suivent le partage du PJ ; erreurs de fichiers au journal ; dossiers non listés.
+- **Documentation (F-27)** : ce que voient l'administrateur et l'hébergeur, conservation des sauvegardes.
+- **Vérifications** : V-01, charges dans les champs des joueurs, sans injection dans les écrans parcourus ; V-02, aucune faille prouvée, fichiers reçus durcis et cible de fuzzing `FuzzFichierRecu`.
+- **F-25** : historique non réécrit, conformément à la consigne. **F-12** : changement du workflow préparé, pas appliqué, en attente des réglages GitHub.
 
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
