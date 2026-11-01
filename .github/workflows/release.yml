@@ -4,11 +4,22 @@ name: Release
 # demande (onglet Actions → Release → Run workflow) : canal « aucun » pour de simples artefacts,
 # canal « test » pour publier une préversion vX.Y.Z-test.N de la branche choisie (une PR à essayer),
 # que l'application propose à qui suit le canal Test.
-# - Windows : COF-DM.exe portable (zip) ; WebView2 est déjà présent sous Windows 10 et 11.
+# - Windows : COF-DM.exe (aussi en zip), qui s'installe seul au premier lancement pour l'utilisateur ;
+#   WebView2 est déjà présent sous Windows 10 et 11.
 # - Linux : AppImage ; demande WebKitGTK 4.1 sur le système (libwebkit2gtk-4.1-0).
 # Chaque Release porte SHA256SUMS, les empreintes de ses fichiers, et SHA256SUMS.sig, leur signature
 # Ed25519 (base64) par la clé de publication (secret COF_DM_SIGNATURE, au format PEM) : l'application
 # refuse une mise à jour qu'elle ne vérifie pas avec la clé publique de internal/majour.
+#
+# Docker : l'image du mode serveur est construite à chaque passage (la construction se vérifie ainsi
+# sur une branche, canal « aucun ») et envoyée sur Docker Hub seulement pour une version stable, sous
+# les tags X.Y.Z et latest (jamais une version d'essai). Identifiants : secrets DOCKERHUB_USERNAME et
+# DOCKERHUB_TOKEN (jeton d'accès Docker Hub, droit Read & Write) ; image <DOCKERHUB_USERNAME>/cof-dm
+# (tchyze/cof-dm), ou la variable DOCKERHUB_IMAGE du dépôt si elle est définie. Hors tag, le job se
+# connecte seulement à Docker Hub, pour vérifier les identifiants, sans rien envoyer.
+# L'entrée « docker » (X.Y.Z) reconstruit et envoie l'image d'une version stable déjà publiée, depuis
+# son tag (une version d'avant ce job, ou un envoi raté), sans compiler les lanceurs. Dans tous les
+# cas, latest ne passe sur une version que si c'est la plus récente des versions stables.
 #
 # Chaîne de publication : les actions sont épinglées par SHA (la version en commentaire) ; les
 # outils téléchargés le sont par version et vérifiés par leur empreinte. Pour les mettre à jour,
@@ -23,6 +34,10 @@ on:
         type: choice
         options: [aucun, test]
         default: aucun
+      docker:
+        description: "Republier sur Docker Hub l'image d'une version stable déjà publiée (X.Y.Z, depuis son tag) ; vide : rien"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -74,6 +89,7 @@ jobs:
 
   linux:
     needs: [version, tests]
+    if: inputs.docker == ''
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -115,6 +131,7 @@ jobs:
 
   windows:
     needs: [version, tests]
+    if: inputs.docker == ''
     runs-on: windows-latest
     defaults:
       run:
@@ -133,15 +150,94 @@ jobs:
         run: go run github.com/tc-hib/go-winres@v0.3.3 simply --icon build/icon.png --manifest gui --product-name "COF DM" --file-description "COF DM"
       - name: Compilation
         run: CGO_ENABLED=1 go build -tags sqlite_fts5 -trimpath -ldflags "-s -w -H windowsgui -X main.version=$VERSION" -o dist/COF-DM.exe .
-      - name: Archive portable
+      - name: Archive zip
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\COF-DM.exe, LICENSE -DestinationPath "dist\COF-DM-$env:VERSION-windows-portable.zip"
+          Compress-Archive -Path dist\COF-DM.exe, LICENSE -DestinationPath "dist\COF-DM-$env:VERSION-windows.zip"
           Get-ChildItem dist
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows
           path: dist/*
+
+  docker:
+    needs: [version, tests]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ inputs.docker || needs.version.outputs.version }}
+      REPUBLIER: ${{ inputs.docker }}
+    steps:
+      - name: Version visée
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [[ -n "$REPUBLIER" ]]; then
+            [[ "$REPUBLIER" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "« $REPUBLIER » : il faut une version stable X.Y.Z"; exit 1; }
+            gh release view "v$REPUBLIER" --json isPrerelease -q '.isPrerelease' | grep -qx false ||
+              { echo "v$REPUBLIER n'est pas une version stable publiée"; exit 1; }
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.docker && format('v{0}', inputs.docker) || '' }}
+      - name: Construction de l'image
+        run: |
+          docker build --platform linux/amd64 --build-arg VERSION="$VERSION" \
+            --label org.opencontainers.image.title="COF DM" \
+            --label org.opencontainers.image.version="$VERSION" \
+            --label org.opencontainers.image.revision="$(git rev-parse HEAD)" \
+            --label org.opencontainers.image.source="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.licenses="GPL-3.0" \
+            -t cof-dm:construite .
+      - name: Essai de l'image
+        # le serveur démarre, crée son compte admin (conteneur jetable, mot de passe lu dans ses
+        # traces), accepte la connexion et répond dans la version attendue
+        run: |
+          docker run -d --name essai --network host cof-dm:construite -serveur -port 8199 -data /data
+          trap 'docker rm -f essai > /dev/null' EXIT
+          for i in $(seq 30); do curl -fsS -o /dev/null http://127.0.0.1:8199/api/acces 2>/dev/null && break; sleep 1; done
+          MDP=$(docker logs essai 2>&1 | sed -n 's/^ *mot de passe *: *//p')
+          test -n "$MDP" || { docker logs essai; echo "pas de compte admin créé"; exit 1; }
+          J="$RUNNER_TEMP/session"
+          jq -n --arg mdp "$MDP" '{nom: "admin", mdp: $mdp}' |
+            curl -fsS -c "$J" -H 'Content-Type: application/json' -H 'X-COF-DM: 1' --data @- http://127.0.0.1:8199/api/acces/connexion > /dev/null
+          curl -fsS -b "$J" http://127.0.0.1:8199/api/sante | tee sante.json; echo
+          test "$(jq -r .version sante.json)" = "$VERSION" || { echo "le serveur ne répond pas en $VERSION"; exit 1; }
+      - name: Identifiants Docker Hub (vérification, sans envoi)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') && inputs.docker == '' }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          test -n "$DOCKERHUB_USERNAME" && test -n "$DOCKERHUB_TOKEN" || { echo "::warning::secrets Docker Hub absents : la prochaine version stable n'enverrait pas l'image"; exit 0; }
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker"
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          docker logout; rm -rf "$DOCKER_CONFIG"
+      - name: Envoi sur Docker Hub (version stable)
+        # un tag vX.Y.Z de trois nombres seulement : une préversion (-test.N) ne part jamais
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.docker != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          DOCKERHUB_IMAGE: ${{ vars.DOCKERHUB_IMAGE }}
+        run: |
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version $VERSION : pas une version stable, rien n'est envoyé"; exit 0; }
+          test -n "$DOCKERHUB_USERNAME" && test -n "$DOCKERHUB_TOKEN" || { echo "secrets DOCKERHUB_USERNAME ou DOCKERHUB_TOKEN absents : image non envoyée"; exit 1; }
+          IMAGE="${DOCKERHUB_IMAGE:-$DOCKERHUB_USERNAME/cof-dm}"
+          export DOCKER_CONFIG="$RUNNER_TEMP/docker" # identifiants hors du dossier personnel, retirés à la fin
+          printf '%s' "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+          trap 'docker logout; rm -rf "$DOCKER_CONFIG"' EXIT
+          TAGS="$VERSION"
+          # latest : seulement si aucune version stable publiée n'est plus récente
+          D=$(gh release list --exclude-pre-releases --limit 1 --json tagName -q '.[0].tagName'); D="${D#v}"
+          [[ -z "$D" || "$(printf '%s\n%s\n' "$D" "$VERSION" | sort -V | tail -1)" == "$VERSION" ]] && TAGS="$TAGS latest"
+          for t in $TAGS; do
+            docker tag cof-dm:construite "$IMAGE:$t"
+            docker push "$IMAGE:$t"
+          done
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || inputs.canal == 'test'
@@ -184,7 +280,8 @@ jobs:
           files: dist/*
           generate_release_notes: true
           body: |
-            **Windows** : `COF-DM.exe` se lance directement, sans installation (aussi dans le zip).
+            **Windows** : lancez `COF-DM.exe` (aussi dans le zip) : il s'installe seul pour vous, sans droits d'administrateur (raccourcis sur le Bureau et dans le menu Démarrer, désinstallation par « Applications installées »).
             **Linux** : rendez l'AppImage exécutable (`chmod +x`) puis lancez-la ; il faut WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` sur Debian/Ubuntu, `webkit2gtk4.1` sur Fedora).
-            **Mode portable** : créez un dossier `COF DM - données` à côté du programme pour y garder la base.
+            **Serveur (Docker)** : l'image de cette version est sur Docker Hub, tags `${{ needs.version.outputs.version }}` et `latest` (voir le README, « Avec Docker »).
+            **Ancien mode portable** : un dossier `COF DM - données` à côté du programme est repris au lancement dans le dossier de données de l'utilisateur, sans rien perdre.
             **Vérifier un téléchargement** : `sha256sum --check --ignore-missing SHA256SUMS` (Linux), ou comparer `Get-FileHash COF-DM.exe` à la ligne de `SHA256SUMS` (Windows). `SHA256SUMS.sig` en est la signature, que l'application vérifie avant toute mise à jour.

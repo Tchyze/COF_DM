@@ -22,7 +22,9 @@ export async function panneauMaj(box) {
       ${d ? `<div class="maj-dispo">
           <p><b>Version ${esc(d.version)}</b> disponible${d.preversion ? " (version d'essai)" : ""}${d.date ? `, publiée le ${esc(new Date(d.date).toLocaleDateString("fr-FR"))}` : ""}.</p>
           ${d.notes ? `<details><summary>Nouveautés</summary><pre class="maj-notes">${esc(d.notes)}</pre></details>` : ""}
-          ${m.automatique && m.installable
+          ${m.automatique && m.installable && m.modifiable === false
+            ? `<p class="alerte">Le dossier où se trouve COF DM n'accepte pas de fichier neuf : la mise à jour ne peut pas remplacer le programme. Placez-le dans un dossier à vous (par exemple vos Documents), ou téléchargez la version depuis <a href="${esc(d.page)}" target="_blank" rel="noopener">sa page</a>.</p>`
+            : m.automatique && m.installable
             ? `<p class="hint">L'univers ouvert est sauvegardé et fermé, la nouvelle version vérifiée (signature de COF DM) puis installée, et l'application redémarre.</p>
                <div class="ligne"><button class="primary" id="maj-installer">⬆ Installer et redémarrer</button></div>`
             : `<p class="hint">Ce programme ne se met pas à jour seul${m.automatique ? "" : " (version de développement, ou binaire Linux hors AppImage)"} : téléchargez la version depuis <a href="${esc(d.page)}" target="_blank" rel="noopener">sa page</a>.</p>`}

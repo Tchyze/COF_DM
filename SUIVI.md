@@ -9,7 +9,7 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 - **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `docker-hub` (PR 32, lot A), `installation-hors-depot` (PR 33) `menu-replie` (PR 34, lot B) `maj-fiable` (PR 35, lot C1) et `installation` (PR 36, lot C2, empilée sur la 35), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
-- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses reçues (voir « Installation Windows » et « Rôles du serveur »). Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable (PR 35), C2 installation (PR 36, empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
+- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses reçues (voir « Installation Windows » et « Rôles du serveur »). Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable (PR 35), C2 installation (PR 36, empilée) ; D1 rôles côté serveur (PR 37), D2 page d'administration et écrans du MJ (PR 38, empilée sur la 37 ; à essayer ensemble, préversion depuis `admin-ecran`). Tous les lots attendent l'essai du MJ : branche `essai-complet` (PR 32 à 38 réunies, à ne pas fusionner), préversion 1.2.6-test.40 publiée le 1er novembre 2026.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -134,6 +134,16 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Joueur** : inchangé (sa page, son affichage). **Auditeur** : garde son nom ; lecture seule, sur les univers choisis par l'administrateur.
 - **Archiver** : l'univers sort de toutes les listes et n'est plus accessible, fichier et rôles gardés ; seul l'administrateur le désarchive. **Supprimer** : sauvegarde automatique, puis nom de l'univers retapé pour confirmer.
 - **Passage** : les comptes administrateurs actuels restent administrateurs (sans plus aucun accès au contenu) ; le MJ recrée lui-même ses comptes MJ.
+
+### Client, tablettes et combat en direct (1er novembre 2026, lot E)
+
+- Le **mode local reste** : un MJ sans serveur peut ouvrir son PC aux tablettes. Idée d'un client seulement relié à un serveur écartée ; les univers locaux ne changent pas.
+- **E1, ouverture du réseau sans relance** (Paramètres → Tablette et réseau) : cocher ouvre aussitôt, décocher referme et coupe les tablettes ; mot de passe MJ exigé et QR code gardés ; relié à un serveur, le réseau reste fermé.
+- **E2, combat et dés en direct** : client connecté, le combat tourne sur le serveur et le client y transmet chaque action (écran gardé dans le client, joueurs à jour aussitôt). Au lancement, le client envoie d'abord ses changements ; à la fin, synchro immédiate (PV, chance, récapitulatif).
+  - Connexion perdue en plein combat : « connexion perdue », actions bloquées, reprise seule au retour du serveur ; pas de continuation en local.
+  - Combat lancé hors connexion : reste local, invisible des joueurs, envoyé une fois terminé (comme aujourd'hui).
+  - Jets de dés : même chemin ; les jets cachés restent invisibles des joueurs.
+- E1 et E2 partent de `main` une fois les lots A à D fusionnés, après l'essai du MJ.
 
 ### Butin et pot commun (31 octobre 2026, projet 14, avant le code)
 
