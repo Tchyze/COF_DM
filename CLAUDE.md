@@ -3,7 +3,7 @@
 Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Application de bureau Windows / Linux (fenêtre native autour d'une interface web embarquée), un fichier SQLite `.cofdm` par univers. Une édition serveur (image Docker) héberge plusieurs univers avec des comptes ; le bureau s'y synchronise. Le projet frère tracker_COF (bestiaire, feuilles, rencontres, combat) y est entièrement fusionné.
 
 - **Tout en français** : code, identifiants, commentaires, commits, docs.
-- **Avant de reprendre** : lire `SUIVI.md` (état, consignes du MJ, décisions) et `PROJETS.md` (chantiers et priorités). Pour un gros chantier, poser les questions de fond au MJ avant de coder.
+- **Avant de reprendre** : lire `SUIVI.md` (état, consignes du MJ, décisions), `PROJETS.md` (chantiers et priorités) et, s'il existe, `LOCAL.md` (installation du MJ, hors dépôt). Pour un gros chantier, poser les questions de fond au MJ avant de coder.
 
 ## Stack et commandes
 
@@ -89,7 +89,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 1. `gofmt -l .`, `go vet` et `go test` passent avec les tags ci-dessus.
 2. Écrans touchés vérifiés dans Chrome (CDP) à 1300 et 390 px, sans erreur de console.
 3. `docs/API.md` et `SUIVI.md` à jour.
-4. Rien de local committé : ni `.db`, `.cofdm`, `.log`, ni médias réels, ni `donnees/`.
+4. Rien de local committé : ni `.db`, `.cofdm`, `.log`, ni médias réels, ni `donnees/`. Le dépôt et l'image Docker sont publics : aucune donnée du MJ (univers, règles, bestiaire), ni rien de son installation (machine, chemins, fichiers, sauvegardes) dans un fichier suivi ; tout cela va dans `LOCAL.md`.
 
 ## Git et publication
 
@@ -97,4 +97,5 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 - PR empilées : avant de fusionner celle du dessous (`--delete-branch`), reporter celle du dessus sur `main` : `gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` (`gh pr edit --base` échoue).
 - Faire essayer : `gh workflow run release.yml --ref <branche> -f canal=test`.
 - Version stable : tag `vX.Y.Z` (trois nombres, rien d'autre), **jamais sans demande explicite** ; notes de version commençant par « Nouveautés » en français.
+- Image Docker : le job `docker` de *Release* la construit et l'essaie à chaque passage, et ne l'envoie sur Docker Hub (`X.Y.Z` et `latest`) que pour un tag stable. Secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` ; image `tchyze/cof-dm` (`<DOCKERHUB_USERNAME>/cof-dm`, ou variable `DOCKERHUB_IMAGE`). Sur une branche, le job vérifie seulement les identifiants (connexion, sans envoi). Republier une version stable déjà publiée : `gh workflow run release.yml -f docker=X.Y.Z` (image reconstruite depuis le tag ; `latest` seulement si c'est la plus récente).
 - `SUIVI.md` seul : commit direct sur `main`, sans PR.

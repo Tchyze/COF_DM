@@ -8,8 +8,8 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 
 - **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `docker-hub` (PR 32, lot A), `installation-hors-depot` (PR 33) et `menu-replie` (PR 34, lot B), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
-- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses attendues avant les lots C et D. Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable, C2 installation (empilée) ; D1 rôles côté serveur, D2 écran d'administration (empilée).
+- **Branches** : `docker-hub` (PR 32, lot A), `installation-hors-depot` (PR 33) `menu-replie` (PR 34, lot B) `maj-fiable` (PR 35, lot C1) et `installation` (PR 36, lot C2, empilée sur la 35), à essayer. Les PR 29 à 31 (butin), essayées par le MJ en préversion 1.2.5-test.34, sont fusionnées le 31 octobre 2026 et publiées dans la 1.2.5.
+- **Chantier en cours** (31 octobre 2026) : installation Windows et mise à jour fiable, administrateur séparé du MJ, menu repliable, image sur Docker Hub. Questions de fond posées au MJ (installation, portable, administrateurs existants, double casquette, PJ d'un compte joueur, archivage, suppression, dépôt d'univers, Docker Hub) : réponses reçues (voir « Installation Windows » et « Rôles du serveur »). Lots : A Docker Hub (PR 32) ; B menu repliable (PR 34) ; C1 mise à jour fiable (PR 35), C2 installation (PR 36, empilée) ; D1 rôles côté serveur (PR 37), D2 page d'administration et écrans du MJ (PR 38, empilée sur la 37 ; à essayer ensemble, préversion depuis `admin-ecran`). Tous les lots attendent l'essai du MJ : branche `essai-complet` (PR 32 à 38 réunies, à ne pas fusionner), préversion 1.2.6-test.40 publiée le 1er novembre 2026.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -56,7 +56,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 - Derrière un reverse proxy nginx qui porte le HTTPS ; seulement dans l'édition serveur (image Docker). Rien n'est accordé aux requêtes venues de la machine.
 - Comptes (nom d'utilisateur, mot de passe), jetons d'API par compte. **Plusieurs univers ouverts à la fois** ; chacun choisit le sien, onglet par onglet.
-- **Rôles** : administrateur pour tout le serveur ; MJ, auditeur et joueur **univers par univers**.
+- **Rôles** : administrateur pour tout le serveur ; MJ, auditeur et joueur **univers par univers** (refonte du 31 octobre 2026 : voir « Rôles du serveur »).
   - Auditeur : lit tout, secrets compris, ne modifie rien.
   - Joueur (21 octobre 2026) : n'a que sa page de joueur (plus de vue filtrée de l'application, ni par l'API) ; un compte à plusieurs rôles passe d'un univers à l'autre depuis sa page ou l'application. Lecture seule, sauf si le MJ de l'univers ouvre l'**édition par les joueurs** (Paramètres, ou options de l'écran du MJ ; réglage synchronisé) : toute la feuille de son PJ sauf les notes du MJ, et l'apparence, l'historique et les objectifs. Ajouter une voie de la bibliothèque reste au MJ.
 - L'application de bureau reste sans compte.
@@ -119,6 +119,31 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Affichage** : une valeur changée par un objet a sa part **en bleu** (les capacités restent en vert), et **la formule au survol** : « DEF 12 = base 8 + 4 Casque du guerrier ».
 - **Joueurs** (édition ouverte) : ils cochent « porté », comptent leurs objets (−/+), ajoutent ou retirent des objets courants ; les chiffres d'un objet et son emplacement restent au MJ.
 - **Objets du monde** (lot 2) : une ligne peut désigner une fiche « Objet », dont elle prend le nom et les chiffres (champ « Chiffres » de la fiche : emplacement, bonus, arme). Le **Détenteur suit dans les deux sens** : donné à un PJ, l'objet entre dans son inventaire (et quitte celui d'un autre PJ) ; donné ailleurs ou ôté de l'inventaire, il n'y est plus / n'a plus de détenteur. Fiche effacée : la ligne reste, en objet courant. Lier ou retirer un objet du monde reste au MJ. Rien ne suit quand les feuilles de personnage sont coupées.
+
+### Installation Windows (31 octobre 2026, lot C)
+
+- **Exe qui s'installe seul** au premier lancement (pas d'installeur à part), sans droits d'administrateur, dans `%LOCALAPPDATA%\Programs\COF DM` ; raccourcis « COF DM » sur le Bureau **et** dans le menu Démarrer ; entrée dans **« Applications installées »** avec désinstallation (données gardées, sauf demande).
+- **Reprise** d'une installation existante : l'exe posé sur le Bureau (ou dans les Téléchargements) est **retiré** après l'installation ; une copie plus ancienne que l'installé n'écrase jamais l'installé.
+- **Le mode portable est supprimé** : un dossier « COF DM - données » à côté du programme est repris au lancement dans le dossier de données de l'utilisateur, sans rien perdre.
+- Données toujours dans `%APPDATA%\COF DM` ; l'AppImage Linux se lance d'où elle est.
+
+### Rôles du serveur (31 octobre 2026, lot D)
+
+- **Administrateur** : compte du serveur seulement, **jamais MJ** (un ou plusieurs comptes bien distincts). Crée, renomme, archive et supprime les univers (pas leur contenu), crée les comptes, change leurs mots de passe, les lie aux univers (MJ, auditeur), décide à quels univers un compte **peut** être joint comme joueur, règle le serveur. D'un univers il ne voit que nom, dates, taille, état et comptes liés : **aucune fiche** (test de non-fuite). Connexion par mot de passe seulement, sans jeton d'API.
+- **MJ** : le contenu des univers auxquels il est lié. Y joint (ou non) les comptes que l'administrateur a admis comme joueurs de cet univers, et lie chacun à son PJ : plusieurs groupes bien distincts sur une même instance. Importe et exporte les **données** (un import remplace le contenu, après une sauvegarde automatique ; nom, comptes et rôles restent ceux de l'administrateur). Sauvegardes et restauration de ses univers. Plusieurs MJ possibles dans un univers.
+- **Joueur** : inchangé (sa page, son affichage). **Auditeur** : garde son nom ; lecture seule, sur les univers choisis par l'administrateur.
+- **Archiver** : l'univers sort de toutes les listes et n'est plus accessible, fichier et rôles gardés ; seul l'administrateur le désarchive. **Supprimer** : sauvegarde automatique, puis nom de l'univers retapé pour confirmer.
+- **Passage** : les comptes administrateurs actuels restent administrateurs (sans plus aucun accès au contenu) ; le MJ recrée lui-même ses comptes MJ.
+
+### Client, tablettes et combat en direct (1er novembre 2026, lot E)
+
+- Le **mode local reste** : un MJ sans serveur peut ouvrir son PC aux tablettes. Idée d'un client seulement relié à un serveur écartée ; les univers locaux ne changent pas.
+- **E1, ouverture du réseau sans relance** (Paramètres → Tablette et réseau) : cocher ouvre aussitôt, décocher referme et coupe les tablettes ; mot de passe MJ exigé et QR code gardés ; relié à un serveur, le réseau reste fermé.
+- **E2, combat et dés en direct** : client connecté, le combat tourne sur le serveur et le client y transmet chaque action (écran gardé dans le client, joueurs à jour aussitôt). Au lancement, le client envoie d'abord ses changements ; à la fin, synchro immédiate (PV, chance, récapitulatif).
+  - Connexion perdue en plein combat : « connexion perdue », actions bloquées, reprise seule au retour du serveur ; pas de continuation en local.
+  - Combat lancé hors connexion : reste local, invisible des joueurs, envoyé une fois terminé (comme aujourd'hui).
+  - Jets de dés : même chemin ; les jets cachés restent invisibles des joueurs.
+- E1 et E2 partent de `main` une fois les lots A à D fusionnés, après l'essai du MJ.
 
 ### Butin et pot commun (31 octobre 2026, projet 14, avant le code)
 
@@ -187,6 +212,8 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 32 | **Docker Hub** (lot A, en PR) : job `docker` du workflow Release (image construite et essayée à chaque passage, envoyée en `X.Y.Z` et `latest` pour un tag stable seulement ; secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`) ; README : image publiée, `image:` à la place de `build:`. |
 | 33 | **Installation du MJ hors dépôt** (en PR) : `LOCAL.md`, ignoré par git, reçoit ce qui décrit l'installation du MJ ; CLAUDE.md demande de le lire. |
 | 34 | **Menu repliable** (lot B, en PR) : catégories du menu de gauche repliables (clic, Entrée, Espace), gardées sur l'appareil (`localStorage` sous try/catch) ; la catégorie de la page ouverte se déplie le temps qu'on y est. |
+| 35 | **Mise à jour fiable** (lot C1, en PR) : le programme d'avant (`.ancien`) est retiré en fond avec réessais pendant une minute (il tournait encore quand le nouveau le retirait) ; un `.ancien` encore tenu ne bloque plus la mise à jour suivante (`.ancien-2`) ; renommages réessayés (antivirus) ; dossier non modifiable vérifié avant de télécharger (`modifiable` dans l'état, message à l'écran). |
+| 36 | **Installation Windows** (lot C2, en PR, empilée sur la 35) : l'exe s'installe seul pour l'utilisateur (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis Bureau et menu Démarrer, « Applications installées », `-desinstaller`) ; copie du Bureau retirée ; Claude suit ; mode portable supprimé, ses données reprises au lancement. Paquet `internal/installation`, testé sur le vrai Windows. |
 
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
