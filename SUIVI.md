@@ -248,7 +248,7 @@ Lot 1, avant la mise en ligne :
 
 ### Double authentification des administrateurs (novembre 2026, branche `security/mfa-admin`, empilée sur `security/audit-fixes`)
 
-**Lot 1, TOTP** (non poussé, en attente de l'essai du MJ) :
+**Lot 1, TOTP** :
 
 - **Connexion en deux étapes** : le mot de passe d'un administrateur ne donne qu'une preuve de cinq minutes (`secondfacteur.go`), ou une session d'enrôlement de trente minutes s'il n'a aucun facteur. Les autres comptes ne changent pas.
 - **Session d'administrateur à niveau** : les sessions d'avant et celles d'un compte promu ne valent plus rien. **Les administrateurs se reconnectent une fois.**
@@ -258,12 +258,13 @@ Lot 1, avant la mise en ligne :
 - **Réinitialisation** par un autre administrateur, ou commande locale `-reinitialiser-second-facteur`, serveur arrêté (verrou de fichier).
 - **Essayé** : suite de tests et `-race`, écrans dans Chrome à 1300 et 390 px, HTTPS derrière un vrai NPM sur un banc jetable (par l'API, pas par les écrans), commande locale dans Docker.
 
-**Lot 2, WebAuthn et clés de sécurité** (non poussé, en attente de l'essai du MJ avec une vraie clé) :
+**Lot 2, WebAuthn et clés de sécurité** :
 
 - **Clés FIDO2** par `go-webauthn/webauthn` (`webauthn.go`), dépendance acceptée par le MJ. Toute clé FIDO2, sans attestation. Plusieurs clés, nommées et retirables, une deuxième conseillée à l'écran.
 - **Configuration** : `-origine` (`COF_DM_ORIGINE`), et `-rp-id` (`COF_DM_RP_ID`) pour lier les clés à un domaine parent ; jamais d'en-tête. Sans `-origine`, le TOTP reste seul.
 - **Vérifications** : origine, domaine, signature, présence, défi à usage unique de deux minutes, compteur incohérent refusé (la bibliothèque ne fait que le signaler). Une clé peut aussi confirmer une action.
-- **Essayé** : authentificateur logiciel dans les tests, authentificateur virtuel du CDP dans Chrome à 1300 et 390 px ; en HTTPS derrière un vrai NPM sur un banc jetable, certificat de test accepté par une option de Chrome : clé, TOTP et WebSocket d'un joueur. Pas essayé : une vraie clé.
+- **Essayé** : authentificateur logiciel dans les tests, authentificateur virtuel du CDP dans Chrome à 1300 et 390 px ; en HTTPS derrière un vrai NPM sur un banc jetable, certificat de test accepté par une option de Chrome : clé, TOTP et WebSocket d'un joueur. 
+- **Essai du MJ** : une vraie clé et une vraie application d'authentification, sous Windows dans Chrome, sur une instance en `localhost` : enregistrement, connexion, un simple toucher sans PIN. Pas encore essayé en vrai : l'adresse HTTPS réelle, les autres navigateurs, fail2ban, Portainer.
 
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
