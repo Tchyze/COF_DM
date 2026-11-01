@@ -865,7 +865,7 @@ func (s *Serveur) servirMedia(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Cache-Control", "max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, f, time.Unix(int64(cree), 0), bytes.NewReader(contenu))
 }

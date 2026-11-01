@@ -437,7 +437,7 @@ La page n'affiche aucun cadre. Sa politique de sécurité n'admet de WebSocket q
 | `POST /api/entites/{id}/medias` | Ajoute une image (PNG, JPEG, WebP, GIF ; 20 Mo au plus) : formulaire multipart avec le champ `fichier`, ou contenu brut de l'image avec `?nom=portrait.png`. La première image devient l'image principale. Sur un serveur : `507` au-delà du quota de l'univers. |
 | `PATCH /api/medias/{id}` `{"legende": "…", "principal": true}` | Légende, image principale. |
 | `DELETE /api/medias/{id}` | Supprime. |
-| `GET /medias/{fichier}` | L'image (rangée dans le fichier de l'univers). |
+| `GET /medias/{fichier}` | L'image (rangée dans le fichier de l'univers). `Cache-Control: private` : jamais dans un cache partagé. |
 
 ## Claude (application de bureau)
 

@@ -525,7 +525,7 @@ func (s *Serveur) qr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "max-age=3600")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
 	_, _ = w.Write(png)
 }
 
