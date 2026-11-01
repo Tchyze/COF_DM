@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installation, rôles, menu, Docker Hub » commencé).
+Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 1).
 
 ## Où on en est
 
 - **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : aucune en attente. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
-- **Chantier en cours** : aucun ; lot E fini et publié dans la 1.3.0.
+- **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, pas encore poussée. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
+- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lot 1 fini, à essayer par le MJ ; lots 2 et 3 à venir. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -215,6 +215,19 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 35 | **Mise à jour fiable** (lot C1, en PR) : le programme d'avant (`.ancien`) est retiré en fond avec réessais pendant une minute (il tournait encore quand le nouveau le retirait) ; un `.ancien` encore tenu ne bloque plus la mise à jour suivante (`.ancien-2`) ; renommages réessayés (antivirus) ; dossier non modifiable vérifié avant de télécharger (`modifiable` dans l'état, message à l'écran). |
 | 36 | **Installation Windows** (lot C2, en PR, empilée sur la 35) : l'exe s'installe seul pour l'utilisateur (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis Bureau et menu Démarrer, « Applications installées », `-desinstaller`) ; copie du Bureau retirée ; Claude suit ; mode portable supprimé, ses données reprises au lancement. Paquet `internal/installation`, testé sur le vrai Windows. |
 
+### Durcissement de sécurité (novembre 2026, branche `security/audit-fixes`)
+
+Lot 1, avant la mise en ligne :
+
+- Go 1.26.10.
+- **Proxys de confiance** (`-proxies`, `COF_DM_PROXIES`) : `X-Forwarded-*` ne se croit que d'une adresse déclarée, par défaut la machine elle-même.
+- **Inventaire** : contrôle du joueur indépendant de l'écriture de la clé ; plus aucun corps renvoyé tel quel.
+- **Limite d'essais** : par nom et adresse, quota par adresse (IPv6 par `/64`), simple ralentissement par nom : plus aucun blocage d'un compte par un tiers.
+- **Sessions** liées à une graine propre au compte. **Tout le monde se reconnecte une fois** à la mise à jour.
+- **Jetons** : retirés par une réinitialisation de l'administrateur, au choix du titulaire quand il change son mot de passe (case cochée par défaut) ; date de dernière utilisation. Un poste de bureau au jeton retiré demande de se reconnecter.
+- **Journal de sécurité** au format stable (`securite evenement=…`), filtre fail2ban d'exemple.
+- **Déploiement** : `docker-compose.npm.yml`, section « Derrière Nginx Proxy Manager et Portainer » du README, configuration nginx revue. Essayés sur un NPM et un nginx réels, en local ; pas de stack Portainer réelle ni de vrai certificat.
+
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
 | PR | Contenu |
@@ -249,7 +262,7 @@ Aucun. Les trois notés jusqu'au 22 octobre 2026 sont corrigés (PR des correcti
 ### À vérifier à la main (projet 6)
 
 - **Exe Windows et AppImage** dans leur vraie fenêtre (WebView2, WebKitGTK) : seul Chrome a servi aux vérifications.
-- **Serveur derrière un vrai nginx** (HTTPS) : l'exemple du README n'a pas été essayé ; synchronisation sur une vraie coupure, et avec deux copies hors ligne en même temps.
+- **Serveur derrière un vrai nginx** (HTTPS) : l'exemple du README et NPM sont essayés en local avec un certificat de test, pas encore sur Internet ; synchronisation sur une vraie coupure, et avec deux copies hors ligne en même temps.
 - **Export vers Obsidian** ouvert dans le vrai vault (propriétés, tableaux, liens).
 - **Serveur MCP** : essayé dans Claude Desktop sous Windows (19 octobre 2026) ; reste Claude Code.
 - La reprise des anciens liens de tracker_COF sur un vrai univers ancien.
