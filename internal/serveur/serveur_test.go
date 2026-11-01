@@ -22,6 +22,8 @@ type banc struct {
 	t     *testing.T
 	s     *Serveur
 	jeton string
+	// dernierePreuve : le cookie de preuve de la dernière réponse (second facteur d'un administrateur)
+	dernierePreuve *http.Cookie
 }
 
 func nouveau(t *testing.T) *banc { return nouveauAvec(t, Options{}) }
@@ -37,7 +39,7 @@ func nouveauAvec(t *testing.T, opt Options) *banc {
 	opt.Version, opt.DossierDon, opt.Frontend = "test", dir, fstest.MapFS{"index.html": {Data: []byte("<html>")}}
 	s := Nouveau(st, opt)
 	j, _ := st.Meta("api_jeton")
-	return &banc{t, s, j}
+	return &banc{t, s, j, nil}
 }
 
 // appel depuis le navigateur local (sans jeton).

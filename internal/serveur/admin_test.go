@@ -271,9 +271,13 @@ func TestAdminUnivers(t *testing.T) {
 // reconnecter : une nouvelle session sur l'application a.
 func reconnecter(t *testing.T, a *Application, nom string) *navigateur {
 	t.Helper()
-	n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
-	if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}); c != 200 {
+	n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}, reg: a.opt.Comptes}
+	c, v := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)})
+	if c != 200 {
 		t.Fatalf("connexion de %s : %d", nom, c)
+	}
+	if v["etape"] != nil {
+		n.finirConnexionAdmin(nom)
 	}
 	return n
 }
