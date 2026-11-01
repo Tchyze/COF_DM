@@ -521,3 +521,24 @@ func TestAdminPasSonPropreMdp(t *testing.T) {
 		t.Fatalf("celui d'un autre : %d %v", c, v)
 	}
 }
+
+// Une erreur de fichier reste au journal : les réponses ne disent pas où sont les données du serveur.
+func TestErreursSansChemin(t *testing.T) {
+	a, reg, connecter := serveurMulti(t)
+	chef, meneur := connecter("chef"), connecter("meneur")
+	id := a.st.ID()
+	donner(reg, "meneur", id, comptes.MJ)
+	autre := creerUnivers(t, chef, "Les Marches")
+	secret := a.opt.DossierDon
+	// le dossier des archives ne peut pas être créé : un fichier est à sa place
+	if err := os.WriteFile(a.DossierArchives(), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, v := chef.faire("PATCH", "/api/admin/univers/"+autre, map[string]any{"archive": true})
+	if c != 500 || strings.Contains(toJSON(v), secret) || strings.Contains(toJSON(v), "/") {
+		t.Fatalf("archivage : %d %v", c, v)
+	}
+	if c, v := meneur.faire("POST", "/api/univers/restaurer", map[string]any{"fichier": "2020-01-01_00-00-00_manuelle.cofdm"}, enTeteUnivers, id); c != 404 || strings.Contains(toJSON(v), secret) {
+		t.Fatalf("restauration : %d %v", c, v)
+	}
+}

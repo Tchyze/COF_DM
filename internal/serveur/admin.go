@@ -245,7 +245,7 @@ func (a *Application) archiver(f ficheAdmin) (int, string) {
 		return 409, msgDernierUnivers
 	}
 	if err := os.MkdirAll(a.DossierArchives(), 0o700); err != nil {
-		return 500, "Archivage impossible : " + err.Error()
+		return 500, auJournal("Archivage impossible", err)
 	}
 	cible := filepath.Join(a.DossierArchives(), filepath.Base(f.chemin))
 	if _, err := os.Stat(cible); err == nil {
@@ -257,7 +257,7 @@ func (a *Application) archiver(f ficheAdmin) (int, string) {
 	defer a.fermetureFinie(f.ID)
 	if err := os.Rename(f.chemin, cible); err != nil {
 		a.rouvrir(f.chemin)
-		return 500, "Archivage impossible : " + err.Error()
+		return 500, auJournal("Archivage impossible", err)
 	}
 	m := a.archives()
 	m[f.ID] = filepath.Base(cible)
@@ -274,7 +274,7 @@ func (a *Application) desarchiver(f ficheAdmin) (int, string) {
 		return 409, "Un univers servi porte déjà ce nom : renommez-le d'abord."
 	}
 	if err := os.Rename(f.chemin, cible); err != nil {
-		return 500, "Désarchivage impossible : " + err.Error()
+		return 500, auJournal("Désarchivage impossible", err)
 	}
 	m := a.archives()
 	delete(m, f.ID)
@@ -310,7 +310,7 @@ func (a *Application) renommer(f ficheAdmin, nom, auteur string) (int, string) {
 	if f.Archive {
 		chemin = filepath.Join(a.DossierArchives(), filepath.Base(chemin))
 		if err := os.Rename(f.chemin, chemin); err != nil {
-			return 500, "Renommage impossible : " + err.Error()
+			return 500, auJournal("Renommage impossible", err)
 		}
 		m := a.archives()
 		m[f.ID] = filepath.Base(chemin)
@@ -331,7 +331,7 @@ func (a *Application) renommer(f ficheAdmin, nom, auteur string) (int, string) {
 	}
 	a.noterServis()
 	if echec != nil {
-		return 500, "Renommage impossible : " + echec.Error()
+		return 500, auJournal("Renommage impossible", echec)
 	}
 	if o == nil {
 		return 500, "L'univers est renommé, mais ne s'ouvre plus (voir le journal du serveur)."
@@ -369,7 +369,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 	}
 	dossier := filepath.Join(a.opt.DossierDon, "sauvegardes", id)
 	if err := os.MkdirAll(dossier, 0o700); err != nil {
-		erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
+		erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été supprimé", err))
 		return
 	}
 	sauvegarde := ""
@@ -383,7 +383,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		s, err := sauvegarder(f.ouvert.st, dossier, motifAvantSuppression)
 		if err != nil {
 			a.remettre(f.ouvert)
-			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
+			erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été supprimé", err))
 			return
 		}
 		sauvegarde = s
@@ -392,7 +392,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		sauvegarde = filepath.Join(dossier, nomSauvegarde(motifAvantSuppression))
 		if err := copierFichier(f.chemin, sauvegarde); err != nil {
 			_ = os.Remove(sauvegarde)
-			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
+			erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été supprimé", err))
 			return
 		}
 	}
@@ -400,7 +400,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		if f.ouvert != nil {
 			a.rouvrir(f.chemin)
 		}
-		erreur(w, 500, "Suppression impossible : "+err.Error())
+		erreur(w, 500, auJournal("Suppression impossible", err))
 		return
 	}
 	if f.Archive {

@@ -340,6 +340,12 @@ func erreur(w http.ResponseWriter, code int, msg string) {
 // msgInterne : la réponse à une erreur imprévue, dont le détail ne sort pas du journal.
 const msgInterne = "Erreur interne (détails dans le journal de l'application)."
 
+// auJournal : le détail d'une erreur (chemins de fichiers) va au journal, et la réponse n'en dit que quoi.
+func auJournal(quoi string, err error) string {
+	log.Printf("%s : %v", quoi, err)
+	return quoi + ". " + msgInterne
+}
+
 func erreurStore(w http.ResponseWriter, err error) {
 	var ev store.ErrValidation
 	switch {

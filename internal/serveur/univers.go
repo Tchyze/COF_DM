@@ -842,7 +842,8 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 	tmp := chemin + ".restauration"
 	if err := copierFichier(filepath.Join(dossier, in.Fichier), tmp); err != nil {
 		_ = os.Remove(tmp)
-		erreur(w, 404, "Sauvegarde illisible : "+err.Error())
+		log.Printf("restauration : %v", err)
+		erreur(w, 404, "Sauvegarde illisible.")
 		return
 	}
 	essai, err := store.Ouvrir(tmp)
@@ -864,7 +865,7 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		a.remettre(o)
 		_ = os.Remove(tmp)
-		erreur(w, 500, "Sauvegarde impossible, rien n'a été modifié : "+err.Error())
+		erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été modifié", err))
 		return
 	}
 	if !a.opt.Limites.ranger(dossier, filepath.Base(avant), false) {
@@ -877,14 +878,15 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 	}
 	st, err := store.Ouvrir(chemin)
 	if err != nil {
-		erreur(w, 500, "L'univers ne s'ouvre plus : "+err.Error()+" (état précédent : "+avant+")")
+		log.Printf("restauration, état précédent dans %s", avant)
+		erreur(w, 500, auJournal("L'univers ne s'ouvre plus", err))
 		return
 	}
 	if rouvert := a.installer(st); o.defaut {
 		a.redevenirDefaut(rouvert)
 	}
 	if echec != nil {
-		erreur(w, 500, "Restauration impossible, rien n'a été modifié : "+echec.Error())
+		erreur(w, 500, auJournal("Restauration impossible, rien n'a été modifié", echec))
 		return
 	}
 	repondre(w, 200, map[string]any{"restaure": in.Fichier, "sauvegarde": filepath.Base(avant)})
