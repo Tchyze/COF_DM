@@ -280,10 +280,117 @@ docker compose up -d --build
 docker compose logs cof-dm     # premier lancement : le mot de passe du compte « admin »
 ```
 
+- Ce `docker-compose.yml` suit le cas d'un nginx installé sur la machine. Avec un proxy en conteneur, voir « Derrière Nginx Proxy Manager et Portainer ».
 - Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui fait de nginx un proxy de confiance sans aucun réglage : avec un port publié ou un réseau Docker, il faudrait déclarer le proxy dans `-proxies`.
 - Les données sont dans `./donnees` : `comptes.json`, `reglages.json`, `univers/` (un fichier `.cofdm` par univers) et `sauvegardes/`. Pour mettre sur le serveur un univers préparé sur votre ordinateur : l'administrateur crée l'univers et vous en fait MJ, puis **Fichier → Importer un fichier d'univers…** ; ou son fichier dans `donnees/univers/` puis `docker compose restart`. Les univers archivés sont rangés dans `donnees/univers/archives/`.
 - Le conteneur tourne avec l'utilisateur `1000:1000`. Si `./donnees` appartient à un autre utilisateur, indiquez-le : `COF_UID=$(id -u) COF_GID=$(id -g) docker compose up -d`. `COF_PORT` change le port (8100 par défaut).
 - Mise à jour : avec l'image publiée, changer le tag (ou garder `latest`) puis `docker compose pull && docker compose up -d` ; construite depuis le dépôt, `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (onglet **Serveur** de sa page), avec la version des applications de bureau reliées. Sa version est celle de l'image publiée, ou vient de git pour une image construite (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. Construite depuis le dépôt, la première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.
+
+### Derrière Nginx Proxy Manager et Portainer
+
+Pour un serveur où [Nginx Proxy Manager](https://nginxproxymanager.com/) (NPM) tourne en conteneur, exposé directement sur Internet, sur le même hôte Docker que COF DM. Le fichier [`docker-compose.npm.yml`](docker-compose.npm.yml) sert d'exemple : pas de `build:`, pas de réseau `host`, aucun port publié, conteneur en lecture seule, sans capacité, avec des limites de mémoire et de processus.
+
+**Essayé** sur un banc jetable en local, avec un vrai NPM (`jc21/nginx-proxy-manager:2`) et un certificat de test : tout ce qui suit, sauf ce qui est indiqué plus bas comme non essayé.
+
+**1. Le réseau.** Un réseau Docker pour NPM et COF DM **seulement**, à sous-réseau fixe : tout conteneur de ce réseau peut dicter son adresse et le HTTPS à l'application. Dans Portainer : *Networks → Add network*, nom `cof-dm-proxy`, sous-réseau `172.30.0.0/24` ; ou :
+
+```bash
+docker network create --subnet 172.30.0.0/24 cof-dm-proxy
+```
+
+Un autre sous-réseau convient, à reporter dans `-proxies`. NPM rejoint ce réseau depuis sa propre stack :
+
+```yaml
+services:
+  npm:
+    # … sa configuration habituelle …
+    networks: [default, cof-dm-proxy]
+networks:
+  cof-dm-proxy:
+    external: true
+```
+
+**2. La stack COF DM.** Dans Portainer : *Stacks → Add stack*, éditeur web, y coller `docker-compose.npm.yml` en remplaçant `X.Y.Z` par une version publiée précise, jamais `latest`. Au premier lancement, le mot de passe du compte `admin` s'affiche dans les journaux du conteneur. **Portainer les montre à quiconque y a accès, et Docker les garde : changez ce mot de passe aussitôt.**
+
+**3. Les limites de débit de NPM, avant le reste.** Les zones de `limit_req` se déclarent dans le bloc `http`, que le champ « Advanced » n'atteint pas : elles vont dans `/data/nginx/custom/http_top.conf`, un fichier que NPM inclut s'il existe, dans son propre volume de données :
+
+```nginx
+limit_req_zone $binary_remote_addr zone=cof_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=cof_login:10m rate=10r/m;
+```
+
+Sans ce fichier, le bloc « Advanced » ci-dessous fait échouer le contrôle de la configuration, et NPM met le site hors ligne. Après l'avoir créé, enregistrez l'hôte de nouveau pour que NPM recharge nginx.
+
+**4. L'hôte dans NPM.** *Hosts → Proxy Hosts → Add Proxy Host* :
+
+| Réglage | Valeur | Ce qu'il fait dans NPM |
+|---|---|---|
+| Scheme, Forward Hostname, Forward Port | `http`, `cof-dm`, `8100` | Le nom du service, résolu sur le réseau partagé. |
+| Websockets Support | **Activé** | Transmet `Upgrade` et `Connection`. Sans lui, le suivi en direct reçoit `400`. |
+| Cache Assets | **Désactivé** | Activé, NPM met en cache public tout chemin finissant par `.png`, `.js`… **en ignorant `Cache-Control`** : essayé, une image de `/medias/` vue par le MJ est ensuite servie à un anonyme. |
+| Block Common Exploits | Au choix | Non essayé avec l'application : des motifs sur l'URL, dont COF DM n'a pas besoin. |
+| SSL : Force SSL | **Activé** | Redirige le HTTP vers le HTTPS (`301`). NPM recopie le `X-Forwarded-Proto` du client s'il vaut `http` ou `https` : c'est cette redirection qui empêche de se faire passer pour du HTTPS. |
+| SSL : HTTP/2 Support | Activé | `http2 on`. |
+| SSL : HSTS Enabled | Activé, une fois le HTTPS validé | NPM envoie `max-age=63072000; preload` : les navigateurs refuseront ce domaine sans HTTPS pendant deux ans. HSTS Subdomains : désactivé, sauf si tout le domaine est en HTTPS. |
+
+Onglet **Advanced**, à coller tel quel :
+
+```nginx
+# NPM croit X-Real-IP pour les adresses privées et les plages de CDN : un client vu sous l'une d'elles
+# dicterait son adresse, à la limite d'essais comme au journal. Personne n'est de confiance ici.
+set_real_ip_from 127.0.0.1/32;
+
+client_max_body_size 8m;
+proxy_read_timeout 600s;
+
+limit_req zone=cof_api burst=100 nodelay;
+limit_req_status 429;
+
+location = /api/acces/connexion {
+  limit_req zone=cof_login burst=5 nodelay;
+  include conf.d/include/proxy.conf;
+}
+location = /api/import/univers {
+  client_max_body_size 1g;
+  include conf.d/include/proxy.conf;
+}
+location = /api/restaurer {
+  client_max_body_size 300m;
+  include conf.d/include/proxy.conf;
+}
+location ~ ^/api/(import/fiches|sync|sync/images/[^/]+|entites/[0-9]+/medias|(bestiaire|reference|regles)/import|bibliotheque)$ {
+  client_max_body_size 64m;
+  include conf.d/include/proxy.conf;
+}
+```
+
+Si NPM était placé derrière un CDN, la première ligne serait à revoir : ce guide suppose NPM exposé directement.
+
+**Sur un port public autre que 443**, ajoutez ce bloc. NPM transmet `Host` sans le port, alors que le navigateur l'indique dans `Origin` : sans ce bloc, l'application refuse le WebSocket (`403`).
+
+```nginx
+location ~ ^/api/(combats/[0-9]+|joueur)/direct$ {
+  proxy_set_header Upgrade           $http_upgrade;
+  proxy_set_header Connection        $http_connection;
+  proxy_http_version 1.1;
+  proxy_set_header Host              $http_host;
+  proxy_set_header X-Forwarded-Proto $x_forwarded_proto;
+  proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+  proxy_pass $forward_scheme://$server:$port$request_uri;
+}
+```
+
+**5. À vérifier ensuite.** Le cookie `cof_dm_mj` porte `Secure` ; après une connexion ratée, `docker logs` montre votre vraie adresse dans la ligne `securite evenement=connexion_echec` (sinon, revoir `-proxies`) ; le port 8100 ne répond pas depuis l'extérieur ; le suivi en direct fonctionne.
+
+**Ne jamais exposer sur Internet :** le port 81 de NPM (son administration) et l'interface de Portainer. La socket Docker reste réservée à Portainer : ni NPM ni COF DM ne la montent, car elle donne la main sur tout l'hôte.
+
+**Sauvegardes :** tout le volume, pas seulement les univers : il contient `comptes.json` et `reglages.json` (dont le secret qui signe les sessions), à garder chiffrés. Par exemple, conteneur arrêté (le nom exact du volume porte celui de la stack) :
+
+```bash
+docker run --rm -v <stack>_cof-dm-donnees:/data:ro -v "$PWD":/sauvegarde debian:bookworm-slim tar czf /sauvegarde/cof-dm-donnees.tar.gz -C /data .
+```
+
+**Non essayé :** une vraie stack déployée par Portainer (le compose a été lancé avec `docker compose`) ; un vrai certificat Let's Encrypt ; de vrais clients sur Internet (le banc les voit tous sous une adresse de la passerelle Docker). `mem_limit: 1g` et les imports les plus lourds n'ont pas été mesurés ensemble ; le volume de données doit aussi avoir la place d'accueillir `TMPDIR` pendant un import.
 
 ### Mode de travail : local ou serveur
 

@@ -470,6 +470,10 @@ func main() {
 	if *modeServeur {
 		opt.Dialogue, opt.Config, opt.VeilleMaj = nil, nil, true
 		opt.ChangerReseau = nil // un serveur reste derrière son reverse proxy
+		// un conteneur en lecture seule range ses fichiers temporaires dans le volume (TMPDIR)
+		if err := os.MkdirAll(os.TempDir(), 0o700); err != nil {
+			log.Printf("dossier temporaire %s : %v", os.TempDir(), err)
+		}
 		if opt.Proxies, err = proxiesDemandes(*proxiesFlag); err != nil {
 			fatal("Option -proxies : %v", err)
 		}
