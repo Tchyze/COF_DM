@@ -114,7 +114,7 @@ func TestBureauEnvoie(t *testing.T) {
 		t.Fatalf("envoyer sans connexion : %d", c)
 	}
 	// un administrateur ne se relie pas : il n'a pas de jeton
-	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"}); c == 200 {
+	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"}); c != 422 || !strings.Contains(v["detail"].(string), "navigateur") {
 		t.Fatalf("bureau relié par l'administrateur : %d %v", c, v)
 	}
 	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})

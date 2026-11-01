@@ -122,10 +122,34 @@ func TestAdminReserve(t *testing.T) {
 	if c, _ := meneur.faire("POST", "/api/admin/univers", map[string]any{"nom": "Pirate"}); c != 403 || len(a.tous) != 1 {
 		t.Fatalf("univers créé par un MJ : %d", c)
 	}
-	// sur le bureau, l'administration n'existe pas
-	b := nouvelleAppli(t, t.TempDir())
+	// la page d'administration : sur le serveur seulement, ni ses routes ni ses fichiers sur le bureau
+	page := fstest.MapFS{"index.html": {Data: []byte("<html>")}, "admin.html": {Data: []byte("<html>")}, "js/admin.js": {Data: []byte("//")}}
+	srv := NouvelleApplication(Options{Version: "test", DossierDon: t.TempDir(), Port: 8100, Comptes: reg, Frontend: page})
+	if err := srv.Demarrer(""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(srv.Fermer)
+	dir := t.TempDir()
+	bureau := NouvelleApplication(Options{Version: "test", DossierDon: dir, Port: 8100, Frontend: page})
+	if err := bureau.Demarrer(""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(bureau.Fermer)
+	b := &bancAppli{t, bureau, dir}
 	if c, _ := b.local("GET", "/api/admin/univers", nil); c != 404 {
 		t.Fatalf("administration sur le bureau : %d", c)
+	}
+	for _, u := range []string{"/admin.html", "/js/admin.js"} {
+		if c, _ := b.local("GET", u, nil); c != 404 {
+			t.Fatalf("GET %s sur le bureau : %d", u, c)
+		}
+		w := (&navigateur{t: t, a: srv, cookies: map[string]*http.Cookie{}}).brut("GET", u, nil)
+		if w.Code != 200 {
+			t.Fatalf("GET %s sur le serveur : %d", u, w.Code)
+		}
+	}
+	if c, _ := b.local("GET", "/", nil); c != 200 {
+		t.Fatalf("application de bureau : %d", c)
 	}
 }
 

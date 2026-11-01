@@ -116,7 +116,7 @@ Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche
 - **Comptes** : créer un compte (administrateur ou non), changer un mot de passe, désactiver, supprimer.
 - **Serveur** : la version du serveur et des applications de bureau reliées. **Mon compte** : son mot de passe.
 
-Un compte administrateur n'a de rôle dans aucun univers ni de jeton d'API : pour préparer une campagne, créez-vous un compte MJ à part.
+L'administration n'existe que sur le serveur, dans un navigateur : l'application de bureau n'a pas cette page, et ne se connecte pas avec un compte administrateur. Un tel compte n'a de rôle dans aucun univers ni de jeton d'API : pour préparer une campagne, créez-vous un compte MJ à part.
 
 | Rôle | Droits |
 |---|---|
