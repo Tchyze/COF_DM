@@ -223,6 +223,7 @@ func enTetes(w http.ResponseWriter) {
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 }
 
 func contexte(r *http.Request, auteur string) context.Context {
@@ -318,7 +319,15 @@ func (s *Serveur) routes() {
 
 // ---------------------------------------------------------------- utilitaires HTTP
 
+// sansCache : une réponse JSON ne reste pas sur un appareil partagé, sauf si la route a dit autre chose.
+func sansCache(w http.ResponseWriter) {
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+}
+
 func repondre(w http.ResponseWriter, code int, v any) {
+	sansCache(w)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)

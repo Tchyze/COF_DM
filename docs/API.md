@@ -35,6 +35,8 @@ Par défaut l'application n'écoute que sur l'ordinateur du MJ. En mode local (a
 
 Depuis une session ouverte par mot de passe, `POST /api/acces/mdp`, `POST /api/acces/reseau` et `POST /api/parametres/jeton` répondent `403`, et `GET /api/parametres` ne donne pas le jeton : ces réglages se font sur l'ordinateur du MJ. Il en va de même avec le jeton d'API depuis le réseau.
 
+Toute réponse JSON porte `Cache-Control: no-store`, et toute réponse `Permissions-Policy` (ni caméra, ni micro, ni position, ni paiement).
+
 ## Mode serveur
 
 L'**édition serveur** (image Docker, compilée avec l'étiquette `serveur`) tourne sans fenêtre sur une machine distante, derrière un reverse proxy qui porte le HTTPS (voir le README). L'accès décrit plus haut ne s'applique plus : il n'y a ni mot de passe MJ, ni jeton unique, et **rien n'est accordé aux requêtes venues de la machine elle-même** (celles du proxy en viennent toutes). Chacun entre avec son compte, ou avec un jeton d'API de son compte (`Authorization: Bearer cofdm_…`).

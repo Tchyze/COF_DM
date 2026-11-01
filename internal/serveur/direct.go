@@ -59,6 +59,7 @@ func garderCorps(r *http.Request) []byte {
 }
 
 func repondreBrut(w http.ResponseWriter, code int, corps []byte) {
+	sansCache(w)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_, _ = w.Write(corps)
