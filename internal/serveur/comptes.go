@@ -240,7 +240,7 @@ func (s *Serveur) vueCompte(c comptes.Compte) map[string]any {
 		out["doit_changer"] = true
 	}
 	if c.Admin {
-		out["second_facteur"] = vueSecondFacteur(c)
+		out["second_facteur"] = s.acces.vueSecondFacteur(c)
 	} else {
 		out["role"], out["roles"], out["pj"] = c.Role(s.store.ID()), c.Roles, c.Persos[s.store.ID()]
 	}
@@ -251,9 +251,9 @@ func erreurCompte(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, comptes.ErrInconnu):
 		erreur(w, 404, "Compte ou jeton introuvable.")
-	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis), errors.Is(err, comptes.ErrDernierFacteur), errors.Is(err, comptes.ErrSansFacteur), errors.Is(err, comptes.ErrPasAdmin):
+	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis), errors.Is(err, comptes.ErrDernierFacteur), errors.Is(err, comptes.ErrSansFacteur), errors.Is(err, comptes.ErrPasAdmin), errors.Is(err, comptes.ErrCleConnue):
 		erreur(w, 409, majuscule(err.Error())+".")
-	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrMdpAdmin), errors.Is(err, comptes.ErrMdpFaible), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
+	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrMdpAdmin), errors.Is(err, comptes.ErrMdpFaible), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons), errors.Is(err, comptes.ErrNomCle), errors.Is(err, comptes.ErrTropDeCles):
 		erreur(w, 422, majuscule(err.Error())+".")
 	default:
 		erreurStore(w, err)

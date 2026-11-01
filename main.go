@@ -373,6 +373,8 @@ func main() {
 	sauvegardesMaxFlag := flag.Int("sauvegardes-max", serveur.SauvegardesMaxParDefaut, "mode serveur : sauvegardes gardées par univers, demandées d'une part, d'avant une opération de l'autre (0 : pas de plafond)")
 	proxiesFlag := flag.String("proxies", "", "mode serveur : réseaux des proxys de confiance, en CIDR séparés par des virgules (ou COF_DM_PROXIES ; par défaut "+serveur.ProxiesParDefaut+")")
 	desinstallerFlag := flag.Bool("desinstaller", false, "désinstaller l'application (Windows, lancé par « Applications installées »)")
+	origineFlag := flag.String("origine", "", "mode serveur : l'adresse publique du serveur, pour les clés de sécurité, comme https://jdr.exemple.org (ou COF_DM_ORIGINE ; sans elle, pas de clés)")
+	rpIDFlag := flag.String("rp-id", "", "mode serveur : le domaine auquel les clés de sécurité sont liées (ou COF_DM_RP_ID ; par défaut, l'hôte de -origine)")
 	reinit2FFlag := flag.String("reinitialiser-second-facteur", "", "mode serveur, dernier recours sur la machine, serveur arrêté : retire tous les seconds facteurs de ce compte administrateur, puis s'arrête (README, « Double authentification »)")
 	modeMCP := flag.Bool("mcp", false, "serveur MCP pour Claude, sur l'entrée et la sortie standard : joint l'application lancée par son API (COF_DM_URL, COF_DM_JETON, COF_DM_UNIVERS)")
 	flag.Parse()
@@ -494,6 +496,9 @@ func main() {
 		}
 		if opt.Proxies, err = proxiesDemandes(*proxiesFlag); err != nil {
 			fatal("Option -proxies : %v", err)
+		}
+		if opt.Cles, err = clesDemandees(*origineFlag, *rpIDFlag); err != nil {
+			fatal("Option -origine ou -rp-id : %v", err)
 		}
 		opt.Limites = serveur.NouvellesLimites(*importsFlag, *quotaUniversFlag<<20, *quotaSauvegardesFlag<<20, *sauvegardesMaxFlag)
 		// tenu jusqu'à l'arrêt : le fichier des comptes vit en mémoire, et une écriture d'ailleurs serait écrasée
@@ -630,6 +635,23 @@ func premierAdmin(reg *comptes.Registre) error {
 	}
 	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nÀ changer dès la première connexion : le compte n'a accès à rien d'autre avant, et ce mot de passe reste lisible dans les journaux du conteneur tant qu'il n'est pas changé.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
 	return nil
+}
+
+// clesDemandees : la configuration des clés de sécurité, depuis les options, sinon l'environnement.
+func clesDemandees(origine, rpID string) (*serveur.ConfigCles, error) {
+	if origine == "" {
+		origine = os.Getenv("COF_DM_ORIGINE")
+	}
+	if rpID == "" {
+		rpID = os.Getenv("COF_DM_RP_ID")
+	}
+	if origine == "" {
+		if rpID != "" {
+			return nil, errors.New("-rp-id demande -origine")
+		}
+		return nil, nil
+	}
+	return serveur.LireConfigCles(origine, rpID)
 }
 
 // verrouComptes : tenu tant que le serveur tourne ; le système le lâche à la fin du programme.

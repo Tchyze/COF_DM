@@ -355,3 +355,154 @@ func TestFichierAncienRelu(t *testing.T) {
 		}
 	}
 }
+
+func cleEssai(identifiant string, compteur uint32) CleSecurite {
+	return CleSecurite{Nom: "Clé " + identifiant, Identifiant: []byte(identifiant), ClePublique: []byte("publique"), Compteur: compteur}
+}
+
+// Plusieurs clés, nommées et retirables ; la première donne les codes de secours et répond à l'obligation.
+func TestClesDeSecurite(t *testing.T) {
+	r, _ := registreAdmin(t)
+	codes, id, err := r.AjouterCle("chef", cleEssai("A", 5))
+	if err != nil || len(codes) != secoursNombre || id == "" {
+		t.Fatalf("première clé : %d codes, %q, %v", len(codes), id, err)
+	}
+	c, _ := r.Lire("chef")
+	if !c.AFacteur() || c.SecondFacteur.TOTP != nil {
+		t.Fatalf("une clé répond à l'obligation : %+v", c.SecondFacteur)
+	}
+	// la copie ne partage rien
+	c.SecondFacteur.Cles[0].Compteur = 99
+	if d, _ := r.Lire("chef"); d.SecondFacteur.Cles[0].Compteur != 5 {
+		t.Fatal("la copie partage les clés avec le registre")
+	}
+	codes2, id2, err := r.AjouterCle("chef", cleEssai("B", 0))
+	if err != nil || len(codes2) != 0 || id2 == id {
+		t.Fatalf("deuxième clé : %d codes, %q, %v", len(codes2), id2, err)
+	}
+	if _, _, err := r.AjouterCle("chef", cleEssai("A", 0)); !errors.Is(err, ErrCleConnue) {
+		t.Fatalf("même clé deux fois : %v", err)
+	}
+	if _, err := r.Creer("autre", "une-phrase-bien-longue", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.AjouterCle("autre", cleEssai("A", 0)); !errors.Is(err, ErrCleConnue) {
+		t.Fatalf("la clé d'un autre compte : %v", err)
+	}
+	sansNom := cleEssai("C", 0)
+	sansNom.Nom = "   "
+	if _, _, err := r.AjouterCle("chef", sansNom); !errors.Is(err, ErrNomCle) {
+		t.Fatalf("clé sans nom : %v", err)
+	}
+	for i := 2; i < clesMax; i++ {
+		if _, _, err := r.AjouterCle("chef", cleEssai(string(rune('D'+i)), 0)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, _, err := r.AjouterCle("chef", cleEssai("Z", 0)); !errors.Is(err, ErrTropDeCles) {
+		t.Fatalf("trop de clés : %v", err)
+	}
+	if err := r.RenommerCle("chef", id, " Clé du coffre "); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := r.Lire("chef"); c.SecondFacteur.Cles[0].Nom != "Clé du coffre" {
+		t.Fatalf("nom : %q", c.SecondFacteur.Cles[0].Nom)
+	}
+	if err := r.RenommerCle("chef", "inconnue", "x"); !errors.Is(err, ErrInconnu) {
+		t.Fatalf("renommer une clé inconnue : %v", err)
+	}
+}
+
+// Le compteur ne recule jamais et n'est jamais égal, sauf une clé sans compteur (toujours zéro).
+func TestCompteurDeCle(t *testing.T) {
+	r, _ := registreAdmin(t)
+	if _, _, err := r.AjouterCle("chef", cleEssai("A", 5)); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []uint32{5, 4, 0} {
+		if err := r.UtiliserCle("chef", []byte("A"), n, false); !errors.Is(err, ErrCompteurCle) {
+			t.Fatalf("compteur %d après 5 : %v", n, err)
+		}
+	}
+	if err := r.UtiliserCle("chef", []byte("A"), 6, false); err != nil {
+		t.Fatalf("compteur 6 : %v", err)
+	}
+	if c, _ := r.Lire("chef"); c.SecondFacteur.Cles[0].Compteur != 6 || c.SecondFacteur.Cles[0].Utilise == 0 {
+		t.Fatalf("après usage : %+v", c.SecondFacteur.Cles[0])
+	}
+	if err := r.UtiliserCle("chef", []byte("A"), 6, false); !errors.Is(err, ErrCompteurCle) {
+		t.Fatalf("même compteur : %v", err)
+	}
+	if err := r.UtiliserCle("chef", []byte("inconnue"), 9, false); !errors.Is(err, ErrCode) {
+		t.Fatalf("clé inconnue : %v", err)
+	}
+	if _, _, err := r.AjouterCle("chef", cleEssai("B", 0)); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if err := r.UtiliserCle("chef", []byte("B"), 0, false); err != nil {
+			t.Fatalf("clé sans compteur : %v", err)
+		}
+	}
+}
+
+// Le dernier facteur ne se retire pas, quel qu'il soit ; le retrait ferme les sessions.
+func TestDernierFacteurAvecCles(t *testing.T) {
+	r, h := registreAdmin(t)
+	_, a, err := r.AjouterCle("chef", cleEssai("A", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RetirerCle("chef", a); !errors.Is(err, ErrDernierFacteur) {
+		t.Fatalf("seule clé, sans TOTP : %v", err)
+	}
+	if err := r.RetirerCle("chef", "inconnue"); !errors.Is(err, ErrInconnu) {
+		t.Fatalf("clé inconnue : %v", err)
+	}
+	_, b, err := r.AjouterCle("chef", cleEssai("B", 0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	avant, _ := r.Lire("chef")
+	if !avant.PeutRetirerCle() {
+		t.Fatal("deux clés : l'une peut partir")
+	}
+	if err := r.RetirerCle("chef", a); err != nil {
+		t.Fatal(err)
+	}
+	apres, _ := r.Lire("chef")
+	if len(apres.SecondFacteur.Cles) != 1 || apres.Version != avant.Version+1 {
+		t.Fatalf("après retrait : %+v", apres)
+	}
+	if apres.PeutRetirerCle() {
+		t.Fatal("dernière clé : elle reste")
+	}
+	// une clé et un TOTP : chacun peut partir, pas les deux
+	secret := NouveauSecretTOTP()
+	if _, err := r.ActiverTOTP("chef", secret, CodeTOTP(secret, *h)); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.RetirerTOTP("chef"); err != nil {
+		t.Fatalf("TOTP, une clé restant : %v", err)
+	}
+	if c, _ := r.Lire("chef"); !c.AFacteur() || c.SecondFacteur.TOTP != nil || c.SecoursRestants() != secoursNombre {
+		t.Fatalf("après le retrait du TOTP : %+v", c.SecondFacteur)
+	}
+	if err := r.VerifierTOTP("chef", CodeTOTP(secret, *h)); !errors.Is(err, ErrCode) {
+		t.Fatalf("TOTP retiré, clé restante : %v", err)
+	}
+	if err := r.RetirerCle("chef", b); !errors.Is(err, ErrDernierFacteur) {
+		t.Fatalf("plus que cette clé : %v", err)
+	}
+	// la réinitialisation retire tout, clés comprises
+	if err := r.ReinitialiserSecondFacteur("chef"); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := r.Lire("chef"); c.SecondFacteur != nil {
+		t.Fatalf("après réinitialisation : %+v", c.SecondFacteur)
+	}
+	// et la clé redevient enregistrable
+	if _, _, err := r.AjouterCle("chef", cleEssai("B", 0)); err != nil {
+		t.Fatal(err)
+	}
+}

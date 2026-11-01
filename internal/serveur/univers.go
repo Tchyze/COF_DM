@@ -72,6 +72,7 @@ func NouvelleApplication(opt Options) *Application {
 	}
 	if opt.Comptes != nil {
 		opt.acces = nouvelAcces(opt.Reglages, opt.Comptes, opt.Proxies)
+		opt.acces.cles = opt.Cles
 	}
 	if opt.Comptes != nil && opt.Limites == nil {
 		opt.Limites = LimitesParDefaut()

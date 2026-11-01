@@ -60,6 +60,8 @@ type acces struct {
 	clePreuve      []byte
 	preuvesServies map[string]int64 // preuves qui ont servi : identifiant → échéance
 	totpAttente    map[string]totpEnAttente
+	cles           *ConfigCles // clés de sécurité : nil tant que -origine n'est pas donné
+	defis          map[string]defiCle
 }
 
 func nouvelAcces(reg Reglages, c *comptes.Registre, proxies []*net.IPNet) *acces {
@@ -67,7 +69,7 @@ func nouvelAcces(reg Reglages, c *comptes.Registre, proxies []*net.IPNet) *acces
 		proxies, _ = LireProxies(ProxiesParDefaut)
 	}
 	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fenetres: map[string]time.Duration{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond, pasNom: 250 * time.Millisecond,
-		clePreuve: make([]byte, 32), preuvesServies: map[string]int64{}, totpAttente: map[string]totpEnAttente{}}
+		clePreuve: make([]byte, 32), preuvesServies: map[string]int64{}, totpAttente: map[string]totpEnAttente{}, defis: map[string]defiCle{}}
 	_, _ = rand.Read(a.clePreuve)
 	if v, ok := reg.Meta(metaSecret); ok {
 		a.secret, _ = hex.DecodeString(v)
@@ -336,7 +338,7 @@ func ouvert(r *http.Request) bool {
 	if !strings.HasPrefix(chemin, "/api/") && !strings.HasPrefix(chemin, "/medias/") {
 		return r.Method == http.MethodGet || r.Method == http.MethodHead
 	}
-	return (r.Method == http.MethodGet && chemin == "/api/acces") || (r.Method == http.MethodPost && (chemin == "/api/acces/connexion" || chemin == routeSecondFacteur))
+	return (r.Method == http.MethodGet && chemin == "/api/acces") || (r.Method == http.MethodPost && (chemin == "/api/acces/connexion" || chemin == routeSecondFacteur || chemin == routeSecondFacteur+"/defi"))
 }
 
 // surPlace réserve à l'ordinateur du MJ les réglages qui gardent la porte : le mot de passe,

@@ -347,11 +347,6 @@ func routesDeclarees(t *testing.T) [][2]string {
 			})
 		}
 	}
-	// ceux qui se composent avec une constante
-	for _, x := range [][2]string{{"POST", routeSecondFacteur}, {"POST", prefixeSecondFacteur + "totp/debut"},
-		{"POST", prefixeSecondFacteur + "totp/activer"}, {"DELETE", prefixeSecondFacteur + "totp"}, {"POST", prefixeSecondFacteur + "secours"}} {
-		ajouter(x[0] + " " + x[1])
-	}
 	if len(l) < 100 {
 		t.Fatalf("seulement %d routes trouvées : la lecture des sources a changé", len(l))
 	}
@@ -406,7 +401,7 @@ func TestEnrolementFerme(t *testing.T) {
 // Un anonyme n'atteint que ce qu'ouvre la page de connexion, sur toutes les routes déclarées.
 func TestRoutesOuvertes(t *testing.T) {
 	a, reg, _ := serveurMulti(t)
-	permises := map[string]int{"GET /api/acces": 200, "POST /api/acces/connexion": 401, "POST " + routeSecondFacteur: 401, "POST /api/acces/deconnexion": 401}
+	permises := map[string]int{"GET /api/acces": 200, "POST /api/acces/connexion": 401, "POST " + routeSecondFacteur: 401, "POST " + routeSecondFacteur + "/defi": 401, "POST /api/acces/deconnexion": 401}
 	for _, x := range routesDeclarees(t) {
 		cle := x[0] + " " + x[1]
 		n := anonymeDe(a, t, reg)

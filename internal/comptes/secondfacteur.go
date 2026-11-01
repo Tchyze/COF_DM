@@ -1,6 +1,7 @@
 package comptes
 
 import (
+	"bytes"
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/hmac"
@@ -16,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -28,6 +30,9 @@ import (
 //
 // Codes de secours : tirés au hasard, assez longs pour qu'un calcul coûteux n'ajoute rien ; seule leur
 // empreinte est gardée.
+//
+// Clés de sécurité (WebAuthn) : leur vérification est dans internal/serveur ; il ne reste ici que leur
+// clé publique et leur compteur, rien de secret.
 
 const (
 	totpPeriode  = 30
@@ -38,6 +43,9 @@ const (
 	secoursNombre   = 10
 	secoursLongueur = 16
 	secoursAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ" // base 32 de Crockford : ni I, L, O, U
+
+	clesMax   = 10
+	nomCleMax = 60
 
 	fichierCle     = "comptes.cle"
 	fichierVerrou  = "comptes.verrou"
@@ -51,13 +59,18 @@ var (
 	ErrDernierFacteur  = errors.New("c'est le dernier second facteur de ce compte : enregistrez-en un autre d'abord")
 	ErrPasAdmin        = errors.New("ce compte n'est pas administrateur")
 	ErrSecretIllisible = errors.New("secret du second facteur illisible")
+	ErrCompteurCle     = errors.New("compteur de la clé incohérent : elle a peut-être été copiée")
+	ErrCleConnue       = errors.New("cette clé est déjà enregistrée")
+	ErrNomCle          = errors.New("donnez un nom à cette clé")
+	ErrTropDeCles      = errors.New("trop de clés : retirez-en une d'abord")
 	ErrOccupe          = errors.New("un autre programme tient déjà le fichier des comptes")
 )
 
 // SecondFacteur : ce qui prouve le second facteur d'un compte. Les codes de secours n'en sont pas un à
-// eux seuls : ils dépannent, et l'obligation demande un TOTP.
+// eux seuls : ils dépannent, et l'obligation demande un TOTP ou une clé.
 type SecondFacteur struct {
 	TOTP    *FacteurTOTP  `json:"totp,omitempty"`
+	Cles    []CleSecurite `json:"cles,omitempty"`
 	Secours []CodeSecours `json:"secours,omitempty"`
 }
 
@@ -67,13 +80,44 @@ type FacteurTOTP struct {
 	Active     float64 `json:"active"`
 }
 
+// CleSecurite : une clé WebAuthn enregistrée. Rien de secret : sa clé publique et son identifiant.
+type CleSecurite struct {
+	ID          string   `json:"id"` // court, pour la désigner dans l'API et au journal
+	Nom         string   `json:"nom"`
+	Identifiant []byte   `json:"identifiant"`
+	ClePublique []byte   `json:"cle_publique"`
+	Type        string   `json:"type,omitempty"`
+	Format      string   `json:"format,omitempty"`
+	Transports  []string `json:"transports,omitempty"`
+	AAGUID      []byte   `json:"aaguid,omitempty"`
+	Compteur    uint32   `json:"compteur"`
+	// Eligible, Sauvegardee : indications de la clé ; une clé ne change jamais d'éligibilité
+	Eligible    bool    `json:"sauvegarde_eligible,omitempty"`
+	Sauvegardee bool    `json:"sauvegardee,omitempty"`
+	Cree        float64 `json:"cree"`
+	Utilise     float64 `json:"utilise,omitempty"`
+}
+
 type CodeSecours struct {
 	Empreinte string  `json:"empreinte"`
 	Utilise   float64 `json:"utilise,omitempty"`
 }
 
 // AFacteur : ce compte a un facteur qui répond à l'obligation.
-func (c Compte) AFacteur() bool { return c.SecondFacteur != nil && c.SecondFacteur.TOTP != nil }
+func (c Compte) AFacteur() bool {
+	return c.ATOTP() || c.NombreDeCles() > 0
+}
+
+// ATOTP : ce compte a un TOTP actif.
+func (c Compte) ATOTP() bool { return c.SecondFacteur != nil && c.SecondFacteur.TOTP != nil }
+
+// NombreDeCles : ses clés de sécurité.
+func (c Compte) NombreDeCles() int {
+	if c.SecondFacteur == nil {
+		return 0
+	}
+	return len(c.SecondFacteur.Cles)
+}
 
 // SecoursRestants : ses codes de secours encore valables.
 func (c Compte) SecoursRestants() int {
@@ -90,7 +134,12 @@ func (c Compte) SecoursRestants() int {
 }
 
 // PeutRetirerTOTP : il lui reste un autre facteur, ou l'obligation ne le concerne pas.
-func (c Compte) PeutRetirerTOTP() bool { return !c.Admin }
+func (c Compte) PeutRetirerTOTP() bool { return !c.Admin || c.NombreDeCles() > 0 }
+
+// PeutRetirerCle : il lui reste un autre facteur, ou l'obligation ne le concerne pas.
+func (c Compte) PeutRetirerCle() bool {
+	return !c.Admin || c.ATOTP() || c.NombreDeCles() > 1
+}
 
 func copieSecondFacteur(s *SecondFacteur) *SecondFacteur {
 	if s == nil {
@@ -102,6 +151,13 @@ func copieSecondFacteur(s *SecondFacteur) *SecondFacteur {
 		x.TOTP = &t
 	}
 	x.Secours = append([]CodeSecours(nil), s.Secours...)
+	x.Cles = append([]CleSecurite(nil), s.Cles...)
+	for i := range x.Cles {
+		x.Cles[i].Identifiant = append([]byte(nil), x.Cles[i].Identifiant...)
+		x.Cles[i].ClePublique = append([]byte(nil), x.Cles[i].ClePublique...)
+		x.Cles[i].AAGUID = append([]byte(nil), x.Cles[i].AAGUID...)
+		x.Cles[i].Transports = append([]string(nil), x.Cles[i].Transports...)
+	}
 	return &x
 }
 
@@ -215,7 +271,7 @@ func (r *Registre) ActiverTOTP(nom, secret, code string) ([]string, error) {
 // l'écriture échoue, c'est non.
 func (r *Registre) VerifierTOTP(nom, code string) error {
 	_, err := r.Modifier(nom, func(c *Compte) error {
-		if !c.AFacteur() {
+		if !c.ATOTP() {
 			return ErrCode
 		}
 		cle, err := r.dechiffrer(c, c.SecondFacteur.TOTP.Secret)
@@ -235,7 +291,7 @@ func (r *Registre) VerifierTOTP(nom, code string) error {
 // RetirerTOTP : les sessions ouvertes du compte tombent.
 func (r *Registre) RetirerTOTP(nom string) error {
 	_, err := r.Modifier(nom, func(c *Compte) error {
-		if !c.AFacteur() {
+		if !c.ATOTP() {
 			return ErrInconnu
 		}
 		if !c.PeutRetirerTOTP() {
@@ -244,6 +300,123 @@ func (r *Registre) RetirerTOTP(nom string) error {
 		c.SecondFacteur.TOTP = nil
 		c.Version++
 		return nil
+	})
+	return err
+}
+
+// ---------------------------------------------------------------- clés de sécurité
+
+func lireNomCle(nom string) (string, error) {
+	nom = strings.TrimSpace(nom)
+	if nom == "" {
+		return "", ErrNomCle
+	}
+	if rs := []rune(nom); len(rs) > nomCleMax {
+		nom = string(rs[:nomCleMax])
+	}
+	return nom, nil
+}
+
+// AjouterCle enregistre une clé déjà vérifiée. Une clé qui sert déjà, sur ce compte ou un autre, est
+// refusée. Les codes de secours sont tirés s'il n'en reste aucun : ils sont renvoyés cette seule fois.
+func (r *Registre) AjouterCle(nom string, cle CleSecurite) (codes []string, id string, err error) {
+	if cle.Nom, err = lireNomCle(cle.Nom); err != nil {
+		return nil, "", err
+	}
+	b := make([]byte, 4)
+	_, _ = rand.Read(b)
+	cle.ID, cle.Cree = hex.EncodeToString(b), maintenant()
+	_, err = r.Modifier(nom, func(c *Compte) error {
+		for _, autre := range r.m { // r.mu est tenu
+			if autre.SecondFacteur == nil {
+				continue
+			}
+			for _, k := range autre.SecondFacteur.Cles {
+				if bytes.Equal(k.Identifiant, cle.Identifiant) {
+					return ErrCleConnue
+				}
+			}
+		}
+		if c.NombreDeCles() >= clesMax {
+			return ErrTropDeCles
+		}
+		if c.SecondFacteur == nil {
+			c.SecondFacteur = &SecondFacteur{}
+		}
+		c.SecondFacteur.Cles = append(c.SecondFacteur.Cles, cle)
+		if c.SecoursRestants() == 0 {
+			codes, c.SecondFacteur.Secours = nouveauxSecours(c)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	return codes, cle.ID, nil
+}
+
+// UtiliserCle note l'usage d'une clé dont la signature vient d'être vérifiée. Le compteur est comparé
+// sous le verrou : s'il ne monte pas, alors qu'il compte, la clé a pu être copiée, et c'est non. Une clé
+// sans compteur reste à zéro. Si l'écriture échoue, c'est non aussi.
+func (r *Registre) UtiliserCle(nom string, identifiant []byte, compteur uint32, sauvegardee bool) error {
+	_, err := r.Modifier(nom, func(c *Compte) error {
+		if c.SecondFacteur == nil {
+			return ErrCode
+		}
+		for i := range c.SecondFacteur.Cles {
+			k := &c.SecondFacteur.Cles[i]
+			if !bytes.Equal(k.Identifiant, identifiant) {
+				continue
+			}
+			if (compteur != 0 || k.Compteur != 0) && compteur <= k.Compteur {
+				return ErrCompteurCle
+			}
+			k.Compteur, k.Sauvegardee, k.Utilise = compteur, sauvegardee, maintenant()
+			return nil
+		}
+		return ErrCode
+	})
+	return err
+}
+
+// RenommerCle : son nom seul change.
+func (r *Registre) RenommerCle(nom, id, libelle string) error {
+	libelle, err := lireNomCle(libelle)
+	if err != nil {
+		return err
+	}
+	_, err = r.Modifier(nom, func(c *Compte) error {
+		if c.SecondFacteur != nil {
+			for i := range c.SecondFacteur.Cles {
+				if c.SecondFacteur.Cles[i].ID == id {
+					c.SecondFacteur.Cles[i].Nom = libelle
+					return nil
+				}
+			}
+		}
+		return ErrInconnu
+	})
+	return err
+}
+
+// RetirerCle : jamais le dernier facteur. Les sessions ouvertes du compte tombent.
+func (r *Registre) RetirerCle(nom, id string) error {
+	_, err := r.Modifier(nom, func(c *Compte) error {
+		if c.SecondFacteur == nil {
+			return ErrInconnu
+		}
+		for i := range c.SecondFacteur.Cles {
+			if c.SecondFacteur.Cles[i].ID != id {
+				continue
+			}
+			if !c.PeutRetirerCle() {
+				return ErrDernierFacteur
+			}
+			c.SecondFacteur.Cles = slices.Delete(c.SecondFacteur.Cles, i, i+1)
+			c.Version++
+			return nil
+		}
+		return ErrInconnu
 	})
 	return err
 }

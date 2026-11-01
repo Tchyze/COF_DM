@@ -31,7 +31,7 @@ import (
 //
 // Personne ne bloque le titulaire : sans la preuve, donc sans le mot de passe, on n'atteint aucun des
 // compteurs de cette étape. Celui qui a le mot de passe peut saturer le quota du TOTP par compte, mais pas
-// les codes de secours, qui ne se devinent pas. Les limites sont en mémoire, comme celles du mot de passe.
+// les codes de secours ni les clés, qui ne se devinent pas. Les limites sont en mémoire, comme celles du mot de passe.
 
 const (
 	cookiePreuve         = "cof_dm_2f"
@@ -47,6 +47,7 @@ const (
 
 	facteurTOTP    = "totp"
 	facteurSecours = "secours"
+	facteurCle     = "cle"
 
 	essaisMaxPreuve       = 5  // erreurs par preuve : au-delà, retour au mot de passe
 	essaisMax2FCouple     = 5  // par compte et par adresse, tous facteurs
@@ -151,9 +152,12 @@ func (a *acces) temoinPreuve(r *http.Request, valeur string, exp time.Time) *htt
 }
 
 // facteursDe : ce que ce compte peut donner à l'étape du second facteur.
-func facteursDe(c comptes.Compte) []string {
+func (a *acces) facteursDe(c comptes.Compte) []string {
 	l := []string{}
-	if c.AFacteur() {
+	if c.NombreDeCles() > 0 && a.cles != nil {
+		l = append(l, facteurCle)
+	}
+	if c.ATOTP() {
 		l = append(l, facteurTOTP)
 	}
 	if c.SecoursRestants() > 0 {
@@ -168,7 +172,7 @@ func (s *Serveur) suiteDuMdp(w http.ResponseWriter, r *http.Request, c comptes.C
 		exp := time.Now().Add(dureePreuve)
 		http.SetCookie(w, s.acces.temoinPreuve(r, s.acces.preuve(c, exp), exp))
 		s.acces.noter(r, "second_facteur_demande", c.Nom)
-		repondre(w, 200, map[string]any{"mj": false, "etape": "second_facteur", "facteurs": facteursDe(c)})
+		repondre(w, 200, map[string]any{"mj": false, "etape": "second_facteur", "facteurs": s.acces.facteursDe(c)})
 		return
 	}
 	exp := time.Now().Add(dureeEnrolement)
@@ -179,10 +183,19 @@ func (s *Serveur) suiteDuMdp(w http.ResponseWriter, r *http.Request, c comptes.C
 
 // ---------------------------------------------------------------- donner un facteur
 
-// essayerFacteur vérifie un code de ce compte, après l'avoir compté. En cas de refus, la réponse est
-// déjà écrite. Jamais le code au journal ni dans une réponse.
-func (a *acces) essayerFacteur(w http.ResponseWriter, r *http.Request, c comptes.Compte, facteur, code string) bool {
-	if facteur != facteurTOTP && facteur != facteurSecours {
+// donFacteur : un second facteur donné, code ou réponse d'une clé à un défi.
+type donFacteur struct {
+	Facteur string          `json:"facteur"`
+	Code    string          `json:"code"`
+	Reponse json.RawMessage `json:"reponse"`
+}
+
+// essayerFacteur vérifie ce facteur de ce compte, après l'avoir compté. cleDefi : là où attend le défi
+// d'une clé. En cas de refus, la réponse est déjà écrite. Jamais un code ni un défi au journal ou dans
+// une réponse.
+func (a *acces) essayerFacteur(w http.ResponseWriter, r *http.Request, c comptes.Compte, don donFacteur, cleDefi string) bool {
+	facteur := don.Facteur
+	if facteur != facteurTOTP && facteur != facteurSecours && (facteur != facteurCle || a.cles == nil) {
 		erreur(w, 422, "Second facteur inconnu.")
 		return false
 	}
@@ -215,19 +228,29 @@ func (a *acces) essayerFacteur(w http.ResponseWriter, r *http.Request, c comptes
 			erreur(w, 429, "Trop d'essais de code sur ce compte : utilisez un code de secours, ou patientez.")
 			return false
 		}
-		err = a.comptes.VerifierTOTP(c.Nom, code)
+		err = a.comptes.VerifierTOTP(c.Nom, don.Code)
 	case facteurSecours:
-		restants, err = a.comptes.UtiliserSecours(c.Nom, code)
+		restants, err = a.comptes.UtiliserSecours(c.Nom, don.Code)
+	case facteurCle:
+		err = a.verifierCle(c, cleDefi, don.Reponse)
 	}
 	if err != nil {
-		if !errors.Is(err, comptes.ErrCode) {
+		if errors.Is(err, comptes.ErrSecretIllisible) {
 			log.Printf("second facteur de %q : %v", c.Nom, err)
+		}
+		if errors.Is(err, comptes.ErrCompteurCle) {
+			a.noter(r, "cle_compteur_incoherent", c.Nom)
 		}
 		a.noter(r, "second_facteur_echec", c.Nom, "facteur="+facteur)
 		time.Sleep(a.pause)
-		if facteur == facteurTOTP {
+		switch {
+		case errors.Is(err, comptes.ErrCompteurCle):
+			erreur(w, 401, "Clé refusée : son compteur est incohérent, elle a peut-être été copiée. Utilisez un autre facteur.")
+		case facteur == facteurCle:
+			erreur(w, 401, "Clé refusée. Recommencez, ou utilisez un autre facteur.")
+		case facteur == facteurTOTP:
 			erreur(w, 401, "Code incorrect, ou déjà utilisé : attendez le suivant.")
-		} else {
+		default:
 			erreur(w, 401, "Code de secours incorrect, ou déjà utilisé.")
 		}
 		return false
@@ -242,14 +265,11 @@ func (a *acces) essayerFacteur(w http.ResponseWriter, r *http.Request, c comptes
 	return true
 }
 
-// connexionSecondFacteur : POST /api/acces/second-facteur {"facteur", "code"}, avec la preuve. Sans
-// preuve valable, toujours la même réponse, et aucun compteur n'est touché.
+// connexionSecondFacteur : POST /api/acces/second-facteur {"facteur", "code" ou "reponse"}, avec la
+// preuve. Sans preuve valable, toujours la même réponse, et aucun compteur n'est touché.
 func (s *Serveur) connexionSecondFacteur(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Facteur string `json:"facteur"`
-		Code    string `json:"code"`
-	}
-	_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req)
+	var req donFacteur
+	_ = json.NewDecoder(io.LimitReader(r.Body, tailleMaxReponseCle)).Decode(&req)
 	a := s.acces
 	expiree := func() { // la page revient au mot de passe
 		repondre(w, 401, map[string]any{"detail": "Cette étape a expiré : reprenez la connexion.", "reprendre": true})
@@ -272,7 +292,7 @@ func (s *Serveur) connexionSecondFacteur(w http.ResponseWriter, r *http.Request)
 		expiree()
 		return
 	}
-	if !a.essayerFacteur(w, r, c, req.Facteur, req.Code) {
+	if !a.essayerFacteur(w, r, c, req, "preuve:"+id) {
 		return
 	}
 	http.SetCookie(w, a.temoinPreuve(r, "", time.Unix(0, 0)))
@@ -297,9 +317,8 @@ func (s *Serveur) connexionSecondFacteur(w http.ResponseWriter, r *http.Request)
 // confirmation : ce que demande une action sensible, dans sa requête même. Sans état à garder, et une
 // session volée ne l'a pas.
 type confirmation struct {
-	Mdp     string `json:"mdp"`
-	Facteur string `json:"facteur"`
-	Code    string `json:"code"`
+	Mdp string `json:"mdp"`
+	donFacteur
 }
 
 // confirmer vérifie le mot de passe et, si le compte en a un, un second facteur. Pendant l'enrôlement,
@@ -330,27 +349,67 @@ func (a *acces) confirmer(w http.ResponseWriter, r *http.Request, c comptes.Comp
 		erreur(w, 401, "Connectez-vous avec votre compte.")
 		return false
 	}
-	return !c.AFacteur() || a.essayerFacteur(w, r, c, conf.Facteur, conf.Code)
+	return !c.AFacteur() || a.essayerFacteur(w, r, c, conf.donFacteur, "confirmer:"+a.idSession(r))
 }
 
 // ---------------------------------------------------------------- ses facteurs
 
 func (s *Serveur) routesSecondFacteur() {
 	m := s.mux
-	m.HandleFunc("POST "+routeSecondFacteur, s.connexionSecondFacteur)
-	m.HandleFunc("POST "+prefixeSecondFacteur+"totp/debut", s.debutTOTP)
-	m.HandleFunc("POST "+prefixeSecondFacteur+"totp/activer", s.activerTOTP)
-	m.HandleFunc("DELETE "+prefixeSecondFacteur+"totp", s.retirerTOTP)
-	m.HandleFunc("POST "+prefixeSecondFacteur+"secours", s.regenererSecours)
+	m.HandleFunc("POST /api/acces/second-facteur", s.connexionSecondFacteur)
+	m.HandleFunc("POST /api/acces/second-facteur/defi", s.defiConnexion)
+	m.HandleFunc("POST /api/compte/second-facteur/defi", s.defiConfirmation)
+	m.HandleFunc("POST /api/compte/second-facteur/totp/debut", s.debutTOTP)
+	m.HandleFunc("POST /api/compte/second-facteur/totp/activer", s.activerTOTP)
+	m.HandleFunc("DELETE /api/compte/second-facteur/totp", s.retirerTOTP)
+	m.HandleFunc("POST /api/compte/second-facteur/secours", s.regenererSecours)
+	m.HandleFunc("POST /api/compte/second-facteur/cles/debut", s.debutCle)
+	m.HandleFunc("POST /api/compte/second-facteur/cles/activer", s.activerCle)
+	m.HandleFunc("PATCH /api/compte/second-facteur/cles/{id}", s.renommerCle)
+	m.HandleFunc("DELETE /api/compte/second-facteur/cles/{id}", s.retirerCle)
 }
 
 // vueSecondFacteur : ce que le titulaire voit de ses facteurs. Jamais un secret.
-func vueSecondFacteur(c comptes.Compte) map[string]any {
-	v := map[string]any{"requis": !c.AFacteur(), "totp": c.AFacteur(), "secours_restants": c.SecoursRestants()}
-	if c.AFacteur() {
+func (a *acces) vueSecondFacteur(c comptes.Compte) map[string]any {
+	cles := []map[string]any{}
+	if c.SecondFacteur != nil {
+		for _, k := range c.SecondFacteur.Cles {
+			v := map[string]any{"id": k.ID, "nom": k.Nom, "cree": k.Cree}
+			if k.Utilise != 0 {
+				v["utilise"] = k.Utilise
+			}
+			cles = append(cles, v)
+		}
+	}
+	v := map[string]any{"requis": !c.AFacteur(), "totp": c.ATOTP(), "cles": cles, "cles_disponibles": a.cles != nil,
+		"secours_restants": c.SecoursRestants()}
+	if c.ATOTP() {
 		v["totp_active"] = c.SecondFacteur.TOTP.Active
 	}
 	return v
+}
+
+// apresActivation : un facteur vient d'être activé. Une session d'enrôlement devient une session
+// complète, sous un autre identifiant : l'ancienne ne vaut plus rien.
+func (a *acces) apresActivation(w http.ResponseWriter, r *http.Request, nom, facteur string) {
+	a.noter(r, "second_facteur_active", nom, "facteur="+facteur)
+	if niveauSession(r) != niveauEnrolement {
+		return
+	}
+	if t, err := r.Cookie(cookieMJ); err == nil {
+		a.fermer(t.Value)
+	}
+	c, _ := a.comptes.Lire(nom)
+	fin := time.Now().Add(dureeSessionAdmin)
+	http.SetCookie(w, a.temoin(r, a.sessionCompte(c, niveauComplet, fin), fin))
+	a.noter(r, "connexion_ok", nom, "facteur="+facteur)
+}
+
+// renouvelerSession : la version du compte vient de changer ; cette session continue, les autres tombent.
+func (a *acces) renouvelerSession(w http.ResponseWriter, r *http.Request, nom string) {
+	c, _ := a.comptes.Lire(nom)
+	fin := time.Now().Add(dureeSessionAdmin)
+	http.SetCookie(w, a.temoin(r, a.sessionCompte(c, niveauSession(r), fin), fin))
 }
 
 // adminDeSession : ces routes ne concernent qu'un administrateur, par sa session. Rien ne change pour
@@ -423,8 +482,7 @@ func (s *Serveur) debutTOTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // activerTOTP : {"code"} active le secret montré par debutTOTP si ce code en vient. Les codes de secours,
-// s'il n'en restait aucun, sont dans la réponse, cette seule fois. Une session d'enrôlement devient une
-// session complète, sous un autre identifiant : l'ancienne ne vaut plus rien.
+// s'il n'en restait aucun, sont dans la réponse, cette seule fois.
 func (s *Serveur) activerTOTP(w http.ResponseWriter, r *http.Request) {
 	c, ok := adminDeSession(w, r)
 	if !ok {
@@ -457,16 +515,7 @@ func (s *Serveur) activerTOTP(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	delete(a.totpAttente, c.Nom)
 	a.mu.Unlock()
-	a.noter(r, "second_facteur_active", c.Nom, "facteur="+facteurTOTP)
-	if niveauSession(r) == niveauEnrolement {
-		if t, err := r.Cookie(cookieMJ); err == nil {
-			a.fermer(t.Value)
-		}
-		c, _ = a.comptes.Lire(c.Nom)
-		fin := time.Now().Add(dureeSessionAdmin)
-		http.SetCookie(w, a.temoin(r, a.sessionCompte(c, niveauComplet, fin), fin))
-		a.noter(r, "connexion_ok", c.Nom, "facteur="+facteurTOTP)
-	}
+	a.apresActivation(w, r, c.Nom, facteurTOTP)
 	out := map[string]any{"ok": true}
 	if len(codes) > 0 {
 		out["secours"] = codes
@@ -488,7 +537,7 @@ func (s *Serveur) retirerTOTP(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
-	if !c.AFacteur() {
+	if !c.ATOTP() {
 		erreur(w, 404, "Aucun TOTP sur ce compte.")
 		return
 	}
@@ -504,9 +553,7 @@ func (s *Serveur) retirerTOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.acces.noter(r, "second_facteur_retire", c.Nom, "facteur="+facteurTOTP)
-	c, _ = s.acces.comptes.Lire(c.Nom)
-	fin := time.Now().Add(dureeSessionAdmin)
-	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, niveauSession(r), fin), fin))
+	s.acces.renouvelerSession(w, r, c.Nom)
 	repondre(w, 200, map[string]any{"ok": true})
 }
 

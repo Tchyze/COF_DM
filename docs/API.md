@@ -35,7 +35,7 @@ Par défaut l'application n'écoute que sur l'ordinateur du MJ. En mode local (a
 
 Depuis une session ouverte par mot de passe, `POST /api/acces/mdp`, `POST /api/acces/reseau` et `POST /api/parametres/jeton` répondent `403`, et `GET /api/parametres` ne donne pas le jeton : ces réglages se font sur l'ordinateur du MJ. Il en va de même avec le jeton d'API depuis le réseau.
 
-Toute réponse JSON porte `Cache-Control: no-store`, et toute réponse `Permissions-Policy` (ni caméra, ni micro, ni position, ni paiement).
+Toute réponse JSON porte `Cache-Control: no-store`, et toute réponse `Permissions-Policy` (ni caméra, ni micro, ni position, ni paiement ; les clés de sécurité pour le site lui-même seulement).
 
 ## Mode serveur
 
@@ -65,7 +65,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 | `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`) ; un administrateur (`compte.admin`) est renvoyé vers `/admin.html`. |
 | `POST /api/acces/connexion` `{"nom", "mdp"}` | Ouvre la session (cookie `cof_dm_mj`, 30 jours, `Secure` en HTTPS). Pour un **administrateur**, le mot de passe seul n'ouvre pas de session : voir « Second facteur des administrateurs ». `401` : nom ou mot de passe incorrect ; `429` : huit essais ratés en cinq minutes sur ce nom depuis cette adresse, ou trente tous noms confondus (en IPv6, une adresse se compte par `/64`). Au-delà de vingt essais ratés sur un même nom, d'où qu'ils viennent, la réponse est ralentie jusqu'à cinq secondes, sans refus : personne ne peut bloquer un compte en se trompant de mot de passe. |
 | `POST /api/acces/deconnexion` | Ferme la session. |
-| `POST /api/acces/second-facteur` `{"facteur", "code"}` | Administrateur, après son mot de passe : voir « Second facteur des administrateurs ». |
+| `POST /api/acces/second-facteur`, `…/defi` | Administrateur, après son mot de passe : voir « Second facteur des administrateurs ». |
 | `GET /api/compte` | Son compte : `{"nom", "admin", "inactif", "role"` (dans l'univers ouvert)`, "roles"` (par identifiant d'univers)`, "pj", "jetons": [{"id", "nom", "cree", "utilise"?}], "cree"}` (`utilise` : dernière utilisation du jeton, à une heure près) ; pour un administrateur, ni `role`, ni `roles`, ni `pj`. |
 | `POST /api/compte/mdp` `{"ancien", "nouveau", "retirer_jetons"?}` | Change son mot de passe (10 caractères au moins, 12 pour un administrateur ; `422` s'il contient le nom du compte, répète un seul caractère ou figure parmi les mots de passe courants : la règle ne vaut qu'au changement, un compte existant se connecte toujours). Les autres sessions du compte sont fermées. Avec `"retirer_jetons": true`, tous ses jetons sont aussi retirés, ce qui déconnecte ses postes de bureau reliés ; absent, ils restent. Réponse `{"ok", "jetons_retires"}`. Il lève l'obligation du mot de passe initial : tant que `compte.doit_changer` est vrai (`GET /api/acces`), toute route `/api/…` hors `/api/compte`, `/api/acces` et `/api/sante` répond `403` `{"detail", "changer_mdp": true}`. |
 | `POST /api/compte/jetons` `{"nom": "script"}` | Crée un jeton d'API : `{"jeton": "cofdm_…", "id", "nom"}`. Il ne s'affiche que cette fois (20 par compte au plus). `409` pour un administrateur. |
@@ -98,14 +98,16 @@ Un administrateur prouve un second facteur à la connexion. Les comptes MJ, audi
 
 | Réponse | Ce qu'elle ouvre |
 |---|---|
-| `{"mj": false, "etape": "second_facteur", "facteurs": ["totp", "secours"]}` | Le cookie `cof_dm_2f` (`HttpOnly`, `SameSite=Strict`, 5 minutes), une preuve qui n'ouvre que `POST /api/acces/second-facteur`. |
+| `{"mj": false, "etape": "second_facteur", "facteurs": ["cle", "totp", "secours"]}` (ceux qu'il a) | Le cookie `cof_dm_2f` (`HttpOnly`, `SameSite=Strict`, 5 minutes), une preuve qui n'ouvre que `POST /api/acces/second-facteur`. |
 | `{"mj": false, "etape": "enrolement", "compte"}` | Une session d'enrôlement de 30 minutes : aucun facteur n'est encore enregistré. |
 
-`POST /api/acces/second-facteur` `{"facteur": "totp" | "secours", "code"}` ouvre la session, de 12 heures, et la preuve ne ressert pas : `{"mj": false, "compte"}`. `401` `{"reprendre": true}` sans preuve valable (absente, expirée, déjà servie, d'avant un changement de mot de passe) : retour au mot de passe ; `401` sans ce champ : code incorrect ou déjà utilisé. La preuve tombe après cinq erreurs. `429` : cinq essais en cinq minutes sur ce compte depuis cette adresse, vingt pour une adresse, ou, pour le TOTP seulement, dix par compte en cinq minutes et cinquante en une journée, d'où qu'ils viennent. Un code de secours reste alors possible. Sans preuve, aucun de ces compteurs n'est touché : qui n'a pas le mot de passe ne peut gêner personne.
+`POST /api/acces/second-facteur` `{"facteur": "totp" | "secours", "code"}` ou `{"facteur": "cle", "reponse"}` ouvre la session, de 12 heures, et la preuve ne ressert pas : `{"mj": false, "compte"}`. `401` `{"reprendre": true}` sans preuve valable (absente, expirée, déjà servie, d'avant un changement de mot de passe) : retour au mot de passe ; `401` sans ce champ : code incorrect ou déjà utilisé. La preuve tombe après cinq erreurs. `429` : cinq essais en cinq minutes sur ce compte depuis cette adresse, vingt pour une adresse, ou, pour le TOTP seulement, dix par compte en cinq minutes et cinquante en une journée, d'où qu'ils viennent. Une clé ou un code de secours reste alors possible.
+
+**Clés de sécurité.** Elles demandent l'option `-origine` (ou `COF_DM_ORIGINE`) : l'adresse publique du serveur, `https://…`, seule source de l'origine et du domaine, jamais un en-tête. `-rp-id` (`COF_DM_RP_ID`) lie les clés à un domaine parent ; par défaut, à l'hôte de l'origine. Sans elle, ces routes répondent `409`. `POST /api/acces/second-facteur/defi`, avec la preuve, donne le défi à passer à `navigator.credentials.get` (`publicKey`) ; `reponse` est le résultat, champs binaires en base64url. Un défi vaut deux minutes et une seule réponse, même fausse. Toute clé FIDO2 convient (aucune attestation) ; à chaque usage, un compteur qui ne monte pas est refusé, sauf une clé dont le compteur reste à zéro. Sans preuve, aucun de ces compteurs n'est touché : qui n'a pas le mot de passe ne peut gêner personne.
 
 **Enrôlement.** Tant qu'il n'a aucun facteur, un administrateur n'atteint que `GET /api/acces`, `GET /api/compte`, `POST /api/compte/mdp`, `/api/compte/second-facteur/…`, `POST /api/acces/deconnexion` et `/api/sante` ; tout le reste répond `403` `{"detail", "second_facteur_requis": true}`. Le mot de passe initial passe avant (`403` `{"changer_mdp": true}` sur ces routes aussi).
 
-**Confirmation.** Certaines actions portent dans leur corps `"confirmation": {"mdp", "facteur", "code"}` : le mot de passe, et un second facteur s'il en a un. Sans elle : `403` `{"confirmation_requise": true}`. Mot de passe ou code faux : `401`. `429` : vingt mots de passe faux en cinq minutes, puis les limites ci-dessus.
+**Confirmation.** Certaines actions portent dans leur corps `"confirmation": {"mdp", "facteur", "code"}` : le mot de passe, et un second facteur s'il en a un. Avec une clé : `"confirmation": {"mdp", "facteur": "cle", "reponse"}`, après `POST /api/compte/second-facteur/defi`. Sans elle : `403` `{"confirmation_requise": true}`. Mot de passe ou code faux : `401`. `429` : vingt mots de passe faux en cinq minutes, puis les limites ci-dessus.
 
 | Requête | Effet |
 |---|---|
@@ -113,8 +115,13 @@ Un administrateur prouve un second facteur à la connexion. Les comptes MJ, audi
 | `POST /api/compte/second-facteur/totp/activer` `{"code"}` | Active ce secret si le code en vient. `{"ok": true, "secours"?: [10 codes]}` : les codes de secours, montrés cette seule fois, s'il n'en restait aucun. Une session d'enrôlement devient une session complète sous un autre identifiant. `422` : code incorrect ; `409` : secret plus valable. |
 | `DELETE /api/compte/second-facteur/totp` `{"confirmation"}` | Retire le TOTP et ferme les autres sessions du compte. `409` si c'est le dernier facteur, sans consommer de code. `404` : aucun TOTP. |
 | `POST /api/compte/second-facteur/secours` `{"confirmation"}` | Remplace les 10 codes de secours, montrés cette seule fois : `{"secours"}`. |
+| `POST /api/compte/second-facteur/defi` | Le défi pour confirmer une action par une clé. `409` : ce compte n'a pas de clé. |
+| `POST /api/compte/second-facteur/cles/debut` `{"nom", "confirmation"}` | Le défi à passer à `navigator.credentials.create` (`publicKey`). Rien n'est enregistré avant la réponse. `422` : sans nom. |
+| `POST /api/compte/second-facteur/cles/activer` `{"reponse"}` | Enregistre la clé : `{"ok": true, "id", "secours"?}`. `422` : réponse qui ne correspond pas à ce serveur ; `409` : défi plus valable, clé déjà enregistrée (sur ce compte ou un autre). Dix clés au plus (`422`). Comme pour le TOTP, une session d'enrôlement devient une session complète. |
+| `PATCH /api/compte/second-facteur/cles/{id}` `{"nom"}` | Renomme la clé. |
+| `DELETE /api/compte/second-facteur/cles/{id}` `{"confirmation"}` | Retire la clé et ferme les autres sessions du compte. `409` si c'est le dernier facteur, sans consommer de code. |
 
-`GET /api/compte` et `GET /api/acces` donnent à un administrateur `compte.second_facteur` : `{"requis", "totp", "totp_active"?, "secours_restants"}`. Jamais un secret. Changer de mot de passe ne retire aucun facteur.
+`GET /api/compte` et `GET /api/acces` donnent à un administrateur `compte.second_facteur` : `{"requis", "totp", "totp_active"?, "cles": [{"id", "nom", "cree", "utilise"?}], "cles_disponibles", "secours_restants"}`. Jamais un secret. Changer de mot de passe ne retire aucun facteur.
 
 ### Comptes joueurs
 
