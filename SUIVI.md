@@ -6,10 +6,10 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 
 ## Où on en est
 
-- **Version stable : 1.2.5** (31 octobre 2026) : PR 23 à 26 (corrections rapides, inventaire), 28 (schéma des fiches) et 29 à 31 (butin et pot commun).
-- **Numéros d'échange** : `VersionModele` 8 (dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `reseau-direct` (PR 39, lot E1) et `direct` (PR 40, lot E2), à essayer : branche `essai-complet` (`main` + PR 39 et 40, à ne pas fusionner), préversion 1.2.6-test.43. Les PR 32 à 38 (lots A à D) sont fusionnées le 1er novembre 2026 à la demande du MJ, qui fera ses essais une fois tout fini ; aucune version stable n'est taguée.
-- **Chantier en cours** (1er novembre 2026) : lot E, client, tablettes et combat en direct. E1, réseau sans relance : PR 39. E2, combat et dés en direct : PR 40 (numéros d'échange inchangés ; corrige aussi le blocage du serveur par un WebSocket ouvert). Tout attend l'essai du MJ, y compris les lots A à D déjà fusionnés (Docker Hub, menu repliable, mise à jour fiable, installation, rôles, page d'administration).
+- **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
+- **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : aucune en attente. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
+- **Chantier en cours** : aucun ; lot E fini et publié dans la 1.3.0.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
