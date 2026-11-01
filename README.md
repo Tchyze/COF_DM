@@ -218,6 +218,7 @@ securite evenement=<événement> [champ=valeur…] nom="<compte>" ip=<adresse du
 | `limite_atteinte portee=nom` | Un essai ralenti, jamais refusé : ce nom reçoit des essais de nombreuses adresses. Le visiteur peut être le vrai titulaire : ne pas bannir sur cette ligne. |
 | `limite_atteinte portee=mdp`, `mdp_echec`, `mdp_change`, `mdp_reinitialise` | Changement de mot de passe par le titulaire (essais de trop, ancien mot de passe faux, réussi) ; réinitialisation par un administrateur (`par`). `jetons_retires` : le nombre de jetons tombés. |
 | `jeton_cree`, `jeton_retire`, `jeton_rendu` | Jeton d'API créé, retiré, ou rendu par un poste de bureau qui quitte le serveur. |
+| `direct_coupe` | Un écran en direct coupé : ses droits ont changé depuis son ouverture. |
 
 Ni mot de passe ni jeton n'y figurent. L'adresse est celle des proxys de confiance : tant que `-proxies` n'est pas juste, elle est fausse. Un nom saisi par erreur à la place du mot de passe y resterait lisible : ce journal se garde comme une donnée sensible. Ces adresses sont des données personnelles : fixez une durée de conservation.
 

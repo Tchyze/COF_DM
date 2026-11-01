@@ -31,14 +31,20 @@ const (
 
 // clientDirect : le client vers le serveur, si cet univers y est relié et connecté ; nil sinon.
 func (s *Serveur) clientDirect() *synchro.Client {
-	if s.opt.app == nil {
-		return nil
-	}
-	_, _, c := s.opt.app.relieDe(s.store)
+	c := s.connexionDirecte()
 	if c == nil {
 		return nil
 	}
 	return synchro.NouveauDirect(c.URL, c.Jeton, s.store.ID())
+}
+
+// connexionDirecte : la connexion au serveur par laquelle cet univers passe, s'il y en a une.
+func (s *Serveur) connexionDirecte() *connexion {
+	if s.opt.app == nil {
+		return nil
+	}
+	_, _, c := s.opt.app.relieDe(s.store)
+	return c
 }
 
 // noterDirect : ce qu'un appel dit du serveur ; la zone d'état de l'application le montre.
@@ -283,6 +289,7 @@ func (s *Serveur) combatSuivreDirect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.noterDirect(err)
 	}
+	droits, passage := s.droitsDuSuivi(r), s.connexionDirecte()
 	conn, errMaj := versWebSocket.Upgrade(w, r, nil)
 	if errMaj != nil {
 		if amont != nil {
@@ -290,6 +297,11 @@ func (s *Serveur) combatSuivreDirect(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	// le poste a quitté le serveur, ou en a changé : ce suivi n'a plus de raison d'être
+	defer s.surveiller(conn, r, func() bool {
+		c := s.connexionDirecte()
+		return droits() && c != nil && passage != nil && *c == *passage
+	})()
 	s.salles.noterDistant(id, true)
 	e := &ecran{conn: conn, envoi: make(chan []byte, 64)}
 	go e.ecrire()
@@ -341,6 +353,10 @@ func (s *Serveur) combatSuivreDirect(w http.ResponseWriter, r *http.Request) {
 					s.salles.noterDistant(id, false)
 					e.envoyer([]byte(`{"type":"supprime"}`))
 					<-fin
+					return
+				}
+				if errors.As(err, &refus) && (refus.Code == http.StatusUnauthorized || refus.Code == http.StatusForbidden) {
+					s.noterDirect(err) // le serveur a retiré ses droits à ce poste : l'écran n'a plus à l'attendre
 					return
 				}
 				continue

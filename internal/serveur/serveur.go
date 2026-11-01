@@ -89,6 +89,8 @@ type Serveur struct {
 	libre   *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
 	jets    *tableJets     // lanceur de dés : les derniers jets de la partie
 	potMu   sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
+
+	intervalleDroits atomic.Int64 // écrans en direct : tous les combien leurs droits sont revus (suivi.go)
 }
 
 func Nouveau(st *store.Store, opt Options) *Serveur {
@@ -99,6 +101,7 @@ func Nouveau(st *store.Store, opt Options) *Serveur {
 		opt.Sauvegardes = filepath.Join(opt.DossierDon, "sauvegardes", st.ID())
 	}
 	s := &Serveur{opt: opt, store: st, reg: opt.Reglages, mux: http.NewServeMux()}
+	s.intervalleDroits.Store(int64(intervalleDroits))
 	if _, ok := s.reg.Meta("api_jeton"); !ok && opt.Comptes == nil {
 		_ = s.reg.SetMeta("api_jeton", nouveauJeton())
 	}
