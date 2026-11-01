@@ -15,5 +15,12 @@
 # installation du MJ (machine, chemins, fichiers) : jamais dans le dépôt public
 /LOCAL.md
 
+# secrets : la clé de publication, un fichier de mot de passe, des variables d'environnement
+*.pem
+*.key
+.env
+.env.*
+*.mdp
+
 # Python
 __pycache__/

@@ -9,3 +9,9 @@ cof-dm.exe
 *.cofdm
 *.log
 *.syso
+LOCAL.md
+*.pem
+*.key
+.env
+.env.*
+*.mdp
