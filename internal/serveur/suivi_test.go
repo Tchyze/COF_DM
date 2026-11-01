@@ -105,6 +105,7 @@ func TestDirectJoueurDroitsRevus(t *testing.T) {
 		donner(reg, nom, id, comptes.Joueur)
 		return n
 	}
+	essai := 0
 	for quoi, retirer := range map[string]func(string){
 		"retiré de l'univers": func(nom string) {
 			reg.Modifier(nom, func(c *comptes.Compte) error { delete(c.Roles, id); return nil })
@@ -124,7 +125,8 @@ func TestDirectJoueurDroitsRevus(t *testing.T) {
 		"mot de passe changé": func(nom string) { _, _ = reg.ChangerMdp(nom, "un-tout-autre-secret", false) },
 	} {
 		t.Run(quoi, func(t *testing.T) {
-			nom := "joueur" + fmt.Sprint(len(quoi))
+			essai++
+			nom := fmt.Sprintf("joueur%d", essai)
 			conn := ecranDirect(t, ts, joueur(nom), chemin)
 			resteBranche(t, conn)
 			retirer(nom)
