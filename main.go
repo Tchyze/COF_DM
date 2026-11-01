@@ -277,6 +277,9 @@ func main() {
 		fatal("Impossible de créer le dossier des données %s : %v", dossier, err)
 	}
 	resserrer(dossier)
+	if !*modeServeur && !*headless {
+		rangerCacheFenetre(dossier)
+	}
 	if logf, err := os.OpenFile(filepath.Join(dossier, "cof-dm.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600); err == nil && !*headless {
 		log.SetOutput(logf)
 	}
