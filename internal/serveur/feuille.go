@@ -284,7 +284,10 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 	}
 	if garderNotes {
 		// les chiffres des objets et les objets du monde restent ceux du MJ
-		corps = fiches.GarderChiffres(corps, ancienne)
+		if corps, err = fiches.GarderChiffres(corps, ancienne); err != nil {
+			erreurFiche(w, err)
+			return
+		}
 	}
 	// les bonus des capacités dépendent des voies de la feuille reçue
 	var recue struct {
@@ -294,6 +297,10 @@ func (s *Serveur) enregistrerFeuille(w http.ResponseWriter, r *http.Request, e s
 	f, err := fiches.NormaliserFeuilleAvec(corps, niveauDe(e), s.lireRegles().Personnage, s.effetsDe(recue.Voies))
 	if err != nil {
 		erreurFiche(w, err)
+		return
+	}
+	if garderNotes && f.LiesAjoutes(ancienne) {
+		erreur(w, 403, "Seul le MJ lie un objet du monde à une feuille.")
 		return
 	}
 	if garderNotes && ancienne != nil {

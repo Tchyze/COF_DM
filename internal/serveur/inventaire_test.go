@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/Tchyze/cof_dm/internal/comptes"
 )
 
 // Une fiche « Objet » et l'inventaire d'un PJ : le Détenteur suit dans les deux sens, la ligne prend
@@ -131,4 +133,135 @@ func TestInventaireObjetsJoueur(t *testing.T) {
 		t.Fatalf("détenteur donné par le joueur : %v", v["data"])
 	}
 	_ = bague
+}
+
+// scenarioInventaire : ce qu'un joueur tente sur l'inventaire de son PJ, par une clé dont il change
+// la casse, ou sans inventaire du tout. Rien ne doit passer : ni lecture d'un objet secret, ni vol à
+// un autre PJ, ni bonus forgé.
+func scenarioInventaire(t *testing.T, cle string, pj, autrePJ, secret, volable float64,
+	ecrire func(corps map[string]any) (int, string), lireMJ func(url string) string) {
+	t.Helper()
+	feuille := fmt.Sprintf("/api/entites/%v/feuille", pj)
+	lignes := func(l ...any) map[string]any { return map[string]any{"pv": 10, cle: l} }
+
+	c, corps := ecrire(lignes(map[string]any{"nom": "x", "quantite": 1, "fiche": secret}))
+	if c != 200 || strings.Contains(corps, "SECRET-NOM") || strings.Contains(corps, `"defense":17`) {
+		t.Fatalf("%s : objet secret lu par le joueur : %d %s", cle, c, corps)
+	}
+	if s := lireMJ(fmt.Sprintf("/api/entites/%v", secret)); strings.Contains(s, "detenteur") {
+		t.Fatalf("%s : le joueur devient détenteur de l'objet secret : %s", cle, s)
+	}
+
+	c, corps = ecrire(lignes(map[string]any{"nom": "x", "quantite": 1, "fiche": volable}))
+	if c != 200 || strings.Contains(corps, "VOLABLE-NOM") {
+		t.Fatalf("%s : objet d'un autre PJ pris par le joueur : %d %s", cle, c, corps)
+	}
+	if s := lireMJ(fmt.Sprintf("/api/entites/%v/feuille", autrePJ)); !strings.Contains(s, "VOLABLE-NOM") {
+		t.Fatalf("%s : l'objet a quitté l'inventaire de l'autre PJ : %s", cle, s)
+	}
+	if s := lireMJ(fmt.Sprintf("/api/entites/%v", volable)); !strings.Contains(s, fmt.Sprintf(`"detenteur":%v`, autrePJ)) {
+		t.Fatalf("%s : le détenteur a changé : %s", cle, s)
+	}
+	if s := lireMJ(feuille); strings.Contains(s, "VOLABLE-NOM") {
+		t.Fatalf("%s : objet d'un autre PJ dans la feuille : %s", cle, s)
+	}
+
+	c, corps = ecrire(lignes(map[string]any{"nom": "forge", "quantite": 1, "bonus": []any{map[string]any{"cible": "def", "valeur": 9}},
+		"arme": map[string]any{"dm": "1d4"}}))
+	if c != 200 {
+		t.Fatalf("%s : ligne libre refusée : %d %s", cle, c, corps)
+	}
+	if s := lireMJ(feuille); strings.Contains(s, `"valeur":9`) || strings.Contains(s, "1d4") || !strings.Contains(s, "forge") {
+		t.Fatalf("%s : bonus forgé enregistré : %s", cle, s)
+	}
+
+	// un identifiant qui n'est pas un objet : aucune réponse ne dit ce qu'il désigne
+	if c, corps = ecrire(lignes(map[string]any{"nom": "x", "quantite": 1, "fiche": pj})); c != 200 || strings.Contains(corps, "objet du monde") {
+		t.Fatalf("%s : nature d'une fiche révélée : %d %s", cle, c, corps)
+	}
+}
+
+// scenarioSansInventaire : une feuille sans aucune clé d'inventaire garde les lignes d'avant, et son
+// ancien texte d'équipement n'y fait pas entrer de bonus.
+func scenarioSansInventaire(t *testing.T, pj float64, ecrire func(corps map[string]any) (int, string), lireMJ func(url string) string) {
+	t.Helper()
+	feuille := fmt.Sprintf("/api/entites/%v/feuille", pj)
+	if c, corps := ecrire(map[string]any{"pv": 10, "inventaire": []any{map[string]any{"nom": "gardee", "quantite": 1}}}); c != 200 {
+		t.Fatalf("ligne libre : %d %s", c, corps)
+	}
+	if c, corps := ecrire(map[string]any{"pv": 10, "armure": map[string]any{"nom": "forgee", "bonus": 15}}); c != 200 {
+		t.Fatalf("sans inventaire : %d %s", c, corps)
+	}
+	if s := lireMJ(feuille); strings.Contains(s, "forgee") || strings.Contains(s, `"valeur":15`) || !strings.Contains(s, "gardee") {
+		t.Fatalf("bonus forgé par l'ancienne armure : %s", s)
+	}
+}
+
+// Page libre de l'édition de bureau : même contrôle que pour un compte.
+func TestInventaireCassePageLibre(t *testing.T) {
+	for _, cle := range []string{"Inventaire", "INVENTAIRE", "inVentaire"} {
+		t.Run(cle, func(t *testing.T) {
+			b, _ := bancReseau(t)
+			pj := b.fiche("pj", "Aldric", map[string]any{"statut": "actif"})
+			autre := b.fiche("pj", "Brune", map[string]any{"statut": "actif"})
+			b.local("PUT", fmt.Sprintf("/api/entites/%v/feuille", pj), map[string]any{"pv": 10})
+			b.local("PUT", fmt.Sprintf("/api/entites/%v/feuille", autre), map[string]any{"pv": 10})
+			chiffres := map[string]any{"emplacement": "tete", "bonus": []any{map[string]any{"cible": "def", "valeur": 7}}}
+			secret := b.fiche("objet", "SECRET-NOM", map[string]any{"equipement": chiffres})
+			volable := b.fiche("objet", "VOLABLE-NOM", map[string]any{"detenteur": autre})
+			b.local("POST", "/api/acces/joueurs", map[string]any{"active": true})
+			b.local("PUT", "/api/joueurs/edition", map[string]any{"active": true})
+			url := fmt.Sprintf("/api/entites/%v/feuille", pj)
+			ecrire := func(corps map[string]any) (int, string) { return b.joueurLibre("PUT", url, corps, true) }
+			lireMJ := func(u string) string { _, v := b.local("GET", u, nil); return toJSON(v) }
+			scenarioInventaire(t, cle, pj, autre, secret, volable, ecrire, lireMJ)
+			scenarioSansInventaire(t, pj, ecrire, lireMJ)
+		})
+	}
+}
+
+// Compte joueur d'un serveur.
+func TestInventaireCasseCompteJoueur(t *testing.T) {
+	for _, cle := range []string{"Inventaire", "INVENTAIRE", "inVentaire"} {
+		t.Run(cle, func(t *testing.T) {
+			b, reg := bancServeur(t)
+			mj := b.connecter("meneur")
+			creer := func(typ, nom string, data map[string]any) float64 {
+				c, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": typ, "nom": nom, "data": data}, mj)
+				if c != 201 {
+					t.Fatalf("création de %s : %d %v", nom, c, v)
+				}
+				return v["id"].(float64)
+			}
+			pj, autre := creer("pj", "Aldric", nil), creer("pj", "Brune", nil)
+			for _, id := range []float64{pj, autre} {
+				b.proxy("PUT", fmt.Sprintf("/api/entites/%v/feuille", id), map[string]any{"pv": 10}, mj)
+			}
+			chiffres := map[string]any{"emplacement": "tete", "bonus": []any{map[string]any{"cible": "def", "valeur": 7}}}
+			secret := creer("objet", "SECRET-NOM", map[string]any{"equipement": chiffres})
+			volable := creer("objet", "VOLABLE-NOM", map[string]any{"detenteur": autre})
+			b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", pj), map[string]any{"partage": true}, mj)
+			if _, err := reg.Creer("joueuse", "mot-de-passe-joueuse", false); err != nil {
+				t.Fatal(err)
+			}
+			reg.Modifier("joueuse", func(c *comptes.Compte) error {
+				c.Admis = append(c.Admis, b.s.store.ID())
+				c.Roles[b.s.store.ID()] = comptes.Joueur
+				c.Persos[b.s.store.ID()] = int64(pj)
+				return nil
+			})
+			joueuse := b.connecter("joueuse")
+			if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": true}, mj); c != 200 {
+				t.Fatalf("ouverture de l'édition : %d", c)
+			}
+			url := fmt.Sprintf("/api/entites/%v/feuille", pj)
+			ecrire := func(corps map[string]any) (int, string) {
+				c, v, _ := b.proxy("PUT", url, corps, joueuse)
+				return c, toJSON(v)
+			}
+			lireMJ := func(u string) string { _, v, _ := b.proxy("GET", u, nil, mj); return toJSON(v) }
+			scenarioInventaire(t, cle, pj, autre, secret, volable, ecrire, lireMJ)
+			scenarioSansInventaire(t, pj, ecrire, lireMJ)
+		})
+	}
 }
