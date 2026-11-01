@@ -1,0 +1,2 @@
+# Clé d'exemple publique de la RFC 6238, en base 32, dans un test : pas un secret.
+9aeb2dca7182c8c43e9d1bdc304fd09ec2407945:internal/serveur/secondfacteur_test.go:generic-api-key:22
