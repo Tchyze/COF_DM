@@ -107,6 +107,7 @@ func TestReferenceJoueurs(t *testing.T) {
 		prepare(b, ecrire, lea)
 		reg.Creer("joueuse", "mot-de-passe-joueuse", false)
 		reg.Modifier("joueuse", func(c *comptes.Compte) error {
+			c.Admis = append(c.Admis, b.s.store.ID())
 			c.Roles[b.s.store.ID()] = comptes.Joueur
 			c.Persos[b.s.store.ID()] = int64(lea)
 			return nil
@@ -194,7 +195,11 @@ func TestReferenceEditeur(t *testing.T) {
 func TestReferenceEditeurRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
 	mj, audit, joueuse := b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse")
 	c, v, _ := b.proxy("POST", "/api/reference/peuples", map[string]any{"nom": "Gens du gué"}, mj)
 	if c != 201 {

@@ -216,6 +216,7 @@ func TestAidesServeur(t *testing.T) {
 	}
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur
 		c.Persos[b.s.store.ID()] = int64(lea)
 		return nil

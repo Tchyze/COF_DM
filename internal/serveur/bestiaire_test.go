@@ -163,7 +163,11 @@ func TestBestiaire(t *testing.T) {
 func TestBestiaireRoles(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
 	mj, audit, joueuse, passant := b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse"), b.connecter("passant")
 	monstre := map[string]any{"nom": "Ogre", "pv": 30}
 	if c, _, _ := b.proxy("POST", "/api/bestiaire", monstre, mj); c != 201 {

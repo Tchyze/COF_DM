@@ -97,7 +97,11 @@ func TestFonctionnalites(t *testing.T) {
 func TestFonctionnalitesServeur(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
 	for _, qui := range []string{"audit", "joueuse"} {
 		if c, _, _ := b.proxy("PUT", "/api/fonctionnalites", map[string]any{"des": false}, b.connecter(qui)); c != 403 {
 			t.Fatalf("réglage par %s : %d", qui, c)

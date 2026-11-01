@@ -70,8 +70,8 @@ func TestRegistre(t *testing.T) {
 	if !ok || c.Nom != "aline" || c.Role("u1") != Auditeur || c.Role("u2") != "" {
 		t.Fatalf("compte du jeton : %+v", c)
 	}
-	if chef, _ := r2.Lire("chef"); chef.Role("u2") != MJ {
-		t.Fatal("l'administrateur n'est pas MJ partout")
+	if chef, _ := r2.Lire("chef"); chef.Role("u2") != "" {
+		t.Fatal("l'administrateur a un rôle dans un univers")
 	}
 	v := c.Version
 	if err := r2.DefinirMdp("aline", "un-autre-mot-de-passe"); err != nil {
@@ -89,5 +89,67 @@ func TestRegistre(t *testing.T) {
 	}
 	if err := r2.RetirerJeton("aline", j.ID); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// L'administrateur n'entre dans aucun univers ; un compte n'y est joueur qu'une fois admis par lui.
+func TestAdminEtAdmis(t *testing.T) {
+	r, _ := Ouvrir(filepath.Join(t.TempDir(), "comptes.json"))
+	r.Creer("chef", "mot-de-passe-du-chef", true)
+	r.Creer("lea", "mot-de-passe-de-lea", false)
+	if _, err := r.Modifier("chef", func(c *Compte) error { c.Roles["u1"] = MJ; return nil }); !errors.Is(err, ErrAdmin) {
+		t.Fatalf("rôle d'un administrateur : %v", err)
+	}
+	if _, _, err := r.NouveauJeton("chef", "script"); !errors.Is(err, ErrAdmin) {
+		t.Fatalf("jeton d'un administrateur : %v", err)
+	}
+	if _, err := r.Modifier("lea", func(c *Compte) error { c.Roles["u1"] = Joueur; return nil }); !errors.Is(err, ErrNonAdmis) {
+		t.Fatalf("joueur sans admission : %v", err)
+	}
+	r.Modifier("lea", func(c *Compte) error { c.Admis = append(c.Admis, "u1", "u1", "u2"); return nil })
+	c, err := r.Modifier("lea", func(c *Compte) error { c.Roles["u1"] = Joueur; c.Persos["u1"] = 7; c.Persos["u2"] = 8; return nil })
+	if err != nil || c.Role("u1") != Joueur || !c.PeutJouer("u2") || len(c.Admis) != 2 || c.Persos["u2"] != 0 {
+		t.Fatalf("joueur admis : %+v %v", c, err)
+	}
+	// plus admise : elle quitte l'univers, et son PJ avec
+	c, err = r.Modifier("lea", func(c *Compte) error { c.Admis = []string{"u2"}; return nil })
+	if err != nil || c.Role("u1") != "" || c.Persos["u1"] != 0 {
+		t.Fatalf("admission retirée : %+v %v", c, err)
+	}
+	if _, err := r.Modifier("lea", func(c *Compte) error { c.Admin = true; return nil }); !errors.Is(err, ErrAdmin) {
+		t.Fatalf("administrateur encore admis : %v", err)
+	}
+	r.Modifier("lea", func(c *Compte) error { c.Roles["u3"] = MJ; return nil })
+	if err := r.OublierUnivers("u3"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.OublierUnivers("u2"); err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := r.Lire("lea"); len(c.Roles) != 0 || len(c.Admis) != 0 {
+		t.Fatalf("univers supprimés gardés : %+v", c)
+	}
+}
+
+// Un fichier d'avant la séparation des rôles : l'administrateur y était MJ partout, avec rôles et
+// jetons ; le joueur n'avait pas d'admission.
+func TestReprendreAnciensComptes(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "comptes.json")
+	os.WriteFile(chemin, []byte(`[
+  {"nom": "chef", "mdp": "x:y", "admin": true, "roles": {"u1": "mj"}, "jetons": [{"id": "a", "empreinte": "b"}], "version": 1},
+  {"nom": "lea", "mdp": "x:y", "roles": {"u1": "joueur", "u2": "auditeur"}, "persos": {"u1": 4}, "version": 1}
+]`), 0o600)
+	r, err := Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := r.Lire("chef"); !c.Admin || len(c.Roles)+len(c.Jetons) != 0 {
+		t.Fatalf("administrateur repris : %+v", c)
+	}
+	if c, _ := r.Lire("lea"); !c.PeutJouer("u1") || c.PeutJouer("u2") || c.Role("u1") != Joueur || c.Persos["u1"] != 4 {
+		t.Fatalf("joueur repris : %+v", c)
+	}
+	if b, _ := os.ReadFile(chemin); strings.Contains(string(b), `"jetons"`) || !strings.Contains(string(b), `"admis"`) {
+		t.Fatalf("reprise non enregistrée : %s", b)
 	}
 }

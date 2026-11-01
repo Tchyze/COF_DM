@@ -18,7 +18,11 @@ func TestSynchronisationHTTP(t *testing.T) {
 	meneur, lecteur, joueuse := connecter("meneur"), connecter("lecteur"), connecter("joueuse")
 	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.MJ; return nil })
 	reg.Modifier("lecteur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.Auditeur; return nil })
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[univers] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, univers)
+		c.Roles[univers] = comptes.Joueur
+		return nil
+	})
 	c, v := meneur.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Le Gué"})
 	if c != 201 {
 		t.Fatalf("fiche : %d %v", c, v)

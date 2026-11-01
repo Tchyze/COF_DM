@@ -57,7 +57,8 @@ func (a *Application) routesMajServeur() {
 }
 
 // routeVersionServeur : la version du serveur et ses numéros, la dernière version stable publiée
-// si elle est plus récente, et les copies de l'univers visé avec leur version (administrateur).
+// si elle est plus récente, et les copies de bureau de chaque univers avec leur version
+// (administrateur : le nom des postes et des comptes, rien du contenu).
 func (a *Application) routeVersionServeur(w http.ResponseWriter, r *http.Request) {
 	out := a.vueMaj()
 	delete(out, "automatique")
@@ -65,11 +66,9 @@ func (a *Application) routeVersionServeur(w http.ResponseWriter, r *http.Request
 	out["protocole"], out["modele"], out["commande"] = store.VersionProtocole, store.VersionModele, commandeMajServeur
 	copies := []map[string]any{}
 	a.mu.RLock()
-	o := a.vise(r)
-	a.mu.RUnlock()
-	if o != nil {
-		out["univers"] = nomUnivers(o.st.Chemin())
-		ici := synchro.Ici()
+	defer a.mu.RUnlock()
+	ici := synchro.Ici()
+	for _, o := range a.ordre() {
 		for _, c := range o.st.Copies() {
 			ecart := ""
 			switch synchro.Comparer(synchro.Versions{Version: c.Version, Protocole: c.Protocole, Modele: c.Modele}, ici) {
@@ -78,8 +77,8 @@ func (a *Application) routeVersionServeur(w http.ResponseWriter, r *http.Request
 			case synchro.BureauRecent:
 				ecart = ecartBureauRecent // ce poste attend la mise à jour du serveur
 			}
-			copies = append(copies, map[string]any{"numero": c.Numero, "nom": c.Nom, "compte": c.Compte, "vu": c.Vu,
-				"version": c.Version, "ecart": ecart})
+			copies = append(copies, map[string]any{"univers": nomUnivers(o.st.Chemin()), "numero": c.Numero, "nom": c.Nom,
+				"compte": c.Compte, "vu": c.Vu, "version": c.Version, "ecart": ecart})
 		}
 	}
 	out["copies"] = copies

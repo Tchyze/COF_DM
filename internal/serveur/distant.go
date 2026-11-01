@@ -774,11 +774,16 @@ func (a *Application) routeEnvoyer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Nom   string `json:"nom"`
-		Copie string `json:"copie"`
+		Univers   string `json:"univers"` // l'univers du serveur, créé par son administrateur
+		Remplacer bool   `json:"remplacer"`
+		Copie     string `json:"copie"`
 	}
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
+		return
+	}
+	if strings.TrimSpace(in.Univers) == "" {
+		erreur(w, 422, "Choisissez l'univers du serveur où envoyer celui-ci (l'administrateur du serveur le crée, et vous en fait MJ).")
 		return
 	}
 	c := a.cnx()
@@ -800,10 +805,6 @@ func (a *Application) routeEnvoyer(w http.ResponseWriter, r *http.Request) {
 	if !a.verifierServeur(w, c, true) {
 		return
 	}
-	nom := strings.TrimSpace(in.Nom)
-	if nom == "" {
-		nom = nomUnivers(st.Chemin())
-	}
 	copie := strings.TrimSpace(in.Copie)
 	if copie == "" {
 		copie = nomDuPoste()
@@ -821,13 +822,31 @@ func (a *Application) routeEnvoyer(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
-	cl := synchro.Nouveau(c.URL, c.Jeton, "")
-	id, err := cl.Deposer(nom, instantane.Name())
+	cl := synchro.Nouveau(c.URL, c.Jeton, in.Univers)
+	us, err := cl.MesUnivers()
 	if err != nil {
 		erreurDistante(w, err)
 		return
 	}
-	cl.Univers = id
+	id, nom := in.Univers, ""
+	for _, u := range us {
+		if u.ID == id && u.Role == "mj" {
+			nom = u.Nom
+		}
+	}
+	if nom == "" {
+		erreur(w, 403, "Votre compte n'est pas MJ de cet univers du serveur.")
+		return
+	}
+	if err := cl.Importer(instantane.Name(), in.Remplacer); err != nil {
+		var se synchro.ErrServeur
+		if errors.As(err, &se) && se.Code == http.StatusConflict {
+			erreur(w, 409, "L'univers « "+nom+" » du serveur a déjà des fiches : confirmez le remplacement de tout son contenu (le serveur le sauvegarde avant).")
+			return
+		}
+		erreurDistante(w, err)
+		return
+	}
 	recue := instantane.Name() + ".copie"
 	defer os.Remove(recue)
 	if _, err := cl.Copier(copie, recue); err != nil {

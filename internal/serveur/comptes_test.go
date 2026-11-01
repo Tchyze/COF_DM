@@ -121,12 +121,14 @@ func TestServeurRoles(t *testing.T) {
 	if c, _, _ := b.proxy("POST", "/api/entites", pnj, mj); c != 201 {
 		t.Fatalf("création par le MJ : %d", c)
 	}
-	for _, x := range [][2]string{{"GET", "/api/comptes"}, {"POST", "/api/comptes"}} {
-		for nom, qui := range map[string]func(*http.Request){"meneur": mj, "audit": audit, "passant": passant} {
-			if c, _, _ := b.proxy(x[0], x[1], map[string]any{"nom": "x", "url": "http://pirate.example"}, qui); c != 403 {
-				t.Fatalf("%s %s par %s : %d", x[0], x[1], nom, c)
-			}
+	// administrateur : il n'entre pas dans l'univers
+	for _, x := range [][2]string{{"GET", "/api/entites"}, {"POST", "/api/entites"}, {"GET", "/api/parametres"}} {
+		if c, _, _ := b.proxy(x[0], x[1], pnj, chef); c != 403 {
+			t.Fatalf("%s %s par l'administrateur : %d", x[0], x[1], c)
 		}
+	}
+	if _, v, _ := b.proxy("GET", "/api/acces", nil, chef); v["mj"] != false || v["compte"].(map[string]any)["admin"] != true {
+		t.Fatalf("état de l'administrateur : %v", v)
 	}
 	// auditeur : lit tout, ne modifie rien
 	for _, u := range []string{"/api/entites", "/api/secrets", "/api/journal", "/api/export", "/api/parametres"} {
@@ -156,29 +158,12 @@ func TestServeurRoles(t *testing.T) {
 	if c, _, _ := b.proxy("POST", "/api/entites", pnj, func(r *http.Request) { mj(r); r.Header.Del("X-COF-DM") }); c != 403 {
 		t.Fatalf("écriture sans en-tête : %d", c)
 	}
-	// l'administrateur gère les comptes ; le rôle donné vaut pour l'univers ouvert
-	if c, v, _ := b.proxy("POST", "/api/comptes", map[string]any{"nom": "Nouvelle", "mdp": "un-bon-mot-de-passe", "role": "auditeur"}, chef); c != 201 || v["role"] != "auditeur" || v["mdp"] != nil {
-		t.Fatalf("création de compte : %d %v", c, v)
-	}
-	if c, _, _ := b.proxy("POST", "/api/comptes", map[string]any{"nom": "court", "mdp": "court"}, chef); c != 422 {
-		t.Fatalf("mot de passe trop court : %d", c)
-	}
-	if c, _, _ := b.proxy("PATCH", "/api/comptes/passant", map[string]any{"role": "mj"}, chef); c != 200 {
-		t.Fatalf("rôle donné : %d", c)
-	}
+	reg.Modifier("passant", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.MJ; return nil })
 	if c, _, _ := b.proxy("POST", "/api/entites", map[string]any{"type": "pnj", "nom": "Aline"}, passant); c != 201 {
 		t.Fatalf("écriture après avoir reçu le rôle : %d", c)
 	}
-	if c, _, _ := b.proxy("PATCH", "/api/comptes/chef", map[string]any{"admin": false}, chef); c != 409 {
-		t.Fatalf("dernier administrateur retiré : %d", c)
-	}
-	if c, _, _ := b.proxy("DELETE", "/api/comptes/chef", nil, chef); c != 409 {
-		t.Fatalf("dernier administrateur supprimé : %d", c)
-	}
 	// désactiver un compte ferme ses sessions
-	if c, _, _ := b.proxy("PATCH", "/api/comptes/meneur", map[string]any{"inactif": true}, chef); c != 200 {
-		t.Fatalf("désactivation : %d", c)
-	}
+	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Inactif = true; return nil })
 	if c, _, _ := b.proxy("GET", "/api/entites", nil, mj); c != 401 {
 		t.Fatalf("session d'un compte désactivé : %d", c)
 	}
@@ -191,11 +176,8 @@ func TestServeurRoles(t *testing.T) {
 	for _, l := range st {
 		auteurs[l.Auteur] = true
 	}
-	if !auteurs["meneur"] || !auteurs["passant"] || !auteurs["chef"] {
+	if !auteurs["meneur"] || !auteurs["passant"] || auteurs["chef"] {
 		t.Fatalf("auteurs du journal : %v", auteurs)
-	}
-	if c, _ := reg.Lire("nouvelle"); c.Mdp == "" || strings.Contains(c.Mdp, "un-bon-mot-de-passe") {
-		t.Fatal("mot de passe mal enregistré")
 	}
 }
 
@@ -342,12 +324,13 @@ func serveurMulti(t *testing.T) (*Application, *comptes.Registre, func(nom strin
 	return a, reg, connecter
 }
 
-// Le menu Fichier touche aux fichiers du serveur : il revient à l'administrateur, et à lui seul,
-// même pour une requête venue de la machine elle-même.
+// Sur un serveur, /api/univers ne crée ni n'ouvre plus rien : l'administration s'en charge. Il reste
+// au MJ l'état de son univers et ses sauvegardes, sans chemin du serveur.
 func TestServeurUnivers(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
-	chef, meneur := connecter("chef"), connecter("meneur")
-	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[a.st.ID()] = comptes.MJ; return nil })
+	chef, meneur, lectrice := connecter("chef"), connecter("meneur"), connecter("lectrice")
+	donner(reg, "meneur", a.st.ID(), comptes.MJ)
+	donner(reg, "lectrice", a.st.ID(), comptes.Auditeur)
 	anonyme := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
 	if c, _ := anonyme.faire("GET", "/api/univers", nil); c != 401 {
 		t.Fatalf("univers sans compte, depuis la machine : %d", c)
@@ -355,29 +338,71 @@ func TestServeurUnivers(t *testing.T) {
 	if c, _ := anonyme.faire("GET", "/api/mes-univers", nil); c != 401 {
 		t.Fatalf("liste des univers sans compte : %d", c)
 	}
-	if c, _ := meneur.faire("POST", "/api/univers/nouveau", map[string]any{"nom": "Autre monde"}); c != 403 {
-		t.Fatalf("nouvel univers par un MJ : %d", c)
+	for _, qui := range []*navigateur{chef, meneur} {
+		for _, u := range []string{"/api/univers/nouveau", "/api/univers/ouvrir", "/api/univers/copie", "/api/univers/parcourir"} {
+			if c, _ := qui.faire("POST", u, map[string]any{"nom": "Autre monde", "chemin": "/etc/passwd"}); c != 403 {
+				t.Fatalf("POST %s sur un serveur : %d", u, c)
+			}
+		}
 	}
-	if c, _ := chef.faire("POST", "/api/univers/nouveau", map[string]any{"chemin": filepath.Join(t.TempDir(), "x")}); c != 422 {
-		t.Fatalf("univers créé hors du dossier du serveur : %d", c)
+	if c, v := meneur.faire("POST", "/api/univers/deposer?nom=Venu", []byte("x")); c != 410 || !strings.Contains(fmt.Sprint(v["detail"]), "importe") {
+		t.Fatalf("ancien dépôt d'univers : %d %v", c, v)
 	}
-	if c, _ := chef.faire("POST", "/api/univers/ouvrir", map[string]any{"chemin": "/etc/passwd"}); c != 422 {
-		t.Fatalf("fichier ouvert hors du dossier du serveur : %d", c)
+	if c, _ := chef.faire("GET", "/api/univers", nil); c != 403 {
+		t.Fatalf("état de l'univers pour l'administrateur : %d", c)
 	}
+	if c, _ := lectrice.faire("GET", "/api/univers", nil); c != 403 {
+		t.Fatalf("état de l'univers pour l'auditrice : %d", c)
+	}
+	c, v := meneur.faire("GET", "/api/univers", nil)
+	if c != 200 || v["courant"].(map[string]any)["id"] != a.st.ID() || v["dossier"] != nil || v["dossier_sauvegardes"] != nil ||
+		strings.Contains(toJSON(v), a.opt.DossierDon) {
+		t.Fatalf("état de l'univers pour son MJ : %d %v", c, v)
+	}
+	if c, _ := chef.faire("GET", "/api/univers/version", nil); c != 200 {
+		t.Fatalf("version du serveur pour l'administrateur : %d", c)
+	}
+	if c, _ := meneur.faire("GET", "/api/univers/version", nil); c != 403 {
+		t.Fatalf("version du serveur pour un MJ : %d", c)
+	}
+}
+
+// creerUnivers : l'administrateur crée un univers (vide) et renvoie son identifiant.
+func creerUnivers(t *testing.T, chef *navigateur, nom string) string {
+	t.Helper()
+	c, v := chef.faire("POST", "/api/admin/univers", map[string]any{"nom": nom})
+	id, _ := v["id"].(string)
+	if c != 201 || id == "" {
+		t.Fatalf("création de « %s » : %d %v", nom, c, v)
+	}
+	return id
+}
+
+// donner : un rôle dans un univers, comme l'administrateur le donne (joueur : admis et joint).
+func donner(reg *comptes.Registre, nom, univers, role string) {
+	reg.Modifier(nom, func(c *comptes.Compte) error {
+		if role == comptes.Joueur {
+			c.Admis = append(c.Admis, univers)
+		}
+		c.Roles[univers] = role
+		return nil
+	})
 }
 
 // Plusieurs univers ouverts à la fois : chacun entre dans ceux où il a un rôle, avec ce rôle.
 func TestServeurMultiUnivers(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
-	chef := connecter("chef")
+	chef, maitre := connecter("chef"), connecter("maitre")
 	premier := a.st.ID()
-	c, v := chef.faire("POST", "/api/univers/nouveau", map[string]any{"nom": "Les Marches"})
-	second, _ := v["courant"].(map[string]any)["id"].(string)
-	if c != 200 || second == "" || second == premier || len(a.tous) != 2 {
-		t.Fatalf("second univers : %d %v", c, v)
+	second := creerUnivers(t, chef, "Les Marches")
+	if second == premier || len(a.tous) != 2 {
+		t.Fatalf("second univers : %s, %d univers", second, len(a.tous))
 	}
-	// l'administrateur est passé dans l'univers créé, et y écrit
-	if c, v := chef.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Fort Boueux"}); c != 201 {
+	donner(reg, "maitre", premier, comptes.MJ)
+	donner(reg, "maitre", second, comptes.MJ)
+	// le MJ des deux passe dans le second, et y écrit
+	maitre.faire("POST", "/api/mes-univers/courant", map[string]any{"id": second})
+	if c, v := maitre.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Fort Boueux"}); c != 201 {
 		t.Fatalf("écriture dans le second univers : %d %v", c, v)
 	}
 	if n, _, _ := a.tous[second].st.Compter(); n["lieu"] != 1 {
@@ -387,10 +412,10 @@ func TestServeurMultiUnivers(t *testing.T) {
 		t.Fatal("la fiche a été écrite dans le premier univers")
 	}
 	// il revient dans le premier
-	if c, _ := chef.faire("POST", "/api/mes-univers/courant", map[string]any{"id": premier}); c != 200 {
+	if c, _ := maitre.faire("POST", "/api/mes-univers/courant", map[string]any{"id": premier}); c != 200 {
 		t.Fatalf("changement d'univers : %d", c)
 	}
-	if _, v := chef.faire("GET", "/api/parametres", nil); v["univers"].(map[string]any)["id"] != premier {
+	if _, v := maitre.faire("GET", "/api/parametres", nil); v["univers"].(map[string]any)["id"] != premier {
 		t.Fatalf("univers courant après le changement : %v", v["univers"])
 	}
 	// des rôles différents selon l'univers
@@ -442,7 +467,7 @@ func TestServeurMultiUnivers(t *testing.T) {
 		t.Fatalf("univers d'un compte sans rôle : %v", v)
 	}
 	// jeton d'API : avec plusieurs univers, il doit dire lequel
-	_, v = lectrice.faire("POST", "/api/compte/jetons", map[string]any{"nom": "script"})
+	_, v := lectrice.faire("POST", "/api/compte/jetons", map[string]any{"nom": "script"})
 	script := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}, jeton: v["jeton"].(string)}
 	if c, _ := script.faire("POST", "/api/entites", pnj); c != 400 {
 		t.Fatalf("jeton sans univers précisé : %d", c)
@@ -459,25 +484,25 @@ func TestServeurMultiUnivers(t *testing.T) {
 	if c, _ := script.faire("GET", "/api/entites", nil, "X-COF-Univers", "inconnu"); c != 404 {
 		t.Fatalf("univers inconnu : %d", c)
 	}
-	// le rôle se donne dans l'univers où l'administrateur se trouve
-	chef.faire("POST", "/api/mes-univers/courant", map[string]any{"id": second})
-	chef.faire("PATCH", "/api/comptes/passant", map[string]any{"role": "joueur"})
-	if c, _ := reg.Lire("passant"); c.Roles[second] != comptes.Joueur || c.Roles[premier] != "" {
-		t.Fatalf("rôle donné dans le mauvais univers : %v", c.Roles)
-	}
-	// la copie d'un univers porte son identifiant : elle ne s'ouvre pas à côté de l'original
+	// la copie d'un univers porte son identifiant : posée dans le dossier, elle n'est pas servie à
+	// côté de l'original
 	copie := filepath.Join(a.DossierUnivers(), "Copie.cofdm")
-	if c, _ := chef.faire("POST", "/api/univers/copie", map[string]any{"chemin": copie}); c != 200 {
-		t.Fatalf("copie : %d", c)
+	if err := a.tous[second].st.Sauvegarder(copie); err != nil {
+		t.Fatal(err)
 	}
-	if c, _ := chef.faire("POST", "/api/univers/ouvrir", map[string]any{"chemin": copie}); c != 422 || len(a.tous) != 2 {
-		t.Fatalf("copie ouverte à côté de l'original : %d, %d univers", c, len(a.tous))
+	a.ouvrirDossier()
+	if len(a.tous) != 2 {
+		t.Fatalf("copie ouverte à côté de l'original : %d univers", len(a.tous))
 	}
 	// restaurer une sauvegarde ne touche que l'univers visé
-	c, v = chef.faire("POST", "/api/sauvegarde", nil)
+	maitre.faire("POST", "/api/mes-univers/courant", map[string]any{"id": second})
+	c, v := maitre.faire("POST", "/api/sauvegarde", nil)
 	fichier := filepath.Base(v["fichier"].(string))
-	chef.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "À effacer"})
-	if c, v = chef.faire("POST", "/api/univers/restaurer", map[string]any{"fichier": fichier}); c != 200 {
+	maitre.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "À effacer"})
+	if c, _ := lectrice.faire("POST", "/api/univers/restaurer", map[string]any{"fichier": fichier}, enTeteUnivers, second); c != 403 {
+		t.Fatalf("restauration par l'auditrice : %d", c)
+	}
+	if c, v = maitre.faire("POST", "/api/univers/restaurer", map[string]any{"fichier": fichier}); c != 200 {
 		t.Fatalf("restauration : %d %v", c, v)
 	}
 	if n, _, _ := a.tous[second].st.Compter(); n["lieu"] != 1 {
@@ -512,7 +537,11 @@ func TestServeurMultiUnivers(t *testing.T) {
 func TestServeurJoueur(t *testing.T) {
 	b, reg := bancServeur(t)
 	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
-	reg.Modifier("joueuse", func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		return nil
+	})
 	mj, joueuse := b.connecter("meneur"), b.connecter("joueuse")
 	creer := func(typ, nom string, data map[string]any, partage bool) int64 {
 		c, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": typ, "nom": nom, "data": data, "tags": []string{"marches"}}, mj)
@@ -607,7 +636,11 @@ func TestServeurEditionJoueur(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
 		reg.Creer(nom, "mot-de-passe-"+nom, false)
-		reg.Modifier(nom, func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = comptes.Joueur; return nil })
+		reg.Modifier(nom, func(c *comptes.Compte) error {
+			c.Admis = append(c.Admis, b.s.store.ID())
+			c.Roles[b.s.store.ID()] = comptes.Joueur
+			return nil
+		})
 	}
 	chef, mj, audit, joueuse, autre := b.connecter("chef"), b.connecter("meneur"), b.connecter("audit"), b.connecter("joueuse"), b.connecter("autre")
 	creer := func(typ, nom string) string {
@@ -622,14 +655,16 @@ func TestServeurEditionJoueur(t *testing.T) {
 	page := func(id int64) string { return "/api/joueur/pj/" + strconv.FormatInt(id, 10) }
 	texte := map[string]any{"data": map[string]any{"historique": "Né à Fort Boueux."}}
 
-	// rattacher un compte à son PJ : l'administrateur seulement, et à un PJ
-	if c, _, _ := b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": idPJ}, mj); c != 403 {
-		t.Fatalf("rattachement par le MJ : %d", c)
+	// rattacher un compte à son PJ : le MJ seulement, et à un PJ
+	for qui, n := range map[string]func(*http.Request){"chef": chef, "audit": audit} {
+		if c, _, _ := b.proxy("PATCH", "/api/joueurs/comptes/joueuse", map[string]any{"pj": idPJ}, n); c != 403 {
+			t.Fatalf("rattachement par %s : %d", qui, c)
+		}
 	}
-	if c, _, _ := b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": idPNJ}, chef); c != 422 {
+	if c, _, _ := b.proxy("PATCH", "/api/joueurs/comptes/joueuse", map[string]any{"pj": idPNJ}, mj); c != 422 {
 		t.Fatalf("rattachement à un PNJ : %d", c)
 	}
-	if c, v, _ := b.proxy("PATCH", "/api/comptes/joueuse", map[string]any{"pj": idPJ}, chef); c != 200 || v["pj"] != float64(idPJ) {
+	if c, v, _ := b.proxy("PATCH", "/api/joueurs/comptes/joueuse", map[string]any{"pj": idPJ}, mj); c != 200 || v["pj"] != float64(idPJ) {
 		t.Fatalf("rattachement : %d %v", c, v)
 	}
 	// sa page montre les champs qu'elle tiendra, sans ceux du MJ
@@ -700,25 +735,31 @@ func TestServeurEditionJoueur(t *testing.T) {
 	if j[0].Auteur != "joueuse" {
 		t.Fatalf("auteur de la modification : %+v", j[0])
 	}
-	// un PJ retiré aux joueurs ne se modifie plus ; l'édition refermée (par l'administrateur) non plus
+	// un PJ retiré aux joueurs ne se modifie plus ; l'édition refermée non plus
 	b.proxy("POST", pj+"/partage", map[string]any{"partage": false}, mj)
 	if c, _, _ := b.proxy("PATCH", page(idPJ), texte, joueuse); c != 404 {
 		t.Fatalf("PJ caché : %d", c)
 	}
 	b.proxy("POST", pj+"/partage", map[string]any{"partage": true}, mj)
-	if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, chef); c != 200 {
+	if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, chef); c != 403 {
 		t.Fatalf("fermeture par l'administrateur : %d", c)
+	}
+	if c, _, _ := b.proxy("PUT", "/api/joueurs/edition", map[string]any{"active": false}, mj); c != 200 {
+		t.Fatalf("fermeture par le MJ : %d", c)
 	}
 	if c, _, _ := b.proxy("PATCH", page(idPJ), texte, joueuse); c != 403 {
 		t.Fatalf("édition refermée : %d", c)
 	}
 }
 
-// L'administrateur ajoute au serveur un univers existant en déposant son fichier, après contrôle.
-func TestDeposerUnivers(t *testing.T) {
+// Le MJ verse dans l'univers créé par l'administrateur les données d'un fichier d'univers, après
+// contrôle ; un univers qui a déjà des fiches n'est remplacé qu'à sa demande, après une sauvegarde.
+func TestImporterUnivers(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
-	chef, meneur := connecter("chef"), connecter("meneur")
-	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[a.st.ID()] = comptes.MJ; return nil })
+	chef, meneur, lectrice := connecter("chef"), connecter("meneur"), connecter("lectrice")
+	id := creerUnivers(t, chef, "Les Marches")
+	donner(reg, "meneur", id, comptes.MJ)
+	donner(reg, "lectrice", id, comptes.Auditeur)
 	fichier := func(piege string) []byte {
 		chemin := filepath.Join(t.TempDir(), "venu.cofdm")
 		st, err := store.Ouvrir(chemin)
@@ -743,15 +784,6 @@ func TestDeposerUnivers(t *testing.T) {
 		return b
 	}
 	bon := fichier("")
-	restes := func() []string {
-		var l []string
-		es, _ := os.ReadDir(a.DossierUnivers())
-		for _, e := range es {
-			l = append(l, e.Name())
-		}
-		return l
-	}
-	avant := restes()
 	for _, c := range []struct {
 		qui     *navigateur
 		url     string
@@ -759,38 +791,41 @@ func TestDeposerUnivers(t *testing.T) {
 		code    int
 		attendu string
 	}{
-		{meneur, "/api/univers/deposer?nom=Venu", bon, 403, ""},
-		{chef, "/api/univers/deposer", bon, 422, "nom"},
-		{chef, "/api/univers/deposer?nom=Venu", []byte("pas une base"), 422, "pas un univers"},
-		{chef, "/api/univers/deposer?nom=Venu", nil, 422, "pas un univers"},
-		{chef, "/api/univers/deposer?nom=Venu", fichier(`CREATE TRIGGER piege AFTER INSERT ON journal BEGIN DELETE FROM entites; END`), 422, "trigger"},
-		{chef, "/api/univers/deposer?nom=Mon%20univers", bon, 409, "déjà ce nom"},
+		{chef, "/api/import/univers", bon, 403, ""},
+		{lectrice, "/api/import/univers", bon, 403, ""},
+		{meneur, "/api/import/univers", []byte("pas une base"), 422, "pas un univers"},
+		{meneur, "/api/import/univers", nil, 422, "pas un univers"},
+		{meneur, "/api/import/univers", fichier(`CREATE TRIGGER piege AFTER INSERT ON journal BEGIN DELETE FROM entites; END`), 422, "pas un univers"},
 	} {
-		code, v := c.qui.faire("POST", c.url, c.corps)
+		code, v := c.qui.faire("POST", c.url, c.corps, enTeteUnivers, id)
 		if code != c.code || !strings.Contains(fmt.Sprint(v["detail"]), c.attendu) {
 			t.Fatalf("%s : %d %v (attendu %d, « %s »)", c.url, code, v, c.code, c.attendu)
 		}
 	}
-	if r := restes(); fmt.Sprint(r) != fmt.Sprint(avant) {
-		t.Fatalf("fichiers laissés par les dépôts refusés : %v (avant : %v)", r, avant)
+	// l'import accepté : les fiches arrivent, l'univers garde son identifiant, son nom et ses rôles
+	if code, v := meneur.faire("POST", "/api/import/univers", bon, enTeteUnivers, id); code != 200 || v["fiches"] != float64(1) {
+		t.Fatalf("import : %d %v", code, v)
 	}
-	// le dépôt accepté : l'univers est ouvert, l'administrateur y passe et y lit ses fiches
-	code, v := chef.faire("POST", "/api/univers/deposer?nom=Venu%20d'ailleurs", bon)
-	if code != 200 || v["courant"].(map[string]any)["nom"] != "Venu d'ailleurs" || len(a.tous) != 2 {
-		t.Fatalf("dépôt : %d %v", code, v)
+	o := a.tous[id]
+	if n, _, _ := o.st.Compter(); n["lieu"] != 1 || nomUnivers(o.st.Chemin()) != "Les Marches" || len(a.tous) != 2 {
+		t.Fatalf("univers après l'import : %v %s", n, o.st.Chemin())
 	}
-	if code, v := chef.faire("GET", "/api/stats", nil); code != 200 || v["compte"].(map[string]any)["lieu"] != float64(1) {
-		t.Fatalf("fiches de l'univers déposé : %d %v", code, v)
+	if c, _ := reg.Lire("meneur"); c.Role(id) != comptes.MJ {
+		t.Fatal("rôle perdu à l'import")
 	}
-	if _, err := os.Stat(filepath.Join(a.DossierUnivers(), "Venu d'ailleurs.cofdm")); err != nil {
-		t.Fatal(err)
+	// le remplacer demande confirmation, et le sauvegarde avant
+	if code, _ := meneur.faire("POST", "/api/import/univers", bon, enTeteUnivers, id); code != 409 {
+		t.Fatalf("import sur un univers qui a des fiches : %d", code)
 	}
-	// le même fichier, sous un autre nom : c'est une copie
-	if code, v := chef.faire("POST", "/api/univers/deposer?nom=Encore", bon); code != 409 || !strings.Contains(fmt.Sprint(v["detail"]), "copie") {
-		t.Fatalf("copie déposée : %d %v", code, v)
+	if code, v := meneur.faire("POST", "/api/import/univers?remplacer=1", bon, enTeteUnivers, id); code != 200 || !strings.Contains(fmt.Sprint(v["sauvegarde"]), "avant-import") {
+		t.Fatalf("remplacement : %d %v", code, v)
 	}
-	if _, err := os.Stat(filepath.Join(a.DossierUnivers(), "Encore.cofdm")); err == nil {
-		t.Fatal("la copie refusée est restée dans le dossier")
+	if es, _ := os.ReadDir(os.TempDir()); len(es) > 0 {
+		for _, e := range es {
+			if strings.HasPrefix(e.Name(), "cofdm-import-") {
+				t.Fatalf("fichier d'import laissé : %s", e.Name())
+			}
+		}
 	}
 }
 
@@ -798,10 +833,12 @@ func TestDeposerUnivers(t *testing.T) {
 // WebSocket, téléchargements). Le paramètre ne vaut pas pour une écriture et ne donne aucun droit.
 func TestUniversParOnglet(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
-	chef := connecter("chef")
 	premier := a.st.ID()
-	_, v := chef.faire("POST", "/api/univers/nouveau", map[string]any{"nom": "Les Marches"})
-	second := v["courant"].(map[string]any)["id"].(string) // le navigateur est passé dans le second
+	second := creerUnivers(t, connecter("chef"), "Les Marches")
+	chef := connecter("maitre") // MJ des deux, dans le second
+	donner(reg, "maitre", premier, comptes.MJ)
+	donner(reg, "maitre", second, comptes.MJ)
+	chef.faire("POST", "/api/mes-univers/courant", map[string]any{"id": second})
 	if c, _ := chef.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Fort Boueux"}, enTeteUnivers, premier); c != 201 {
 		t.Fatalf("écriture par l'en-tête : %d", c)
 	}
