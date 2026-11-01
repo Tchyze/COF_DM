@@ -785,3 +785,8 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
   .adm-table td:nth-child(4){text-align:left!important}
   .adm-actif span{display:inline}
 }
+
+/* second facteur des administrateurs */
+.sf-qr { display: block; width: 256px; max-width: 100%; height: auto; background: #fff; padding: 8px; border-radius: 6px; }
+.sf-secret { font-family: monospace; overflow-wrap: anywhere; user-select: all; }
+.sf-codes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px 16px; margin: 8px 0; padding: 0; list-style: none; font-family: monospace; }

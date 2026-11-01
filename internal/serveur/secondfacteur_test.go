@@ -203,8 +203,8 @@ func TestPreuveRefusee(t *testing.T) {
 		n.cookies[cookiePreuve] = &http.Cookie{Name: cookiePreuve, Value: preuve}
 		return n.faire("POST", routeSecondFacteur, map[string]any{"facteur": "totp", "code": codeSuivant(reg)})
 	}
-	if c, _ := essayer(acces.preuve(chef, time.Now().Add(-time.Second))); c != 401 {
-		t.Fatalf("preuve expirée : %d", c)
+	if c, v := essayer(acces.preuve(chef, time.Now().Add(-time.Second))); c != 401 || v["reprendre"] != true {
+		t.Fatalf("preuve expirée : %d %v", c, v)
 	}
 	if c, _ := essayer("n.importe.quoi"); c != 401 {
 		t.Fatalf("preuve inventée : %d", c)

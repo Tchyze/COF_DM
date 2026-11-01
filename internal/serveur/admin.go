@@ -30,7 +30,7 @@ const (
 // pageAdmin : les fichiers de la page d'administration, que l'application de bureau ne sert pas.
 func pageAdmin(chemin string) bool {
 	chemin = path.Clean(chemin)
-	return chemin == "/admin.html" || chemin == "/js/admin.js"
+	return chemin == "/admin.html" || chemin == "/js/admin.js" || chemin == "/js/views/secondfacteur.js"
 }
 
 // DossierArchives : les fichiers des univers archivés, hors du dossier ouvert au démarrage.

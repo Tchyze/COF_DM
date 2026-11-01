@@ -340,9 +340,43 @@ function ecranCompte(acces) {
   $("#nom").focus();
   $("#connexion").onsubmit = async e => {
     e.preventDefault();
-    try { await api("POST", "/api/acces/connexion", { nom: $("#nom").value, mdp: $("#mdp").value }); location.reload(); }
+    try {
+      const r = await api("POST", "/api/acces/connexion", { nom: $("#nom").value, mdp: $("#mdp").value });
+      if (r.etape === "second_facteur") ecranSecondFacteur(marque, r.facteurs);
+      else location.reload();
+    }
     catch (err) { toast(err.message, true); $("#mdp").select(); }
   };
+}
+
+/** Un administrateur dont le mot de passe est bon : son second facteur, ou un code de secours. */
+function ecranSecondFacteur(marque, facteurs) {
+  let secours = false;
+  const dessiner = () => {
+    $("#vue").innerHTML = `<section class="panneau connexion">${marque}
+      <form id="connexion" class="colonne" style="gap:12px">
+        <label class="champ"><span>${secours ? "Code de secours" : "Code de votre application d'authentification"}</span>
+          <input id="code" ${secours ? `autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX"` : `inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456"`} required></label>
+        <div><button class="primary" type="submit">Entrer</button></div>
+      </form>
+      ${facteurs.includes("secours") ? `<p class="hint"><button class="ghost petit" id="autre">${secours ? "Utiliser mon application" : "Utiliser un code de secours"}</button></p>` : ""}
+    </section>`;
+    $("#code").focus();
+    const autre = $("#autre");
+    if (autre) autre.onclick = () => { secours = !secours; dessiner(); };
+    $("#connexion").onsubmit = async e => {
+      e.preventDefault();
+      try {
+        await api("POST", "/api/acces/second-facteur", { facteur: secours ? "secours" : "totp", code: $("#code").value });
+        location.reload();
+      } catch (err) {
+        toast(err.message, true);
+        if (err.data?.reprendre) { setTimeout(() => location.reload(), 1500); return; }
+        $("#code").select();
+      }
+    };
+  };
+  dessiner();
 }
 
 (async () => {

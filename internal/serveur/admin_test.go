@@ -124,7 +124,7 @@ func TestAdminReserve(t *testing.T) {
 		t.Fatalf("univers créé par un MJ : %d", c)
 	}
 	// la page d'administration : sur le serveur seulement, ni ses routes ni ses fichiers sur le bureau
-	page := fstest.MapFS{"index.html": {Data: []byte("<html>")}, "admin.html": {Data: []byte("<html>")}, "js/admin.js": {Data: []byte("//")}}
+	page := fstest.MapFS{"index.html": {Data: []byte("<html>")}, "admin.html": {Data: []byte("<html>")}, "js/admin.js": {Data: []byte("//")}, "js/views/secondfacteur.js": {Data: []byte("//")}}
 	srv := NouvelleApplication(Options{Version: "test", DossierDon: t.TempDir(), Port: 8100, Comptes: reg, Frontend: page})
 	if err := srv.Demarrer(""); err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestAdminReserve(t *testing.T) {
 	if c, _ := b.local("GET", "/api/admin/univers", nil); c != 404 {
 		t.Fatalf("administration sur le bureau : %d", c)
 	}
-	for _, u := range []string{"/admin.html", "/js/admin.js"} {
+	for _, u := range []string{"/admin.html", "/js/admin.js", "/js/views/secondfacteur.js"} {
 		if c, _ := b.local("GET", u, nil); c != 404 {
 			t.Fatalf("GET %s sur le bureau : %d", u, c)
 		}

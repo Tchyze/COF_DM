@@ -251,23 +251,25 @@ func (s *Serveur) connexionSecondFacteur(w http.ResponseWriter, r *http.Request)
 	}
 	_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&req)
 	a := s.acces
-	const expiree = "Cette étape a expiré : reprenez la connexion."
+	expiree := func() { // la page revient au mot de passe
+		repondre(w, 401, map[string]any{"detail": "Cette étape a expiré : reprenez la connexion.", "reprendre": true})
+	}
 	t, err := r.Cookie(cookiePreuve)
 	if err != nil {
-		erreur(w, 401, expiree)
+		expiree()
 		return
 	}
 	c, id, exp, ok := a.lirePreuve(t.Value)
 	if !ok {
 		http.SetCookie(w, a.temoinPreuve(r, "", time.Unix(0, 0)))
-		erreur(w, 401, expiree)
+		expiree()
 		return
 	}
 	if !a.reserverEssai("2f-preuve:"+id, essaisMaxPreuve) {
 		a.consommerPreuve(id, exp)
 		http.SetCookie(w, a.temoinPreuve(r, "", time.Unix(0, 0)))
 		a.noter(r, "limite_atteinte", c.Nom, "portee=2f_preuve")
-		erreur(w, 401, expiree)
+		expiree()
 		return
 	}
 	if !a.essayerFacteur(w, r, c, req.Facteur, req.Code) {
@@ -275,13 +277,13 @@ func (s *Serveur) connexionSecondFacteur(w http.ResponseWriter, r *http.Request)
 	}
 	http.SetCookie(w, a.temoinPreuve(r, "", time.Unix(0, 0)))
 	if !a.consommerPreuve(id, exp) {
-		erreur(w, 401, expiree)
+		expiree()
 		return
 	}
 	a.oublierEssais("2f-preuve:" + id)
 	c, ok = a.comptes.Lire(c.Nom)
 	if !ok {
-		erreur(w, 401, expiree)
+		expiree()
 		return
 	}
 	a.noter(r, "connexion_ok", c.Nom, "facteur="+req.Facteur)
