@@ -95,49 +95,55 @@ func TestBureauRelie(t *testing.T) {
 	}
 }
 
-// « Envoyer sur le serveur » : l'univers local y est publié (administrateur), puis remplacé ici par
-// sa copie reliée ; l'original reste dans les sauvegardes.
+// « Envoyer sur le serveur » : l'univers local verse ses données dans un univers du serveur dont le
+// compte est MJ (créé par l'administrateur), puis il est remplacé ici par sa copie reliée ;
+// l'original reste dans les sauvegardes.
 func TestBureauEnvoie(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
 	ts := httptest.NewServer(a)
 	defer ts.Close()
-	connecter("chef") // administrateur
+	id := creerUnivers(t, connecter("chef"), "Les Marches")
 	connecter("meneur")
-	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[a.st.ID()] = comptes.MJ; return nil })
+	donner(reg, "meneur", id, comptes.MJ)
+	donner(reg, "meneur", a.st.ID(), comptes.Auditeur)
 
 	b := nouvelleAppli(t, t.TempDir())
 	b.local("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Fort Boueux"})
 	local := b.courant()
-	if c, _ := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"nom": "Les Marches"}); c != 409 {
+	if c, _ := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": id}); c != 409 {
 		t.Fatalf("envoyer sans connexion : %d", c)
 	}
-	// un MJ qui n'est pas administrateur ne publie pas d'univers
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
-	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"nom": "Les Marches"}); c != 422 {
-		t.Fatalf("envoi par un MJ : %d %v", c, v)
+	// un administrateur ne se relie pas : il n'a pas de jeton
+	if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"}); c != 422 || !strings.Contains(v["detail"].(string), "navigateur") {
+		t.Fatalf("bureau relié par l'administrateur : %d %v", c, v)
 	}
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"})
-	c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"nom": "Les Marches"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	if c, _ := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{}); c != 422 {
+		t.Fatalf("envoi sans univers choisi : %d", c)
+	}
+	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": a.st.ID()}); c != 403 {
+		t.Fatalf("envoi dans un univers où le compte est auditeur : %d %v", c, v)
+	}
+	c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": id})
 	if c != 200 {
 		t.Fatalf("envoi : %d %v", c, v)
 	}
 	courant := v["courant"].(map[string]any)
-	if courant["id"] != local["id"] || courant["chemin"] != local["chemin"] || len(a.tous) != 2 {
+	if courant["id"] != id || courant["chemin"] != local["chemin"] || len(a.tous) != 2 {
 		t.Fatalf("après envoi : %v (avant : %v), %d univers sur le serveur", courant, local, len(a.tous))
 	}
 	if c, v := b.local("GET", "/api/univers/serveur", nil); c != 200 || v["relie"] != true || v["copie"] != true {
 		t.Fatalf("lien après envoi : %d %v", c, v)
 	}
-	if n, _, _ := a.tous[local["id"].(string)].st.Compter(); n["lieu"] != 1 {
-		t.Fatalf("univers publié : %v", n)
+	if n, _, _ := a.tous[id].st.Compter(); n["lieu"] != 1 {
+		t.Fatalf("univers reçu : %v", n)
 	}
 	sauv, _ := filepath.Glob(filepath.Join(b.dir, "sauvegardes", "*", "*_"+motifAvantEnvoi+".cofdm"))
 	if len(sauv) != 1 {
 		t.Fatalf("sauvegarde d'avant l'envoi : %v", sauv)
 	}
-	// le même univers ne s'envoie pas deux fois
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"})
-	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"nom": "Encore"}); c != 409 {
+	// la copie reliée ne s'envoie pas de nouveau
+	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": id}); c != 409 {
 		t.Fatalf("second envoi : %d %v", c, v)
 	}
 	// et l'échange marche aussitôt
@@ -145,8 +151,17 @@ func TestBureauEnvoie(t *testing.T) {
 	if c, v := b.local("POST", "/api/univers/serveur/synchroniser", nil); c != 200 || v["etat"] != etatAJour {
 		t.Fatalf("échange après envoi : %d %v", c, v)
 	}
-	if n, _, _ := a.tous[local["id"].(string)].st.Compter(); n["lieu"] != 2 {
+	if n, _, _ := a.tous[id].st.Compter(); n["lieu"] != 2 {
 		t.Fatalf("échange après envoi : %v", n)
+	}
+	// un autre univers local, vers un univers du serveur qui a déjà des fiches : confirmation
+	b.local("POST", "/api/univers/nouveau", map[string]any{"nom": "Autre"})
+	b.local("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Ailleurs"})
+	if c, _ := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": id}); c != 409 {
+		t.Fatalf("envoi sur un univers du serveur qui a des fiches : %d", c)
+	}
+	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": id, "remplacer": true}); c != 200 {
+		t.Fatalf("envoi confirmé : %d %v", c, v)
 	}
 }
 
@@ -327,11 +342,12 @@ func TestRendreJeton(t *testing.T) {
 // Relié à un serveur, le bureau passe d'un univers du serveur à l'autre : la copie est tirée la
 // première fois, rouverte ensuite, même hors connexion.
 func TestBureauUniversDuServeur(t *testing.T) {
-	a, _, connecter := serveurMulti(t)
+	a, reg, connecter := serveurMulti(t)
 	premier := a.st.ID()
-	chef := connecter("chef") // administrateur : MJ partout
-	_, v := chef.faire("POST", "/api/univers/nouveau", map[string]any{"nom": "Les Marches"})
-	second := v["courant"].(map[string]any)["id"].(string)
+	second := creerUnivers(t, connecter("chef"), "Les Marches")
+	connecter("maitre")
+	donner(reg, "maitre", premier, comptes.MJ)
+	donner(reg, "maitre", second, comptes.MJ)
 	ts := httptest.NewServer(a)
 	defer ts.Close()
 
@@ -339,7 +355,7 @@ func TestBureauUniversDuServeur(t *testing.T) {
 	if c, _ := b.local("POST", "/api/univers/serveur/ouvrir", map[string]any{"univers": premier}); c != 409 {
 		t.Fatalf("ouvrir en mode local : %d", c)
 	}
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "maitre", "mdp": "mot-de-passe-maitre"})
 	liste := func() map[string]map[string]any {
 		t.Helper()
 		c, v := b.local("GET", "/api/univers/serveur/univers", nil)
@@ -394,8 +410,10 @@ func TestBureauUniversDuServeur(t *testing.T) {
 // départ sans réponse du serveur.
 func TestBureauJetonUnique(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
-	chef := connecter("chef") // administrateur : accès à tous les univers
-	chef.faire("POST", "/api/univers/nouveau", map[string]any{"nom": "Les Marches"})
+	second := creerUnivers(t, connecter("chef"), "Les Marches")
+	chef := connecter("maitre") // accès aux deux univers
+	donner(reg, "maitre", a.st.ID(), comptes.MJ)
+	donner(reg, "maitre", second, comptes.Auditeur)
 	if len(a.tous) != 2 {
 		t.Fatalf("univers : %d", len(a.tous))
 	}
@@ -404,17 +422,17 @@ func TestBureauJetonUnique(t *testing.T) {
 	b := nouvelleAppli(t, t.TempDir())
 	connexion := func() {
 		t.Helper()
-		if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"}); c != 200 || v["avertissement"] != nil {
+		if c, v := b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "maitre", "mdp": "mot-de-passe-maitre"}); c != 200 || v["avertissement"] != nil {
 			t.Fatalf("connexion : %d %v", c, v)
 		}
 	}
 	connexion()
-	if c, v := b.local("POST", "/api/univers/serveur/local", nil); c != 200 || v["avertissement"] != nil || jetonsDe(t, reg, "chef") != 0 {
-		t.Fatalf("client seul : %d %v, %d jetons", c, v, jetonsDe(t, reg, "chef"))
+	if c, v := b.local("POST", "/api/univers/serveur/local", nil); c != 200 || v["avertissement"] != nil || jetonsDe(t, reg, "maitre") != 0 {
+		t.Fatalf("client seul : %d %v, %d jetons", c, v, jetonsDe(t, reg, "maitre"))
 	}
 	connexion()
 	connexion()
-	if n := jetonsDe(t, reg, "chef"); n != 1 {
+	if n := jetonsDe(t, reg, "maitre"); n != 1 {
 		t.Fatalf("après deux connexions : %d jetons", n)
 	}
 	// un jeton laissé par ce poste (serveur injoignable au départ) est retiré à la connexion suivante,
@@ -422,7 +440,7 @@ func TestBureauJetonUnique(t *testing.T) {
 	b.a.ecrireConnexion(nil)
 	chef.faire("POST", "/api/compte/jetons", map[string]any{"nom": "Claude"})
 	connexion()
-	c, _ := reg.Lire("chef")
+	c, _ := reg.Lire("maitre")
 	if len(c.Jetons) != 2 || (c.Jetons[0].Nom != "Claude" && c.Jetons[1].Nom != "Claude") {
 		t.Fatalf("jetons après un départ sans rendu : %+v", c.Jetons)
 	}

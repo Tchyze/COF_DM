@@ -1,10 +1,10 @@
 // Pages d'outils : liens morts, journal, paramètres (calendrier, API, données).
 import { $, $$, esc, api, toast, armer, dateHeure, lien, enTetesUnivers } from "../ui.js";
-import { panneauCompte, panneauComptes, aideEditionJoueurs } from "./comptes.js";
+import { panneauCompte, panneauJoueurs, aideEditionJoueurs } from "./comptes.js";
 import { panneauBibliotheque } from "./bibliotheque.js";
 import { schema, chargerSchema, lienFiche, badgeType, actif as fonctionActive } from "../schema.js";
 import { taille, dialogueObsidian } from "../fichier.js";
-import { panneauMaj, panneauVersionServeur } from "../majour.js";
+import { panneauMaj } from "../majour.js";
 
 export async function liens(el) {
   const morts = await api("GET", "/api/liens-morts");
@@ -171,11 +171,10 @@ const GROUPES_PARAM = [
   ["Joueurs et accès", [
     ["acces", "Tablette et réseau", "Mot de passe MJ, accès depuis la tablette, page des joueurs et édition par les joueurs."],
     ["compte", "Mon compte", "Mot de passe et jetons d'API de votre compte."],
-    ["comptes", "Comptes du serveur", "Les comptes, leur rôle dans cet univers, le PJ des joueurs, l'édition par les joueurs."],
+    ["joueurs", "Joueurs de l'univers", "Les comptes admis par l'administrateur : qui joint l'univers, avec quel PJ ; l'édition par les joueurs."],
   ]],
   ["Application", [
     ["maj", "Mises à jour", "Canal, recherche et installation des nouvelles versions."],
-    ["version-serveur", "Version du serveur", "Version du serveur, commande de mise à jour, postes reliés."],
     ["claude", "Claude", "Brancher COF DM sur Claude Desktop ou Claude Code."],
     ["api", "API", "Adresse et jeton, pour un programme ou pour Claude."],
   ]],
@@ -186,7 +185,7 @@ export async function parametres(el, voulu = "") {
   const p = await api("GET", "/api/parametres");
   const surPlace = window.cofAcces?.local !== false; // sur l'ordinateur du MJ (pas une tablette connectée)
   const serveur = !!window.cofAcces?.serveur; // mode serveur : chacun a son compte
-  const admin = serveur && !!window.cofAcces.compte?.admin;
+  const mjServeur = serveur && window.cofAcces.compte?.role === "mj"; // le MJ de cet univers, sur un serveur
   const cal = structuredClone(schema.calendrier);
   // le contenu des blocs écrits ici ; les autres se montent à leur première ouverture
   const contenus = {
@@ -211,7 +210,7 @@ export async function parametres(el, voulu = "") {
         </div>
         <p class="hint">L'export vers Obsidian écrit une note Markdown par fiche pour votre vault, avec ou sans les secrets du MJ. L'export JSON contient les fiches et leurs images. Le restaurer remplace toutes les fiches de l'univers par celles de l'export (une sauvegarde est faite avant).</p>
         <div id="restau" class="alerte" hidden></div>
-        ${surPlace ? `<h3 style="margin-top:18px">Sauvegardes</h3><div id="sauvegardes" class="colonne" style="gap:8px"></div>` : ""}
+        ${surPlace || mjServeur ? `<h3 style="margin-top:18px">Sauvegardes</h3><div id="sauvegardes" class="colonne" style="gap:8px"></div>` : ""}
         <h3 style="margin-top:18px">Importer des fiches</h3>
         <p class="hint">Ajoute les fiches d'un fichier JSON (une liste de <code>{"type", "nom", "data", "tags"}</code>, par exemple des règles). Une fiche dont le type et le nom existent déjà est ignorée : rien n'est remplacé.</p>
         <div class="ligne"><button id="importer">⬆ Importer des fiches (JSON)…</button><input type="file" id="fichier-imp" accept="application/json,.json" hidden></div>
@@ -220,13 +219,12 @@ export async function parametres(el, voulu = "") {
   // les blocs montés à la demande, et où ils existent
   const montes = {
     fonctions: panneauFonctions,
-    // reprendre d'un autre univers touche aux fichiers : ordinateur du MJ, ou administrateur du serveur
-    biblio: box => panneauBibliotheque(box, { peutReprendre: surPlace || admin }),
+    // reprendre d'un autre univers : ordinateur du MJ, ou MJ de l'univers sur un serveur
+    biblio: box => panneauBibliotheque(box, { peutReprendre: surPlace || mjServeur }),
     acces: surPlace && panneauAcces,
     compte: serveur && panneauCompte,
-    comptes: admin && (box => panneauComptes(box, window.cofAcces.compte.nom)),
+    joueurs: mjServeur && panneauJoueurs,
     maj: surPlace && !serveur && panneauMaj,
-    "version-serveur": admin && panneauVersionServeur,
     claude: surPlace && !serveur && panneauClaude,
   };
   const present = cle => cle in contenus ? cle !== "api" || surPlace : !!montes[cle];
@@ -330,12 +328,12 @@ export async function parametres(el, voulu = "") {
   });
 
   // données
-  const MOTIFS = { auto: "automatique", manuelle: "demandée", "avant-restauration": "avant une restauration" };
+  const MOTIFS = { auto: "automatique", manuelle: "demandée", "avant-restauration": "avant une restauration", "avant-import": "avant un import", "avant-envoi": "avant l'envoi au serveur" };
   const peindreSauvegardes = async () => {
     const box = $("#sauvegardes", el);
     if (!box) return;
     const u = await api("GET", "/api/univers");
-    box.innerHTML = `<p class="hint">Une copie complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture, s'il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez ne sont jamais effacées. Dossier : <code>${esc(u.dossier_sauvegardes)}</code>.</p>
+    box.innerHTML = `<p class="hint">Une copie complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture, s'il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez ne sont jamais effacées.${u.dossier_sauvegardes ? ` Dossier : <code>${esc(u.dossier_sauvegardes)}</code>.` : ""}</p>
       ${u.sauvegardes.length ? `<div style="overflow-x:auto"><table class="tab"><thead><tr><th>Quand</th><th>Sauvegarde</th><th>Taille</th><th></th></tr></thead><tbody>
         ${u.sauvegardes.map(s => `<tr><td class="num" style="white-space:nowrap">${dateHeure(s.quand)}</td><td>${esc(MOTIFS[s.motif] || s.motif)}</td><td class="num">${taille(s.taille)}</td>
           <td><button class="petit danger" data-restaurer="${esc(s.fichier)}">Restaurer</button></td></tr>`).join("")}

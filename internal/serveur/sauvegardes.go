@@ -37,9 +37,14 @@ type Sauvegarde struct {
 	modifie time.Time
 }
 
+// nomSauvegarde : le fichier d'une sauvegarde faite maintenant, « <date>_<motif>.cofdm ».
+func nomSauvegarde(motif string) string {
+	return time.Now().Format(formatSauvegarde) + "_" + motif + store.Extension
+}
+
 // sauvegarder copie l'univers dans dossier/<date>_<motif>.cofdm et renvoie le fichier écrit.
 func sauvegarder(st *store.Store, dossier, motif string) (string, error) {
-	f := filepath.Join(dossier, time.Now().Format(formatSauvegarde)+"_"+motif+store.Extension)
+	f := filepath.Join(dossier, nomSauvegarde(motif))
 	if _, err := os.Stat(f); err == nil {
 		return f, nil // déjà faite dans la même seconde
 	}

@@ -88,6 +88,15 @@ export function armer(btn, labelConfirm, action) {
   });
 }
 
+/** Taille lisible d'un fichier. */
+export function taille(octets) {
+  if (!octets) return "";
+  const unites = ["o", "Ko", "Mo", "Go"];
+  let n = octets, i = 0;
+  while (n >= 1024 && i < unites.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(n < 10 ? 1 : 0).replace(".", ",") : n) + " " + unites[i];
+}
+
 export const dateHeure = s => new Date(s * 1000).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" });
 export const dateReelle = s => s ? new Date(s + "T12:00:00").toLocaleDateString("fr-FR", { dateStyle: "long" }) : "";
 

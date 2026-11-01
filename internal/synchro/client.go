@@ -77,6 +77,9 @@ type Univers struct {
 	Role string `json:"role"`
 }
 
+// ErrCompteAdmin : un compte administrateur ne relie pas le bureau au serveur.
+var ErrCompteAdmin = errors.New("compte administrateur")
+
 // Connecter ouvre une session avec le compte, crée un jeton d'API au nom de ce poste, puis ferme la
 // session : seul le jeton est gardé (jamais le mot de passe). Les jetons que ce poste aurait laissés
 // (serveur injoignable quand il l'a quitté) sont retirés d'abord : un poste n'en a qu'un. Renvoie
@@ -89,6 +92,7 @@ func Connecter(base, nom, mdp, poste string) (jeton string, univers []Univers, e
 	}
 	libelle := LibelleJeton(poste)
 	var compte struct {
+		Admin  bool `json:"admin"`
 		Jetons []struct {
 			ID  string `json:"id"`
 			Nom string `json:"nom"`
@@ -107,6 +111,9 @@ func Connecter(base, nom, mdp, poste string) (jeton string, univers []Univers, e
 	err = c.appel("POST", "/api/compte/jetons", map[string]string{"nom": libelle}, &j)
 	_ = c.appel("POST", "/api/acces/deconnexion", nil, nil)
 	if err != nil {
+		if compte.Admin { // sans jeton : il n'entre dans aucun univers, et se gère sur la page du serveur
+			return "", nil, ErrCompteAdmin
+		}
 		return "", nil, err
 	}
 	if j.Jeton == "" {
@@ -273,34 +280,29 @@ func (c *Client) Copier(nom, fichier string) (int64, error) {
 	return n, nil
 }
 
-// Deposer ajoute au serveur l'univers du fichier donné, sous ce nom (compte administrateur), et
-// renvoie son identifiant sur le serveur.
-func (c *Client) Deposer(nom, fichier string) (string, error) {
+// Importer verse dans l'univers du client (c.Univers, créé par l'administrateur du serveur) les
+// données du fichier d'univers donné (compte MJ de cet univers). Un univers qui a déjà des fiches
+// n'est remplacé qu'avec remplacer (le serveur le sauvegarde avant).
+func (c *Client) Importer(fichier string, remplacer bool) error {
 	f, err := os.Open(fichier)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer f.Close()
-	r, err := c.requete("POST", "/api/univers/deposer?nom="+url.QueryEscape(nom), f)
-	if err != nil {
-		return "", err
+	chemin := "/api/import/univers"
+	if remplacer {
+		chemin += "?remplacer=1"
 	}
-	r.Header.Del("X-COF-Univers")
+	r, err := c.requete("POST", chemin, f)
+	if err != nil {
+		return err
+	}
 	r.Header.Set("Content-Type", "application/octet-stream")
 	rep, err := c.faire(r)
 	if err != nil {
-		return "", err
+		return err
 	}
-	defer rep.Body.Close()
-	var etat struct {
-		Courant struct {
-			ID string `json:"id"`
-		} `json:"courant"`
-	}
-	if err := json.NewDecoder(rep.Body).Decode(&etat); err != nil || etat.Courant.ID == "" {
-		return "", errors.New("réponse du serveur illisible après le dépôt")
-	}
-	return etat.Courant.ID, nil
+	return rep.Body.Close()
 }
 
 // Bilan d'un échange.

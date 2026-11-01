@@ -22,9 +22,9 @@ import (
 // d'API. Rien n'est accordé aux requêtes venues de la machine elle-même : celles du proxy en
 // viennent toutes.
 //
-// Droits : l'administrateur gère les comptes, les univers et les réglages du serveur ; dans un
-// univers, le MJ lit et modifie, l'auditeur lit tout sans rien modifier. Un compte sans rôle dans
-// l'univers ouvert n'y entre pas.
+// Droits : l'administrateur gère les comptes, les univers et les réglages du serveur (admin.go),
+// sans entrer dans aucun univers ; dans un univers, le MJ lit et modifie, l'auditeur lit tout sans
+// rien modifier, le joueur n'a que sa page. Un compte sans rôle dans l'univers ouvert n'y entre pas.
 
 const (
 	essaisMaxNom = 20 // essais ratés sur un même nom, d'où qu'ils viennent
@@ -150,9 +150,9 @@ func (s *Serveur) servirComptes(w http.ResponseWriter, r *http.Request) {
 	lecture := r.Method == http.MethodGet || r.Method == http.MethodHead
 	switch role := c.Role(s.store.ID()); {
 	case !connu, !api, proprePerso(chemin):
-	case chemin == "/api/comptes" || strings.HasPrefix(chemin, "/api/comptes/"):
-		if !c.Admin || parJeton(r) {
-			erreur(w, 403, "Les comptes se gèrent avec un compte administrateur, connecté par son mot de passe.")
+	case c.Admin: // l'administrateur n'entre dans aucun univers (admin.go) ; la version du serveur lui répond
+		if chemin != "/api/sante" {
+			erreur(w, 403, "L'administrateur gère le serveur sans entrer dans les univers.")
 			return
 		}
 	case role == "":
@@ -180,28 +180,30 @@ func (s *Serveur) routesComptes() {
 	m.HandleFunc("POST /api/compte/jetons", s.monJeton)
 	m.HandleFunc("DELETE /api/compte/jetons/{id}", s.retirerMonJeton)
 	m.HandleFunc("DELETE /api/compte/jeton", s.rendreJeton)
-	m.HandleFunc("GET /api/comptes", s.listerComptes)
-	m.HandleFunc("POST /api/comptes", s.creerCompte)
-	m.HandleFunc("PATCH /api/comptes/{nom}", s.modifierCompte)
-	m.HandleFunc("DELETE /api/comptes/{nom}", s.supprimerCompte)
+	m.HandleFunc("GET /api/joueurs/comptes", s.joueursAdmis)
+	m.HandleFunc("PATCH /api/joueurs/comptes/{nom}", s.joindreJoueur)
 	m.HandleFunc("PUT /api/joueurs/edition", s.reglerEditionJoueurs)
 }
 
-// vueCompte : un compte tel que l'API le montre, sans empreinte de mot de passe ni de jeton.
+// vueCompte : un compte tel que l'API le montre à son titulaire, sans empreinte de mot de passe ni
+// de jeton. Pour un administrateur, rien de l'univers où passe la requête.
 func (s *Serveur) vueCompte(c comptes.Compte) map[string]any {
 	jetons := []map[string]any{}
 	for _, j := range c.Jetons {
 		jetons = append(jetons, map[string]any{"id": j.ID, "nom": j.Nom, "cree": j.Cree})
 	}
-	return map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "role": c.Role(s.store.ID()),
-		"roles": c.Roles, "pj": c.Persos[s.store.ID()], "jetons": jetons, "cree": c.Cree}
+	out := map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "jetons": jetons, "cree": c.Cree}
+	if !c.Admin {
+		out["role"], out["roles"], out["pj"] = c.Role(s.store.ID()), c.Roles, c.Persos[s.store.ID()]
+	}
+	return out
 }
 
 func erreurCompte(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, comptes.ErrInconnu):
 		erreur(w, 404, "Compte ou jeton introuvable.")
-	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin):
+	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis):
 		erreur(w, 409, majuscule(err.Error())+".")
 	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
 		erreur(w, 422, majuscule(err.Error())+".")
@@ -226,7 +228,9 @@ func (s *Serveur) etatCompte(w http.ResponseWriter, r *http.Request) {
 		out["connecte"], out["mj"], out["compte"] = true, role != "", s.vueCompte(c)
 		out["lecture_seule"] = role == comptes.Auditeur || role == comptes.Joueur
 		out["joueur"] = role == comptes.Joueur
-		out["edition_joueurs"] = s.editionJoueurs()
+		if role != "" {
+			out["edition_joueurs"] = s.editionJoueurs()
+		}
 	}
 	repondre(w, 200, out)
 }
@@ -268,6 +272,14 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 func (s *Serveur) monCompte(w http.ResponseWriter, r *http.Request) {
 	c, _ := compteDe(r)
 	repondre(w, 200, s.vueCompte(c))
+}
+
+// noterCompte : ce que fait un compte sur lui-même entre au journal de l'univers où il se trouve,
+// s'il y a un rôle (pas celui d'un univers où il n'entre pas, ni pour un administrateur).
+func (s *Serveur) noterCompte(c comptes.Compte, msg string) {
+	if c.Role(s.store.ID()) != "" {
+		s.store.Noter("compte", msg, c.Nom)
+	}
 }
 
 // parMdp refuse à un jeton d'API ce qui garde le compte : son mot de passe et ses jetons.
@@ -313,7 +325,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	c, _ = s.acces.comptes.Lire(c.Nom)
 	exp := time.Now().Add(dureeSession)
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
-	s.store.Noter("compte", "mot de passe changé", c.Nom)
+	s.noterCompte(c, "mot de passe changé")
 	repondre(w, 200, map[string]any{"ok": true})
 }
 
@@ -335,7 +347,7 @@ func (s *Serveur) monJeton(w http.ResponseWriter, r *http.Request) {
 		erreurCompte(w, err)
 		return
 	}
-	s.store.Noter("compte", "jeton d'API créé", c.Nom)
+	s.noterCompte(c, "jeton d'API créé")
 	repondre(w, 201, map[string]any{"jeton": clair, "id": j.ID, "nom": j.Nom, "cree": j.Cree})
 }
 
@@ -348,7 +360,7 @@ func (s *Serveur) retirerMonJeton(w http.ResponseWriter, r *http.Request) {
 		erreurCompte(w, err)
 		return
 	}
-	s.store.Noter("compte", "jeton d'API retiré", c.Nom)
+	s.noterCompte(c, "jeton d'API retiré")
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 
@@ -364,101 +376,75 @@ func (s *Serveur) rendreJeton(w http.ResponseWriter, r *http.Request) {
 		erreurCompte(w, err)
 		return
 	}
-	s.store.Noter("compte", "jeton d'API rendu par son poste", c.Nom)
+	s.noterCompte(c, "jeton d'API rendu par son poste")
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 
-func (s *Serveur) listerComptes(w http.ResponseWriter, r *http.Request) {
+// joueursAdmis : GET /api/joueurs/comptes, les comptes que l'administrateur a admis comme joueurs
+// de cet univers, joints ou non par le MJ, avec leur PJ.
+func (s *Serveur) joueursAdmis(w http.ResponseWriter, r *http.Request) {
+	id := s.store.ID()
 	out := []map[string]any{}
 	for _, c := range s.acces.comptes.Liste() {
-		out = append(out, s.vueCompte(c))
+		if c.PeutJouer(id) {
+			out = append(out, map[string]any{"nom": c.Nom, "joint": c.Role(id) == comptes.Joueur, "pj": c.Persos[id],
+				"inactif": c.Inactif, "autre_role": c.Role(id) != "" && c.Role(id) != comptes.Joueur})
+		}
 	}
 	repondre(w, 200, out)
 }
 
-// creerCompte : {"nom", "mdp", "admin"?, "role"?} ; le rôle vaut pour l'univers ouvert.
-func (s *Serveur) creerCompte(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Nom   string `json:"nom"`
-		Mdp   string `json:"mdp"`
-		Admin bool   `json:"admin"`
-		Role  string `json:"role"`
+// joindreJoueur : PATCH /api/joueurs/comptes/{nom} {"joint"?: true|false, "pj"?: <fiche>} — le MJ
+// joint à son univers (ou en retire) un compte que l'administrateur y a admis, et lui donne son PJ
+// (0 : aucun). Il ne touche à rien d'autre du compte, ni aux autres univers.
+func (s *Serveur) joindreJoueur(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Joint *bool  `json:"joint"`
+		PJ    *int64 `json:"pj"`
 	}
-	if err := lireJSON(r, &req); err != nil {
+	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
 		return
 	}
-	if req.Role != "" && !comptes.RoleValide(req.Role) {
-		erreurCompte(w, comptes.ErrRole)
-		return
-	}
-	c, err := s.acces.comptes.Creer(req.Nom, req.Mdp, req.Admin)
-	if err == nil && req.Role != "" {
-		c, err = s.acces.comptes.Modifier(c.Nom, func(x *comptes.Compte) error { x.Roles[s.store.ID()] = req.Role; return nil })
-	}
-	if err != nil {
-		erreurCompte(w, err)
-		return
-	}
-	s.store.Noter("compte", "compte « "+c.Nom+" » créé", auteurDe(r))
-	repondre(w, 201, s.vueCompte(c))
-}
-
-// modifierCompte : {"mdp"?, "admin"?, "inactif"?, "role"?, "pj"?} ; "role": "" retire l'accès à
-// l'univers ouvert, "pj" est la fiche du PJ que joue ce compte dans cet univers (0 : aucune). Changer le mot de passe ou désactiver le compte ferme ses sessions.
-func (s *Serveur) modifierCompte(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Mdp     *string `json:"mdp"`
-		Admin   *bool   `json:"admin"`
-		Inactif *bool   `json:"inactif"`
-		Role    *string `json:"role"`
-		PJ      *int64  `json:"pj"`
-	}
-	if err := lireJSON(r, &req); err != nil {
-		erreurStore(w, err)
-		return
-	}
-	if req.PJ != nil && *req.PJ != 0 {
-		if t, ok := s.store.TypeDeFiche(*req.PJ); !ok || t != "pj" {
-			erreur(w, 422, "Cette fiche n'est pas un PJ de l'univers ouvert.")
+	if in.PJ != nil && *in.PJ != 0 {
+		if t, ok := s.store.TypeDeFiche(*in.PJ); !ok || t != "pj" {
+			erreur(w, 422, "Cette fiche n'est pas un PJ de cet univers.")
 			return
 		}
 	}
-	nom := r.PathValue("nom")
+	id, nom := s.store.ID(), r.PathValue("nom")
+	if c, ok := s.acces.comptes.Lire(nom); !ok || !c.PeutJouer(id) { // inconnu ou non admis : la même réponse
+		erreur(w, 404, "Compte inconnu, ou que l'administrateur n'a pas admis comme joueur de cet univers.")
+		return
+	}
 	c, err := s.acces.comptes.Modifier(nom, func(x *comptes.Compte) error {
-		if req.PJ != nil {
-			x.Persos[s.store.ID()] = *req.PJ
+		if role := x.Roles[id]; role != "" && role != comptes.Joueur {
+			return errAutreRole
 		}
-		if req.Admin != nil {
-			x.Admin = *req.Admin
+		if in.Joint != nil {
+			x.Roles[id] = map[bool]string{true: comptes.Joueur, false: ""}[*in.Joint]
 		}
-		if req.Inactif != nil {
-			x.Inactif = *req.Inactif
-		}
-		if req.Role != nil {
-			x.Roles[s.store.ID()] = *req.Role
+		if in.PJ != nil {
+			if x.Roles[id] != comptes.Joueur && *in.PJ != 0 {
+				return errNonJoint
+			}
+			x.Persos[id] = *in.PJ
 		}
 		return nil
 	})
-	if err == nil && req.Mdp != nil {
-		if err = s.acces.comptes.DefinirMdp(nom, *req.Mdp); err == nil {
-			c, _ = s.acces.comptes.Lire(nom)
-		}
-	}
-	if err != nil {
+	switch {
+	case errors.Is(err, errAutreRole), errors.Is(err, errNonJoint):
+		erreur(w, 409, majuscule(err.Error())+".")
+		return
+	case err != nil:
 		erreurCompte(w, err)
 		return
 	}
-	s.store.Noter("compte", "compte « "+c.Nom+" » modifié", auteurDe(r))
-	repondre(w, 200, s.vueCompte(c))
+	s.store.Noter("compte", "joueur « "+c.Nom+" » "+map[bool]string{true: "joint à l'univers", false: "hors de l'univers"}[c.Role(id) == comptes.Joueur], auteurDe(r))
+	repondre(w, 200, map[string]any{"nom": c.Nom, "joint": c.Role(id) == comptes.Joueur, "pj": c.Persos[id], "inactif": c.Inactif})
 }
 
-func (s *Serveur) supprimerCompte(w http.ResponseWriter, r *http.Request) {
-	nom := comptes.Normaliser(r.PathValue("nom"))
-	if err := s.acces.comptes.Supprimer(nom); err != nil {
-		erreurCompte(w, err)
-		return
-	}
-	s.store.Noter("compte", "compte « "+nom+" » supprimé", auteurDe(r))
-	repondre(w, 200, map[string]any{"supprime": true})
-}
+var (
+	errAutreRole = errors.New("ce compte a déjà un autre rôle dans cet univers (donné par l'administrateur)")
+	errNonJoint  = errors.New("joignez d'abord ce compte à l'univers")
+)

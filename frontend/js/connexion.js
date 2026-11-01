@@ -272,19 +272,35 @@ export async function explorerUnivers() {
   listeUnivers($("#s-suite", voile), r, fermer);
 }
 
-/** Publier l'univers ouvert sur le serveur (compte administrateur), puis le garder synchronisé. */
+/** Verser l'univers ouvert dans un univers du serveur dont le compte est MJ (l'administrateur du
+ * serveur l'a créé), puis le garder synchronisé. */
 async function dialogueEnvoyer() {
-  const etat = await api("GET", "/api/univers");
-  const { voile, fermer } = dialogue("Envoyer sur le serveur", `
-    <p class="hint">Publie « ${esc(etat.courant?.nom)} » sur <code>${esc(hote(dernier?.serveur?.url))}</code> (compte administrateur), puis le garde synchronisé ici. L'univers tel qu'il est maintenant reste dans ses sauvegardes.</p>
-    <label class="champ"><span>Nom de l'univers sur le serveur</span><input id="s-nom-univers" maxlength="80" value="${esc(etat.courant?.nom || "")}"></label>
-    <div class="ligne"><button class="primary" id="s-envoyer">Envoyer</button><button class="ghost" id="s-annuler">Annuler</button></div>`);
+  const [etat, r] = await Promise.all([api("GET", "/api/univers"), api("GET", "/api/univers/serveur/univers")]);
+  const miens = (r.univers || []).filter(u => u.role === "mj");
+  const { voile, fermer } = dialogue("Envoyer sur le serveur", miens.length ? `
+    <p class="hint">Verse les données de « ${esc(etat.courant?.nom)} » dans un univers de <code>${esc(hote(r.url))}</code> dont vous êtes MJ, puis le garde synchronisé ici. L'univers tel qu'il est maintenant reste dans ses sauvegardes.</p>
+    <label class="champ"><span>Univers du serveur</span><select id="s-cible">${miens.map(u => `<option value="${esc(u.id)}">${esc(u.nom)}</option>`).join("")}</select></label>
+    <div class="ligne"><button class="primary" id="s-envoyer">Envoyer</button><button class="ghost" id="s-annuler">Annuler</button></div>` : `
+    <p class="vide">Vous n'êtes MJ d'aucun univers de <code>${esc(hote(r.url))}</code>.</p>
+    <p class="hint">L'administrateur du serveur crée l'univers et vous en fait MJ ; vous y envoyez ensuite celui-ci.</p>
+    <div class="ligne"><button class="ghost" id="s-annuler">Fermer</button></div>`);
   $("#s-annuler", voile).onclick = fermer;
-  $("#s-envoyer", voile).onclick = async ev => {
-    ev.target.disabled = true;
-    ev.target.textContent = "Envoi…";
-    try { await api("POST", "/api/univers/serveur/envoyer", { nom: $("#s-nom-univers", voile).value.trim() }); recharger(); }
-    catch (err) { toast(err.message, true); ev.target.disabled = false; ev.target.textContent = "Envoyer"; }
+  const bouton = $("#s-envoyer", voile), cible = $("#s-cible", voile);
+  if (!bouton) return;
+  let remplacer = false;
+  cible.onchange = () => { remplacer = false; bouton.textContent = "Envoyer"; bouton.className = "primary"; };
+  bouton.onclick = async () => {
+    const texte = bouton.textContent;
+    bouton.disabled = true;
+    bouton.textContent = "Envoi…";
+    try { await api("POST", "/api/univers/serveur/envoyer", { univers: cible.value, remplacer }); recharger(); }
+    catch (err) {
+      bouton.disabled = false;
+      bouton.textContent = texte;
+      // l'univers du serveur a déjà des fiches : un second clic les remplace (le serveur sauvegarde avant)
+      if (err.status === 409 && !remplacer && /déjà des fiches/.test(err.message)) { remplacer = true; bouton.textContent = "Remplacer son contenu"; bouton.className = "danger"; }
+      toast(err.message, true);
+    }
   };
-  $("#s-nom-univers", voile).focus();
+  cible.focus();
 }

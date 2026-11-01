@@ -73,9 +73,10 @@ func TestBureauVersionsServeur(t *testing.T) {
 	d := &deguise{vrai: a}
 	ts := httptest.NewServer(d)
 	defer ts.Close()
-	connecter("chef") // administrateur
+	vide := creerUnivers(t, connecter("chef"), "Vide")
 	connecter("meneur")
-	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.MJ; return nil })
+	donner(reg, "meneur", univers, comptes.MJ)
+	donner(reg, "meneur", vide, comptes.MJ)
 	b := nouvelleAppli(t, t.TempDir())
 	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
 
@@ -105,14 +106,15 @@ func TestBureauVersionsServeur(t *testing.T) {
 		t.Fatalf("numéros de la copie notés par le serveur : %+v", copies)
 	}
 	b.local("POST", "/api/univers/nouveau", map[string]any{"nom": "Local"})
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "chef", "mdp": "mot-de-passe-chef"})
-	c, v = b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"nom": "Local"})
-	if c != 409 || !strings.Contains(v["detail"].(string), "1.2.1, plus ancien") || len(a.tous) != 1 {
+	b.local("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Fort Boueux"})
+	recus := func() int { n, _, _ := a.tous[vide].st.Compter(); return n["lieu"] }
+	c, v = b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": vide})
+	if c != 409 || !strings.Contains(v["detail"].(string), "1.2.1, plus ancien") || recus() != 0 {
 		t.Fatalf("envoi à un serveur plus ancien : %d %v", c, v)
 	}
 	// au même modèle : l'envoi passe
 	d.sante = nil
-	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"nom": "Local"}); c != 200 || len(a.tous) != 2 {
+	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": vide}); c != 200 || recus() != 1 {
 		t.Fatalf("envoi : %d %v", c, v)
 	}
 }
@@ -238,7 +240,7 @@ func TestVersionServeurAdmin(t *testing.T) {
 		meneur.faire("POST", "/api/sync", map[string]any{"replique": json.Number(n), "curseur": 0, "changements": []any{}}, h...)
 	}
 	c, v := chef.faire("GET", "/api/univers/version", nil)
-	if c != 200 || v["modele"] != float64(store.VersionModele) || v["commande"] == "" || v["univers"] == nil {
+	if c != 200 || v["modele"] != float64(store.VersionModele) || v["commande"] == "" {
 		t.Fatalf("version du serveur : %d %v", c, v)
 	}
 	ecarts := map[string]any{}

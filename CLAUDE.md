@@ -30,14 +30,14 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 |---|---|
 | `internal/modele` | **Seule source du schéma** (types, champs, relations, calendrier, validation), publié par `GET /api/schema`. |
 | `internal/store` | Un univers ouvert : fiches, relations, mentions `[[Nom]]`, images, FTS5, journal, export, réparation (`reparer.go`), synchro (`sync.go`), versions. |
-| `internal/serveur` | API REST (routes `METHODE /chemin`), accès (`acces.go`), comptes, page des joueurs, combats, dés, aides, multi-univers (`multi.go`), bureau relié (`distant.go`). `univers.go` : `Application`. |
+| `internal/serveur` | API REST (routes `METHODE /chemin`), accès (`acces.go`), comptes, page des joueurs, combats, dés, aides, multi-univers (`multi.go`), administration du serveur (`admin.go`), bureau relié (`distant.go`). `univers.go` : `Application`. |
 | `internal/comptes`, `internal/reglages` | Comptes du mode serveur (`comptes.json`) ; réglages de l'ordinateur (`reglages.json`). |
 | `internal/regles`, `internal/reference`, `internal/fiches` | Fichier de règles importé ; profils, peuples, voies ; validation des monstres et feuilles. |
 | `internal/combat`, `internal/des` | Moteur de combat (lit la partie `combat` des règles) ; formules de dés. |
 | `internal/synchro`, `internal/majour` | Client de synchro du bureau ; mises à jour signées (Ed25519 sur `SHA256SUMS`, clé privée = secret `COF_DM_SIGNATURE`, jamais dans le dépôt). |
 | `internal/mcp`, `internal/obsidian` | Serveur MCP ; export vers Obsidian. |
 | `internal/installation` | Bureau Windows : installation pour l'utilisateur au premier lancement (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis, « Applications installées », `-desinstaller`), sans CGO : ses tests se compilent pour Windows (`GOOS=windows go test -c`) et s'y lancent. Reprise de l'ancien mode portable (supprimé). |
-| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `style.css`, `combat.css`. |
+| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `admin.html` + `js/admin.js` (administrateur d'un serveur : seulement `/api/admin/…`, sa version et son compte) ; `style.css`, `combat.css`. |
 | `docs/API.md` | Documentation de l'API. |
 
 ## Invariants à ne jamais casser
@@ -62,7 +62,8 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 - **`/api/univers` et `/api/claude`** ne répondent qu'à l'ordinateur du MJ. `/api/claude` (bureau seulement) n'écrit que l'entrée `cof-dm` de la config Claude, le reste du fichier gardé.
 - **Secrets MJ** : champs `Secret` et relations réservées ne fuitent jamais vers les joueurs (page, comptes joueurs, export Obsidian « joueurs »).
 - **Bureau / serveur** : le bureau n'est qu'un éditeur, le mode serveur n'existe que dans l'édition serveur (`edition_serveur.go`). Relié à un serveur, le bureau ne répond plus au réseau local (`Options.Relie`, `msgReseauRelie`, `BureauRelie`). Connexion par nom et mot de passe échangés contre un jeton propre au poste, rendu au départ (`DELETE /api/compte/jeton`) ; jamais de mot de passe gardé.
-- **Mode serveur** : derrière un reverse proxy tout vient de `127.0.0.1` → **ne jamais se fier à `local()`**. Accès par `acces.entrer`, droits par `servirComptes` (admin : serveur ; `mj` : écrire ; `auditeur` : lire, toute route non-`GET` lui est refusée).
+- **Mode serveur** : derrière un reverse proxy tout vient de `127.0.0.1` → **ne jamais se fier à `local()`**. Accès par `acces.entrer`, droits par `servirComptes` (`mj` : écrire ; `auditeur` : lire, toute route non-`GET` lui est refusée).
+- **Administrateur** (`admin.go`, `/api/admin/…`, serveur seulement : le bureau ne sert ni ces routes ni `admin.html`, et n'accepte pas de compte administrateur) : gère le serveur (univers, comptes, rôles) **sans jamais lire le contenu d'un univers**. `Compte.Role` lui renvoie toujours `""` (toute route d'un univers : `403`, sauf `/api/sante`) ; ni rôle, ni jeton d'API ; ses routes ne lisent du store que l'identifiant et le fichier, jamais une fiche ; son passage n'entre pas au journal d'un univers. Test de non-fuite : `TestAdminNeLitAucuneFiche` (toute nouvelle route de lecture s'y ajoute). Il donne `mj` et `auditeur` ; un joueur, il l'**admet** dans un univers (`Compte.Admis`), et c'est le MJ qui l'y joint et lui donne son PJ (`/api/joueurs/comptes`).
 - **Multi-univers** : univers visé = en-tête `X-COF-Univers`, sinon cookie, sinon premier univers du compte (un jeton multi-univers doit envoyer l'en-tête, sauf `proprePerso`). Dans `/api/univers`, jamais `a.st` : `a.vise(r)`. Rôle lu dans l'univers visé : `c.Role(s.store.ID())`.
 - **MCP** (`internal/mcp`) : chaque outil passe par l'API REST avec un jeton (jamais le store) ; description en français, annotations lecture / destructif, un test ; aucun effacement définitif ; stdout réservé au protocole, traces sur stderr.
 

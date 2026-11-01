@@ -85,7 +85,7 @@ func TestMiseAJour(t *testing.T) {
 	// un serveur se met à jour par docker compose
 	_, _, connecter := serveurMulti(t)
 	chef := connecter("chef")
-	if c, _ := chef.faire("GET", "/api/univers/mise-a-jour", nil); c != 404 {
+	if c, _ := chef.faire("GET", "/api/univers/mise-a-jour", nil); c != 403 && c != 404 {
 		t.Fatalf("sur un serveur : %d", c)
 	}
 }
