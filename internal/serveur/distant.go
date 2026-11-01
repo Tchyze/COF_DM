@@ -428,7 +428,7 @@ func (a *Application) routeDistant(w http.ResponseWriter, r *http.Request) {
 func (a *Application) vueDistante() map[string]any {
 	st, l, c := a.courantRelie()
 	out := map[string]any{"mode": modeLocal, "relie": false, "actif": false, "pause": false,
-		"copie": st != nil && st.EstCopie(), "reseau": a.opt.Reseau}
+		"copie": st != nil && st.EstCopie(), "reseau": a.opt.ecouteReseau()}
 	if cx := a.cnx(); cx != nil {
 		out["mode"] = modeServeurDistant
 		e := a.etatServeur()
@@ -506,13 +506,27 @@ func (a *Application) routeConnexionDistante(w http.ResponseWriter, r *http.Requ
 	repondre(w, 200, out)
 }
 
-// fermerReseau : en passant en mode serveur, les appareils du réseau qui suivaient la page des
-// joueurs sont coupés ; plus rien du réseau n'entre (voir Serveur.ServeHTTP).
+// fermerReseau : en passant en mode serveur, l'écoute se referme et les appareils du réseau sont
+// coupés ; même si elle reste ouverte (-reseau), plus rien du réseau n'entre (voir Serveur.ServeHTTP).
 func (a *Application) fermerReseau() {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if a.srv != nil && a.srv.joueurs != nil {
 		a.srv.joueurs.fermer()
+	}
+	if a.opt.ChangerReseau != nil && !a.opt.ReseauForce {
+		if err := a.opt.ChangerReseau(false); err != nil {
+			log.Printf("fermeture du réseau local : %v", err)
+		}
+	}
+}
+
+// rouvrirReseau : de retour en mode local, l'écoute reprend le réglage du MJ.
+func (a *Application) rouvrirReseau() {
+	if a.opt.ChangerReseau != nil && a.opt.voulu.Load() {
+		if err := a.opt.ChangerReseau(true); err != nil {
+			log.Printf("réouverture du réseau local : %v", err)
+		}
 	}
 }
 
@@ -533,6 +547,7 @@ func (a *Application) routeModeLocal(w http.ResponseWriter, r *http.Request) {
 	a.dist.etatMu.Lock()
 	a.dist.serveur = etatServeur{Etat: etatInconnu}
 	a.dist.etatMu.Unlock()
+	a.rouvrirReseau()
 	out := a.vueDistante()
 	if !a.passerDeconnecte(c) {
 		out["avertissement"] = "Le serveur ne répond pas : le jeton de ce poste y reste valable. Il sera retiré à votre prochaine connexion à " + c.URL + ", ou retirez-le dans « Mon compte »."

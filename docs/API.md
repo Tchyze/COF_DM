@@ -22,11 +22,11 @@ Par défaut l'application n'écoute que sur l'ordinateur du MJ. En mode local (a
 
 | Requête | Effet |
 |---|---|
-| `GET /api/acces` | `{"mj", "local", "mdp_defini"}` : la requête est-elle celle du MJ, vient-elle de son ordinateur, un mot de passe MJ existe-t-il. Pour le MJ, en plus : `"reseau"` (l'application écoute sur le réseau), `"reseau_voulu"` (réglage enregistré, appliqué au prochain lancement), `"reseau_force"` (`-reseau`), `"reglable"`, `"adresses"` (celles de l'application sur le réseau local), `"relie"` (reliée à un serveur : le réseau local reste fermé). |
+| `GET /api/acces` | `{"mj", "local", "mdp_defini"}` : la requête est-elle celle du MJ, vient-elle de son ordinateur, un mot de passe MJ existe-t-il. Pour le MJ, en plus : `"reseau"` (l'application écoute sur le réseau), `"reseau_voulu"` (réglage enregistré), `"reseau_force"` (`-reseau`), `"reglable"`, `"adresses"` (celles de l'application sur le réseau local), `"relie"` (reliée à un serveur : le réseau local reste fermé). |
 | `POST /api/acces/connexion` `{"mdp": "…"}` | Ouvre la session. `401` : mot de passe incorrect ; `409` : aucun mot de passe défini ; `429` : huit essais ratés en cinq minutes depuis cette adresse. |
 | `POST /api/acces/deconnexion` | Ferme la session de l'appareil : son cookie n'est plus accepté, même recopié. |
 | `POST /api/acces/mdp` `{"nouveau": "…"}` | Définit ou change le mot de passe MJ (8 caractères au moins) ; `""` le retire. Les appareils connectés sont déconnectés. |
-| `POST /api/acces/reseau` `{"reseau": true}` | Enregistre l'ouverture au réseau local, appliquée au prochain lancement. `409` pour l'ouvrir quand l'application est reliée à un serveur. |
+| `POST /api/acces/reseau` `{"reseau": true}` | Ouvre aussitôt l'application au réseau local et l'enregistre ; `false` la referme et coupe les appareils du réseau, WebSocket compris. `409` pour l'ouvrir quand l'application est reliée à un serveur, ou si le port est pris (l'application reste alors comme avant). Avec `-reseau`, le réglage s'enregistre mais l'écoute reste ouverte. |
 | `POST /api/acces/joueurs` `{"active": true}` | Ouvre (ou ferme) la page des joueurs au réseau local, sans mot de passe ; effet immédiat. Sur l'ordinateur du MJ seulement ; `409` pour l'ouvrir quand l'application est reliée à un serveur. `GET /api/acces` donne au MJ `"page_joueurs"` et `"edition_joueurs"`. |
 | `PUT /api/joueurs/edition` `{"active": true}` | Déverrouille (ou verrouille) les feuilles de personnage pour les joueurs. Réglage de l'univers (synchronisé) ; le MJ le règle, sur son ordinateur ou depuis la tablette (écran du MJ). |
 | `GET /api/acces/qr?url=http://…` | QR code (PNG) d'une adresse. |

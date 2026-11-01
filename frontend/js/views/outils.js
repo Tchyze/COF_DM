@@ -45,8 +45,8 @@ async function panneauAcces(box) {
       ${etat(a.mdp_defini, a.mdp_defini ? "Un mot de passe MJ est défini." : "Aucun mot de passe MJ : aucun appareil du réseau ne peut entrer.")}
     </ul>
     <label class="t-coche"><input type="checkbox" id="acc-reseau" ${a.reseau_voulu || a.reseau_force ? "checked" : ""} ${a.reglable && !a.reseau_force && !(a.relie && !a.reseau_voulu) ? "" : "disabled"}>
-      <span>Autoriser les appareils du réseau local<small>${a.reseau_force ? "Imposé par l'option <code>-reseau</code> au lancement." : "Prend effet au prochain lancement de l'application."}</small></span></label>
-    ${a.reseau_voulu !== a.reseau && !a.reseau_force ? `<p class="alerte">Fermez puis relancez COF DM pour ${a.reseau_voulu ? "ouvrir" : "fermer"} l'accès au réseau.</p>` : ""}
+      <span>Autoriser les appareils du réseau local<small>${a.reseau_force ? "Imposé par l'option <code>-reseau</code> au lancement." : "Prend effet aussitôt. Décocher coupe les appareils connectés."}</small></span></label>
+    ${a.reseau_voulu && !a.reseau && !a.relie ? `<p class="alerte">Le réseau n'a pas pu s'ouvrir : le port est pris par un autre programme. Décochez puis cochez de nouveau pour réessayer.</p>` : ""}
     <div class="org-form">
       <label class="champ"><span>${a.mdp_defini ? "Nouveau mot de passe MJ" : "Mot de passe MJ"}</span><input type="password" id="acc-mdp" autocomplete="new-password" placeholder="8 caractères au moins"></label>
       <label class="champ"><span>Confirmation</span><input type="password" id="acc-mdp2" autocomplete="new-password"></label>
@@ -79,7 +79,7 @@ async function panneauAcces(box) {
     maj();
   };
   $("#acc-reseau", box).onchange = async e => {
-    try { await api("POST", "/api/acces/reseau", { reseau: e.target.checked }); toast(e.target.checked ? "Accès au réseau activé : relancez COF DM." : "Accès au réseau désactivé : relancez COF DM."); }
+    try { await api("POST", "/api/acces/reseau", { reseau: e.target.checked }); toast(e.target.checked ? "Réseau local ouvert." : "Réseau local fermé : les appareils sont coupés."); window.dispatchEvent(new Event("cof-synchro")); }
     catch (err) { toast(err.message, true); }
     maj();
   };

@@ -73,7 +73,7 @@ L'écran n'est pas destiné aux joueurs : il montre les secrets du MJ.
 
 Par défaut, COF DM ne répond qu'à l'ordinateur sur lequel il tourne. Pour l'ouvrir sur une tablette (ou tout appareil du même réseau), dans **Paramètres → Tablette et réseau**, sur l'ordinateur du MJ (en mode local seulement : une application reliée à un serveur ne s'ouvre pas au réseau, la tablette passe alors par le serveur) :
 
-1. cochez **Autoriser les appareils du réseau local**, puis fermez et relancez COF DM ;
+1. cochez **Autoriser les appareils du réseau local** : le réseau s'ouvre aussitôt, sans relance (décocher le referme et coupe les appareils) ;
 2. créez le **mot de passe MJ** (8 caractères au moins) ;
 3. scannez le QR code avec la tablette (ou tapez l'adresse affichée) et saisissez le mot de passe.
 

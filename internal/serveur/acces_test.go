@@ -3,6 +3,7 @@ package serveur
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -234,6 +235,49 @@ func TestReglageReseau(t *testing.T) {
 	// sans fonction d'enregistrement, le réglage est refusé
 	if c, _ = nouveau(t).local("POST", "/api/acces/reseau", map[string]any{"reseau": true}); c != 409 {
 		t.Fatalf("réglage non enregistrable : %d", c)
+	}
+}
+
+// Cocher ouvre aussitôt, décocher referme ; un port pris ne change ni l'écoute ni le réglage.
+func TestReseauSansRelance(t *testing.T) {
+	ouvert, enregistre := false, false
+	var panne error
+	b := nouveauAvec(t, Options{Port: 8100,
+		ReseauOuvert: func() bool { return ouvert },
+		ChangerReseau: func(v bool) error {
+			if panne != nil {
+				return panne
+			}
+			ouvert = v
+			return nil
+		},
+		Config: func(v bool) error { enregistre = v; return nil }})
+	panne = errors.New("le port est pris")
+	if c, v := b.local("POST", "/api/acces/reseau", map[string]any{"reseau": true}); c != 409 || enregistre || ouvert {
+		t.Fatalf("port pris : %d %v (enregistré : %v, ouvert : %v)", c, v, enregistre, ouvert)
+	}
+	panne = nil
+	c, v := b.local("POST", "/api/acces/reseau", map[string]any{"reseau": true})
+	if c != 200 || v["reseau"] != true || v["reseau_voulu"] != true || !ouvert || !enregistre {
+		t.Fatalf("ouverture : %d %v", c, v)
+	}
+	if r, _ := b.local("GET", "/api/acces/qr?url=http://192.168.1.20:8100/%23/table", nil); r != 200 {
+		t.Fatalf("QR code une fois ouvert : %d", r)
+	}
+	// ouvert, l'appareil du réseau arrive jusqu'à la page de connexion et au mot de passe
+	if c, _, _ := b.tablette("GET", "/api/stats", nil, nil); c != 401 {
+		t.Fatalf("tablette sans mot de passe : %d", c)
+	}
+	c, v = b.local("POST", "/api/acces/reseau", map[string]any{"reseau": false})
+	if c != 200 || v["reseau"] != false || v["reseau_voulu"] != false || ouvert || enregistre {
+		t.Fatalf("fermeture : %d %v", c, v)
+	}
+	// -reseau impose l'écoute : le réglage s'enregistre sans la refermer
+	force := nouveauAvec(t, Options{Port: 8100, ReseauForce: true, Reseau: true,
+		ChangerReseau: func(bool) error { t.Error("écoute changée malgré -reseau"); return nil },
+		Config:        func(bool) error { return nil }})
+	if c, _ := force.local("POST", "/api/acces/reseau", map[string]any{"reseau": false}); c != 200 {
+		t.Fatalf("avec -reseau : %d", c)
 	}
 }
 
