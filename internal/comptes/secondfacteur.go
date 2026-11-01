@@ -40,6 +40,7 @@ const (
 	secoursAlphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ" // base 32 de Crockford : ni I, L, O, U
 
 	fichierCle     = "comptes.cle"
+	fichierVerrou  = "comptes.verrou"
 	formatChiffre  = "aes256gcm"
 	longueurCleAES = 32
 )
@@ -50,6 +51,7 @@ var (
 	ErrDernierFacteur  = errors.New("c'est le dernier second facteur de ce compte : enregistrez-en un autre d'abord")
 	ErrPasAdmin        = errors.New("ce compte n'est pas administrateur")
 	ErrSecretIllisible = errors.New("secret du second facteur illisible")
+	ErrOccupe          = errors.New("un autre programme tient déjà le fichier des comptes")
 )
 
 // SecondFacteur : ce qui prouve le second facteur d'un compte. Les codes de secours n'en sont pas un à
