@@ -38,7 +38,7 @@ const (
 	metaSecret   = "mj_secret"
 	metaFermees  = "mj_fermees" // sessions fermées avant leur terme : {"identifiant": échéance}
 	mdpMin       = 8
-	essaisMax    = 8 // essais ratés par adresse…
+	essaisMax    = 8 // essais ratés par adresse (mode serveur : par nom et par adresse)
 	essaisDuree  = 5 * time.Minute
 )
 
@@ -51,6 +51,7 @@ type acces struct {
 	secret  []byte
 	fermees map[string]int64 // sessions fermées (déconnexion) : identifiant → échéance
 	pause   time.Duration    // attente après un mot de passe faux
+	pasNom  time.Duration    // ralentissement par essai de trop sur un même nom
 	hachage sync.Mutex       // un seul calcul de mot de passe à la fois
 }
 
@@ -58,7 +59,7 @@ func nouvelAcces(reg Reglages, c *comptes.Registre, proxies []*net.IPNet) *acces
 	if proxies == nil {
 		proxies, _ = LireProxies(ProxiesParDefaut)
 	}
-	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond}
+	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond, pasNom: 250 * time.Millisecond}
 	if v, ok := reg.Meta(metaSecret); ok {
 		a.secret, _ = hex.DecodeString(v)
 	}
@@ -238,6 +239,18 @@ func (a *acces) rendreEssai(ip string) {
 	} else {
 		delete(a.echecs, ip)
 	}
+}
+
+// attenteNom : le ralentissement dû aux essais déjà faits sur ce nom. Il ne refuse jamais personne :
+// un refus par nom donnerait à n'importe qui le moyen de bloquer un compte.
+func (a *acces) attenteNom(cle string) time.Duration {
+	a.mu.Lock()
+	n := len(a.echecs[cle])
+	a.mu.Unlock()
+	if n < essaisSeuilNom {
+		return 0
+	}
+	return min(time.Duration(n-essaisSeuilNom+1)*a.pasNom, attenteNomMax)
 }
 
 // temoin : le cookie de session. Il n'est renvoyé qu'en HTTPS quand la page est servie ainsi.

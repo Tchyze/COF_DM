@@ -27,7 +27,11 @@ import (
 // rien modifier, le joueur n'a que sa page. Un compte sans rôle dans l'univers ouvert n'y entre pas.
 
 const (
-	essaisMaxNom = 20 // essais ratés sur un même nom, d'où qu'ils viennent
+	essaisMaxMdp     = 20              // essais ratés de l'ancien mot de passe, par compte
+	essaisMaxAdresse = 30              // essais ratés d'une adresse, tous noms confondus
+	essaisSeuilNom   = 20              // essais ratés sur un même nom, d'où qu'ils viennent, avant d'y ralentir
+	essaisPlafondNom = 1000            // au-delà, ils ne sont plus retenus : l'attente est déjà au plus haut
+	attenteNomMax    = 5 * time.Second // ralentissement maximal d'un essai
 )
 
 type cleCompte struct{}
@@ -228,15 +232,20 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 	if rs := []rune(nom); len(rs) > 32 {
 		nom = string(rs[:32])
 	}
-	parIP, parNom := "ip:"+s.acces.adresse(r), "nom:"+nom
-	if !s.acces.reserverEssai(parIP, essaisMax) {
+	adresse := cleAdresse(s.acces.adresse(r))
+	parIP, parCouple, parNom := "ip:"+adresse, "couple:"+nom+"|"+adresse, "nom:"+nom
+	if !s.acces.reserverEssai(parIP, essaisMaxAdresse) {
 		erreur(w, 429, "Trop d'essais : patientez quelques minutes.")
 		return
 	}
-	if !s.acces.reserverEssai(parNom, essaisMaxNom) {
+	if !s.acces.reserverEssai(parCouple, essaisMax) {
+		s.acces.rendreEssai(parIP)
 		erreur(w, 429, "Trop d'essais sur ce compte : patientez quelques minutes.")
 		return
 	}
+	attente := s.acces.attenteNom(parNom)
+	s.acces.reserverEssai(parNom, essaisPlafondNom)
+	time.Sleep(attente)
 	s.acces.hachage.Lock()
 	c, ok := s.acces.comptes.Verifier(nom, req.Mdp)
 	s.acces.hachage.Unlock()
@@ -246,6 +255,7 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.acces.rendreEssai(parIP)
+	s.acces.rendreEssai(parCouple)
 	s.acces.rendreEssai(parNom)
 	exp := time.Now().Add(dureeSession)
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
@@ -288,8 +298,8 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, _ := compteDe(r)
-	cle := "nom:" + c.Nom
-	if !s.acces.reserverEssai(cle, essaisMaxNom) {
+	cle := "mdp:" + c.Nom // pas le compteur de la connexion : un anonyme n'empêche pas ce changement
+	if !s.acces.reserverEssai(cle, essaisMaxMdp) {
 		erreur(w, 429, "Trop d'essais : patientez quelques minutes.")
 		return
 	}

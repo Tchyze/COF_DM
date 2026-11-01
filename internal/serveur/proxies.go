@@ -97,3 +97,16 @@ func (a *acces) https(r *http.Request) bool {
 	l := valeursEnTete(r, "X-Forwarded-Proto")
 	return strings.EqualFold(l[max(len(l)-1-saut, 0)], "https")
 }
+
+// cleAdresse : l'adresse telle que les limites la comptent. Un client IPv6 tient souvent un /64 entier :
+// c'est lui qu'on compte, sinon changer d'adresse redonnerait des essais.
+func cleAdresse(hote string) string {
+	ip := net.ParseIP(hote)
+	if ip == nil {
+		return hote
+	}
+	if ip.To4() != nil {
+		return ip.String()
+	}
+	return ip.Mask(net.CIDRMask(64, 128)).String()
+}
