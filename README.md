@@ -220,6 +220,16 @@ En dur : 10 propositions de partage en attente par PJ, et une rafale de 20 jets 
 
 Un export JSON ou un fichier d'univers reçu ne peut porter que 32 Mo de texte hors images, et une image de 64 Mo au plus : le texte se déplie en mémoire. Gardez `mem_limit` sur le conteneur : un import de 256 Mo peut demander environ 700 Mo.
 
+### Ce que voient l'administrateur et l'hébergeur
+
+À dire aux groupes que vous hébergez, avant qu'ils y mettent leurs données :
+
+- **L'administrateur** ne lit pas le contenu des univers par l'API. Il peut toutefois créer un compte et se donner le rôle de MJ : cette barrière évite les erreurs, elle ne protège pas d'un administrateur qui voudrait lire. Ces changements sont notés au journal du programme.
+- **Celui qui a accès à la machine** lit tout : les fichiers `.cofdm`, leurs sauvegardes et `comptes.json` ne sont pas chiffrés (les mots de passe y sont hachés). Chiffrer le disque du serveur protège d'un disque volé, pas de cette personne.
+- **Sauvegardes.** Les sauvegardes d'un univers restent dans `sauvegardes/<identifiant>/` après sa suppression, y compris celle faite juste avant : supprimer un univers n'efface pas ses données. Pour les effacer vraiment, supprimez ce dossier à la main, et attendez la fin de la conservation de vos sauvegardes externes. Les plafonds sont dans « Limites d'un serveur partagé ».
+- **Journaux.** Ils gardent des noms de comptes et des adresses IP, ainsi que les opérations de l'administrateur.
+- **Données personnelles.** Si d'autres personnes utilisent votre serveur, le RGPD peut s'appliquer : dites-leur qui héberge, ce qui est gardé et combien de temps, et comment demander l'effacement.
+
 ### Journal de sécurité et fail2ban
 
 En mode serveur, le journal du programme (`docker logs`) note les événements de sécurité, une ligne chacun, sous une forme stable :
