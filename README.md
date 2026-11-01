@@ -138,36 +138,66 @@ Le serveur héberge **plusieurs univers à la fois** : tous les fichiers `.cofdm
 Exemple de configuration nginx :
 
 ```nginx
+# dans le bloc http (par exemple /etc/nginx/conf.d/cof-dm-zones.conf)
+limit_req_zone $binary_remote_addr zone=cof_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=cof_login:10m rate=10r/m;
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ""      close;
+}
+
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name jdr.example.org;
     ssl_certificate     /etc/letsencrypt/live/jdr.example.org/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/jdr.example.org/privkey.pem;
 
-    client_max_body_size 1g;            # dépôt d'un univers, ou restauration d'un export, avec ses images
     add_header Strict-Transport-Security "max-age=31536000" always;
+
+    client_max_body_size 8m;            # une fiche, une feuille : plus large seulement sur les routes d'import, plus bas
+    limit_req zone=cof_api burst=100 nodelay;
+    limit_req_status 429;
+
+    # WebSocket compris : combat suivi, page des joueurs, bureau relié
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade           $http_upgrade;
+    proxy_set_header Connection        $connection_upgrade;
+    proxy_set_header Host              $host;    # sur un port autre que 443 : $http_host, le WebSocket compare Origin à Host, port compris
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 600s;
 
     location / {
         proxy_pass http://127.0.0.1:8100;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 600s;
     }
 
-    # suivi d'un combat en direct (WebSocket)
-    location ~ ^/api/combats/[0-9]+/direct$ {
+    location = /api/acces/connexion {
+        limit_req zone=cof_login burst=5 nodelay;
         proxy_pass http://127.0.0.1:8100;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade           $http_upgrade;
-        proxy_set_header Connection        "upgrade";
-        proxy_set_header Host              $host;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 3600s;
+    }
+
+    # dépôt d'un univers, avec ses images
+    location = /api/import/univers {
+        client_max_body_size 1g;
+        proxy_pass http://127.0.0.1:8100;
+    }
+
+    # restauration d'un export
+    location = /api/restaurer {
+        client_max_body_size 300m;
+        proxy_pass http://127.0.0.1:8100;
+    }
+
+    # images, imports de fiches et de règles, synchronisation d'un bureau
+    location ~ ^/api/(import/fiches|sync|sync/images/[^/]+|entites/[0-9]+/medias|(bestiaire|reference|regles)/import|bibliotheque)$ {
+        client_max_body_size 64m;
+        proxy_pass http://127.0.0.1:8100;
     }
 }
 ```
+
+Les limites de taille s'appliquent avant toute session : nginx garde le corps d'une requête dans ses fichiers temporaires avant de le transmettre, y compris pour un anonyme. Laissez cette mise en tampon active (`proxy_request_buffering on`, le défaut). La limite de 20 requêtes par seconde laisse passer le chargement d'une page (`burst`) ; celle de la connexion vient en plus de la limite d'essais de l'application.
 
 Les deux en-têtes `X-Forwarded-*` comptent : le premier donne à la limite d'essais l'adresse réelle de chaque visiteur, le second fait poser le cookie de session en `Secure`. N'ouvrez pas le port 8100 au réseau : seul nginx doit le joindre.
 
