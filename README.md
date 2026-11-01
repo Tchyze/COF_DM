@@ -173,6 +173,47 @@ Les deux en-têtes `X-Forwarded-*` comptent : le premier donne à la limite d'es
 
 **Proxys de confiance.** L'application ne croit ces deux en-têtes que s'ils viennent d'une adresse déclarée : `-proxies` ou la variable `COF_DM_PROXIES`, une liste de réseaux en CIDR séparés par des virgules. Par défaut, `127.0.0.1/32,::1/128` : un nginx sur la même machine, rien à régler. Un proxy ailleurs (autre machine, autre conteneur) doit être déclaré, sinon tous les visiteurs comptent pour une seule adresse et le cookie perd `Secure`. `X-Forwarded-For` se lit depuis la droite : la première adresse hors de la liste est celle du visiteur. Ne déclarez que des adresses que vous tenez : toute machine de la liste peut dicter son adresse à l'application.
 
+### Journal de sécurité et fail2ban
+
+En mode serveur, le journal du programme (`docker logs`) note les événements de sécurité, une ligne chacun, sous une forme stable :
+
+```text
+securite evenement=<événement> [champ=valeur…] nom="<compte>" ip=<adresse du visiteur>
+```
+
+| Événement | Quand |
+|---|---|
+| `connexion_ok`, `connexion_echec` | Une connexion réussie ou ratée. `nom` est ce qui a été saisi, entre guillemets et échappé. |
+| `limite_atteinte portee=adresse` ou `portee=couple` | Un essai refusé : quota de l'adresse, ou de ce nom depuis cette adresse. |
+| `limite_atteinte portee=nom` | Un essai ralenti, jamais refusé : ce nom reçoit des essais de nombreuses adresses. Le visiteur peut être le vrai titulaire : ne pas bannir sur cette ligne. |
+| `limite_atteinte portee=mdp`, `mdp_echec`, `mdp_change`, `mdp_reinitialise` | Changement de mot de passe par le titulaire (essais de trop, ancien mot de passe faux, réussi) ; réinitialisation par un administrateur (`par`). `jetons_retires` : le nombre de jetons tombés. |
+| `jeton_cree`, `jeton_retire`, `jeton_rendu` | Jeton d'API créé, retiré, ou rendu par un poste de bureau qui quitte le serveur. |
+
+Ni mot de passe ni jeton n'y figurent. L'adresse est celle des proxys de confiance : tant que `-proxies` n'est pas juste, elle est fausse. Un nom saisi par erreur à la place du mot de passe y resterait lisible : ce journal se garde comme une donnée sensible. Ces adresses sont des données personnelles : fixez une durée de conservation.
+
+**Filtre fail2ban d'exemple** (non essayé sur un vrai fail2ban : seule l'expression a été vérifiée sur des lignes du journal). `/etc/fail2ban/filter.d/cof-dm.conf` :
+
+```ini
+[Definition]
+failregex = securite evenement=(?:connexion_echec|limite_atteinte portee=(?:adresse|couple)) .*ip=<HOST>(?:\\n"|\s*$)
+```
+
+`/etc/fail2ban/jail.d/cof-dm.local`, pour le journal `json-file` de Docker, sur l'hôte :
+
+```ini
+[cof-dm]
+enabled   = true
+filter    = cof-dm
+logpath   = /var/lib/docker/containers/*/*-json.log
+maxretry  = 10
+findtime  = 10m
+bantime   = 1h
+port      = http,https
+chain     = DOCKER-USER
+```
+
+`DOCKER-USER` : le trafic vers un conteneur ne passe pas par la chaîne `INPUT`, où un bannissement ordinaire resterait sans effet. Le chemin par défaut lit le journal de tous les conteneurs : un autre conteneur pourrait y écrire une ligne imitée et faire bannir une adresse.
+
 ### Avec Docker
 
 Le mode serveur tourne derrière le nginx de la machine (Linux). Deux façons de l'obtenir : l'**image publiée** sur Docker Hub, ou l'image **construite** depuis le dépôt (`Dockerfile`, `docker-compose.yml`).

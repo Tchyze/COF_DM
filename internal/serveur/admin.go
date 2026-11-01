@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
@@ -524,8 +525,10 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 	if err == nil && in.Mdp != nil {
-		if err = a.opt.Comptes.ReinitialiserMdp(nom, *in.Mdp); err == nil {
+		var retires int
+		if retires, err = a.opt.Comptes.ChangerMdp(nom, *in.Mdp, true); err == nil {
 			c, _ = a.opt.Comptes.Lire(nom)
+			a.opt.acces.noter(r, "mdp_reinitialise", c.Nom, "par="+strconv.Quote(auteurDe(r)), "jetons_retires="+strconv.Itoa(retires))
 		}
 	}
 	if err != nil {

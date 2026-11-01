@@ -241,6 +241,13 @@ func (a *acces) rendreEssai(ip string) {
 	}
 }
 
+// ralenti : ce nom a dépassé le seuil des essais ratés.
+func (a *acces) ralenti(cle string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.echecs[cle]) >= essaisSeuilNom
+}
+
 // attenteNom : le ralentissement dû aux essais déjà faits sur ce nom. Il ne refuse jamais personne :
 // un refus par nom donnerait à n'importe qui le moyen de bloquer un compte.
 func (a *acces) attenteNom(cle string) time.Duration {

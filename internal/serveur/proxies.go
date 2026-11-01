@@ -2,6 +2,7 @@ package serveur
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -109,4 +110,18 @@ func cleAdresse(hote string) string {
 		return ip.String()
 	}
 	return ip.Mask(net.CIDRMask(64, 128)).String()
+}
+
+// noter écrit un événement de sécurité au journal, sous une forme stable que des outils comme
+// fail2ban peuvent lire : « securite evenement=… [champ=valeur…] nom="…" ip=… ». L'adresse, vérifiée,
+// reste en dernier. Le nom, saisi par n'importe qui, est entre guillemets et échappé : il n'ajoute ni
+// ligne ni événement. Jamais de mot de passe, de jeton ni de libellé ici.
+func (a *acces) noter(r *http.Request, evenement, nom string, champs ...string) {
+	if a.comptes == nil {
+		return
+	}
+	for _, c := range champs {
+		evenement += " " + c
+	}
+	log.Printf("securite evenement=%s nom=%q ip=%s", evenement, nom, a.adresse(r))
 }

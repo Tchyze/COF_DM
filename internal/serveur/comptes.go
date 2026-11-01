@@ -240,21 +240,27 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 	adresse := cleAdresse(s.acces.adresse(r))
 	parIP, parCouple, parNom := "ip:"+adresse, "couple:"+nom+"|"+adresse, "nom:"+nom
 	if !s.acces.reserverEssai(parIP, essaisMaxAdresse) {
+		s.acces.noter(r, "limite_atteinte", nom, "portee=adresse")
 		erreur(w, 429, "Trop d'essais : patientez quelques minutes.")
 		return
 	}
 	if !s.acces.reserverEssai(parCouple, essaisMax) {
 		s.acces.rendreEssai(parIP)
+		s.acces.noter(r, "limite_atteinte", nom, "portee=couple")
 		erreur(w, 429, "Trop d'essais sur ce compte : patientez quelques minutes.")
 		return
 	}
 	attente := s.acces.attenteNom(parNom)
+	if s.acces.ralenti(parNom) {
+		s.acces.noter(r, "limite_atteinte", nom, "portee=nom")
+	}
 	s.acces.reserverEssai(parNom, essaisPlafondNom)
 	time.Sleep(attente)
 	s.acces.hachage.Lock()
 	c, ok := s.acces.comptes.Verifier(nom, req.Mdp)
 	s.acces.hachage.Unlock()
 	if !ok {
+		s.acces.noter(r, "connexion_echec", nom)
 		time.Sleep(s.acces.pause)
 		erreur(w, 401, "Nom d'utilisateur ou mot de passe incorrect.")
 		return
@@ -262,6 +268,7 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 	s.acces.rendreEssai(parIP)
 	s.acces.rendreEssai(parCouple)
 	s.acces.rendreEssai(parNom)
+	s.acces.noter(r, "connexion_ok", c.Nom)
 	exp := time.Now().Add(dureeSession)
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	repondre(w, 200, map[string]any{"mj": c.Role(s.store.ID()) != "", "compte": s.vueCompte(c)})
@@ -306,6 +313,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	c, _ := compteDe(r)
 	cle := "mdp:" + c.Nom // pas le compteur de la connexion : un anonyme n'empêche pas ce changement
 	if !s.acces.reserverEssai(cle, essaisMaxMdp) {
+		s.acces.noter(r, "limite_atteinte", c.Nom, "portee=mdp")
 		erreur(w, 429, "Trop d'essais : patientez quelques minutes.")
 		return
 	}
@@ -313,6 +321,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	_, ok := s.acces.comptes.Verifier(c.Nom, req.Ancien)
 	s.acces.hachage.Unlock()
 	if !ok {
+		s.acces.noter(r, "mdp_echec", c.Nom)
 		erreur(w, 401, "Mot de passe actuel incorrect.")
 		return
 	}
@@ -326,6 +335,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	exp := time.Now().Add(dureeSession)
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	s.noterCompte(c, "mot de passe changé")
+	s.acces.noter(r, "mdp_change", c.Nom, "jetons_retires="+strconv.Itoa(retires))
 	repondre(w, 200, map[string]any{"ok": true, "jetons_retires": retires})
 }
 
@@ -348,6 +358,7 @@ func (s *Serveur) monJeton(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.noterCompte(c, "jeton d'API créé")
+	s.acces.noter(r, "jeton_cree", c.Nom, "jeton="+j.ID)
 	repondre(w, 201, map[string]any{"jeton": clair, "id": j.ID, "nom": j.Nom, "cree": j.Cree})
 }
 
@@ -361,6 +372,7 @@ func (s *Serveur) retirerMonJeton(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.noterCompte(c, "jeton d'API retiré")
+	s.acces.noter(r, "jeton_retire", c.Nom, "jeton="+strconv.Quote(r.PathValue("id")))
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 
@@ -377,6 +389,7 @@ func (s *Serveur) rendreJeton(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.noterCompte(c, "jeton d'API rendu par son poste")
+	s.acces.noter(r, "jeton_rendu", c.Nom)
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 
