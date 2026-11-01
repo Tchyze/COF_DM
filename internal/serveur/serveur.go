@@ -90,6 +90,7 @@ type Serveur struct {
 	joueurs *diffusion     // appareils qui suivent la page des joueurs
 	libre   *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
 	jets    *tableJets     // lanceur de dés : les derniers jets de la partie
+	debit   debitJets      // … et ce qu'il reste à chaque lanceur
 	potMu   sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
 	envoi   sync.Mutex     // un seul fichier reçu à la fois dans cet univers (limites sur un serveur)
 

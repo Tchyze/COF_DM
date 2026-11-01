@@ -216,6 +216,8 @@ Un serveur héberge plusieurs groupes : aucun MJ ne doit pouvoir faire tomber le
 
 Une fois un plafond ou le volume dépassé, les plus anciennes sont effacées. Jamais celle qui vient d'être faite, la dernière de chaque sorte, ni celle d'avant une suppression, qui survit à son univers. Une sauvegarde demandée est refusée (`507`) plutôt que d'effacer ces dernières ; une sauvegarde d'avant une opération n'est jamais refusée pour le quota, elle le dépasse et le journal le dit. **Ces sauvegardes ne remplacent pas celles de tout `donnees/` hors de la machine.**
 
+En dur : 10 propositions de partage en attente par PJ, et une rafale de 20 jets de dés par compte, puis 2 par seconde. L'application ne limite pas le débit des autres routes : c'est le rôle de `limit_req` dans le proxy, ci-dessous et dans la section sur NPM.
+
 Un export JSON ou un fichier d'univers reçu ne peut porter que 32 Mo de texte hors images, et une image de 64 Mo au plus : le texte se déplie en mémoire. Gardez `mem_limit` sur le conteneur : un import de 256 Mo peut demander environ 700 Mo.
 
 ### Journal de sécurité et fail2ban

@@ -256,6 +256,9 @@ func (p *Pot) Retirer(m Mouvement, prises []Prise) (*Mouvement, error) {
 	return &p.Historique[len(p.Historique)-1], nil
 }
 
+// PropositionsMaxParPJ : les propositions de partage en attente d'un même PJ.
+const PropositionsMaxParPJ = 10
+
 // Proposer ajoute une proposition de partage, si le pot a ce qu'elle demande.
 func (p *Pot) Proposer(x Proposition) (*Proposition, error) {
 	if x.Pj <= 0 {
@@ -263,6 +266,15 @@ func (p *Pot) Proposer(x Proposition) (*Proposition, error) {
 	}
 	if err := p.Verifier(x.Pieces, x.Objets); err != nil {
 		return nil, err
+	}
+	n := 0
+	for _, y := range p.Propositions {
+		if y.Pj == x.Pj {
+			n++
+		}
+	}
+	if n >= PropositionsMaxParPJ {
+		return nil, invalide("Trop de propositions en attente pour ce personnage : le MJ doit d'abord en traiter.")
 	}
 	x.Note = strings.TrimSpace(x.Note)
 	x.ID = p.numero()
