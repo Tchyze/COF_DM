@@ -75,6 +75,7 @@ type Compte struct {
 	Jetons  []Jeton           `json:"jetons,omitempty"`
 	Version int               `json:"version"` // change avec le mot de passe : les sessions ouvertes tombent
 	Cree    float64           `json:"cree"`
+	Graine  string            `json:"graine"` // tirée à la création : une session n'ouvre que ce compte-là, pas un homonyme recréé
 }
 
 // Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
@@ -128,14 +129,18 @@ func Ouvrir(chemin string) (*Registre, error) {
 
 // reprendre met un compte d'avant la séparation des rôles dans la forme actuelle : un
 // administrateur perd ses rôles et ses jetons (il n'entre plus dans les univers), un compte joueur
-// est admis dans les univers où il joue déjà.
+// est admis dans les univers où il joue déjà. Un compte sans graine en reçoit une : ses sessions
+// d'avant tombent, une seule fois.
 func reprendre(c *Compte) bool {
+	change := false
+	if c.Graine == "" {
+		c.Graine, change = nouvelleGraine(), true
+	}
 	if c.Admin {
-		change := len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0
+		change = len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0 || change
 		c.Roles, c.Admis, c.Persos, c.Jetons = nil, nil, nil, nil
 		return change
 	}
-	change := false
 	for u, role := range c.Roles {
 		if role == Joueur && !slices.Contains(c.Admis, u) {
 			c.Admis, change = append(c.Admis, u), true
@@ -143,6 +148,12 @@ func reprendre(c *Compte) bool {
 	}
 	slices.Sort(c.Admis)
 	return change
+}
+
+func nouvelleGraine() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func (r *Registre) ecrire() error {
@@ -238,7 +249,7 @@ func (r *Registre) Creer(nom, mdp string, admin bool) (Compte, error) {
 	if _, ok := r.m[nom]; ok {
 		return Compte{}, ErrExiste
 	}
-	c := &Compte{Nom: nom, Mdp: empreinteMdp(mdp), Admin: admin, Version: 1, Cree: maintenant()}
+	c := &Compte{Nom: nom, Mdp: empreinteMdp(mdp), Admin: admin, Version: 1, Cree: maintenant(), Graine: nouvelleGraine()}
 	r.m[nom] = c
 	if err := r.ecrire(); err != nil {
 		delete(r.m, nom)

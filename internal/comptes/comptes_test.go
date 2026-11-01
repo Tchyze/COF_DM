@@ -153,3 +153,44 @@ func TestReprendreAnciensComptes(t *testing.T) {
 		t.Fatalf("reprise non enregistrée : %s", b)
 	}
 }
+
+// Un compte d'avant la graine en reçoit une à l'ouverture, écrite aussitôt et gardée ensuite ; un
+// compte recréé sous le même nom en tire une autre, et elle ne change pas avec le mot de passe.
+func TestGraineDuCompte(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "comptes.json")
+	if err := os.WriteFile(chemin, []byte(`[{"nom":"ancien","mdp":"aa:bb","version":3,"cree":1}]`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, _ := r.Lire("ancien")
+	if c.Graine == "" || c.Version != 3 {
+		t.Fatalf("reprise : %+v", c)
+	}
+	r2, err := Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c2, _ := r2.Lire("ancien"); c2.Graine != c.Graine {
+		t.Fatal("la graine doit rester la même d'une ouverture à l'autre")
+	}
+	n1, err := r.Creer("neuf", "mot-de-passe-neuf", false)
+	if err != nil || n1.Graine == "" {
+		t.Fatalf("%+v %v", n1, err)
+	}
+	if err := r.DefinirMdp("neuf", "autre-mot-de-passe"); err != nil {
+		t.Fatal(err)
+	}
+	if x, _ := r.Lire("neuf"); x.Graine != n1.Graine {
+		t.Fatal("la graine ne suit pas le mot de passe")
+	}
+	if err := r.Supprimer("neuf"); err != nil {
+		t.Fatal(err)
+	}
+	n2, err := r.Creer("neuf", "mot-de-passe-neuf", false)
+	if err != nil || n2.Graine == n1.Graine {
+		t.Fatalf("compte recréé : %+v %v", n2, err)
+	}
+}

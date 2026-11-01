@@ -64,25 +64,26 @@ func boucleLocale(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// sessionCompte : jeton de session d'un compte, « échéance.identifiant.nom.version.signature ».
+// sessionCompte : jeton de session d'un compte, « échéance.identifiant.nom.version.graine.signature ».
 func (a *acces) sessionCompte(c comptes.Compte, exp time.Time) string {
 	id := make([]byte, 9)
 	_, _ = rand.Read(id)
-	return a.signer(strings.Join([]string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version)}, "."))
+	return a.signer(strings.Join([]string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version), c.Graine}, "."))
 }
 
-// compteDeSession : le compte actif dont c'est la session, tant que son mot de passe n'a pas changé.
+// compteDeSession : le compte actif dont c'est la session, tant que son mot de passe n'a pas changé
+// et que c'est bien ce compte, pas un autre recréé sous le même nom.
 func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, bool) {
 	t, err := r.Cookie(cookieMJ)
 	if err != nil {
 		return comptes.Compte{}, false
 	}
 	id, _, plus, ok := a.lireSession(t.Value)
-	if !ok || len(plus) != 2 || !a.ouverte(id) {
+	if !ok || len(plus) != 3 || !a.ouverte(id) {
 		return comptes.Compte{}, false
 	}
 	c, ok := a.comptes.Lire(plus[0])
-	if !ok || c.Inactif || strconv.Itoa(c.Version) != plus[1] {
+	if !ok || c.Inactif || strconv.Itoa(c.Version) != plus[1] || c.Graine == "" || c.Graine != plus[2] {
 		return comptes.Compte{}, false
 	}
 	return c, true
