@@ -65,6 +65,7 @@ func NouvelleApplication(opt Options) *Application {
 	if opt.Comptes != nil {
 		opt.acces = nouvelAcces(opt.Reglages, opt.Comptes)
 	}
+	opt.partagerVoulu()
 	a := &Application{opt: opt, reg: opt.Reglages, mux: http.NewServeMux(), fin: make(chan struct{}), tous: map[string]*universOuvert{}}
 	if opt.Comptes == nil {
 		a.opt.Relie = a.Relie

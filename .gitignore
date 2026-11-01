@@ -17,6 +17,3 @@
 
 # Python
 __pycache__/
-
-# installation du MJ (machine, chemins, fichiers) : jamais dans le dépôt public
-/LOCAL.md

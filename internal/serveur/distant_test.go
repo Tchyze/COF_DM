@@ -184,6 +184,10 @@ func TestBureauModes(t *testing.T) {
 	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.MJ; return nil })
 
 	b := nouvelleAppli(t, t.TempDir()) // elle écoute sur le réseau local
+	ecoute := true                     // ouverte par le MJ : l'écoute suit le mode de travail
+	b.a.opt.ReseauOuvert = func() bool { return ecoute }
+	b.a.opt.ChangerReseau = func(v bool) error { ecoute = v; return nil }
+	b.a.opt.voulu.Store(true)
 	if c, v := b.local("GET", "/api/univers/serveur", nil); c != 200 || v["mode"] != modeLocal || v["serveur"] != nil {
 		t.Fatalf("mode au départ : %d %v", c, v)
 	}
@@ -201,6 +205,9 @@ func TestBureauModes(t *testing.T) {
 	}
 	if n := jetonsDe(t, reg, "meneur"); n != 1 {
 		t.Fatalf("jetons après connexion : %d", n)
+	}
+	if ecoute {
+		t.Fatal("relié à un serveur, l'écoute reste ouverte au réseau")
 	}
 	if c, v := b.appel(true, "GET", "/api/stats", nil); c != 403 || !strings.Contains(v["detail"].(string), "mode local") {
 		t.Fatalf("réseau en mode serveur : %d %v", c, v)
@@ -235,6 +242,9 @@ func TestBureauModes(t *testing.T) {
 	b.local("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Écrit hors connexion"})
 	if c, v := b.local("POST", "/api/univers/serveur/local", nil); c != 200 || v["mode"] != modeLocal || v["pause"] != true || v["avertissement"] != nil {
 		t.Fatalf("passage en local : %d %v", c, v)
+	}
+	if !ecoute {
+		t.Fatal("de retour en mode local, le réseau voulu par le MJ ne se rouvre pas")
 	}
 	if n := jetonsDe(t, reg, "meneur"); n != 0 {
 		t.Fatalf("jeton non rendu : %d", n)

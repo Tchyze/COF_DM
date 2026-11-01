@@ -1,11 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strconv"
 	"testing"
+	"time"
 )
 
 // Un autre programme tient 127.0.0.1 sur le port voulu (comme le relais de WSL sous Windows) :
@@ -70,5 +76,157 @@ func TestPortPublie(t *testing.T) {
 	}
 	if p := portApplication(dossier); p != 8100 {
 		t.Fatalf("port publié invalide : %d", p)
+	}
+}
+
+// adresseDuReseau : une adresse de cet ordinateur sur un réseau, pour jouer l'appareil du réseau.
+func adresseDuReseau(t *testing.T) string {
+	t.Helper()
+	as, err := net.InterfaceAddrs()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range as {
+		if n, ok := a.(*net.IPNet); ok && !n.IP.IsLoopback() && !n.IP.IsLinkLocalUnicast() && n.IP.To4() != nil {
+			return n.IP.String()
+		}
+	}
+	t.Skip("pas d'adresse réseau sur cet ordinateur")
+	return ""
+}
+
+func porteDeTest(t *testing.T) (*ecoute, int) {
+	t.Helper()
+	ln, port, err := ecouter("127.0.0.1", 0, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port = ln.Addr().(*net.TCPAddr).Port
+	e := nouvelleEcoute(ln, port, false)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "pong") })
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { // comme un WebSocket : la connexion quitte le serveur HTTP
+		c, _, err := w.(http.Hijacker).Hijack()
+		if err != nil {
+			return
+		}
+		fmt.Fprint(c, "ok")
+		go func() {
+			defer c.Close()
+			_, _ = io.Copy(io.Discard, c)
+		}()
+	})
+	e.srv = &http.Server{Handler: mux}
+	e.servir(ln)
+	t.Cleanup(func() { e.srv.Close() })
+	return e, port
+}
+
+func ping(c *http.Client, hote string, port int) error {
+	r, err := c.Get(fmt.Sprintf("http://%s:%d/ping", hote, port))
+	if err != nil {
+		return err
+	}
+	defer r.Body.Close()
+	_, err = io.Copy(io.Discard, r.Body)
+	return err
+}
+
+// Cocher ouvre sans relance et sans couper la fenêtre ; décocher referme, coupe les appareils du
+// réseau (WebSocket compris) et laisse la fenêtre tranquille.
+func TestEcouteBascule(t *testing.T) {
+	lan := adresseDuReseau(t)
+	e, port := porteDeTest(t)
+	adr := net.JoinHostPort(lan, strconv.Itoa(port))
+	if c, err := net.DialTimeout("tcp", adr, time.Second); err == nil {
+		c.Close()
+		t.Fatal("fermée, l'application répond au réseau")
+	}
+	fenetre, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fenetre.Close()
+	_ = fenetre.SetDeadline(time.Now().Add(5 * time.Second))
+	lecteur := bufio.NewReader(fenetre)
+	requeteFenetre := func() {
+		t.Helper()
+		fmt.Fprintf(fenetre, "GET /ping HTTP/1.1\r\nHost: x\r\n\r\n")
+		r, err := http.ReadResponse(lecteur, nil)
+		if err != nil {
+			t.Fatalf("connexion de la fenêtre : %v", err)
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		r.Body.Close()
+	}
+	requeteFenetre()
+	if err := e.changer(true); err != nil {
+		t.Fatal(err)
+	}
+	if !e.estOuvert() {
+		t.Fatal("état après ouverture")
+	}
+	if err := ping(http.DefaultClient, lan, port); err != nil {
+		t.Fatalf("ouverte, le réseau ne répond pas : %v", err)
+	}
+	if err := ping(http.DefaultClient, "127.0.0.1", port); err != nil {
+		t.Fatalf("ouverte, la fenêtre ne répond plus : %v", err)
+	}
+	requeteFenetre()
+	tablette, err := net.Dial("tcp", adr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tablette.Close()
+	fmt.Fprintf(tablette, "GET /ws HTTP/1.1\r\nHost: x\r\n\r\n")
+	lu := make([]byte, 2)
+	if _, err := io.ReadFull(tablette, lu); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.changer(false); err != nil {
+		t.Fatal(err)
+	}
+	_ = tablette.SetReadDeadline(time.Now().Add(3 * time.Second))
+	if _, err := tablette.Read(lu); err == nil || os.IsTimeout(err) {
+		t.Fatalf("la tablette n'est pas coupée : %v", err)
+	}
+	if c, err := net.DialTimeout("tcp", adr, time.Second); err == nil {
+		c.Close()
+		t.Fatal("refermée, l'application répond encore au réseau")
+	}
+	// la connexion de la fenêtre a traversé les deux bascules
+	requeteFenetre()
+	e.mu.Lock()
+	reste := len(e.reseau)
+	e.mu.Unlock()
+	if reste != 0 {
+		t.Fatalf("connexions encore suivies : %d", reste)
+	}
+}
+
+// Le port est pris sur le réseau (ou par le relais de WSL) : l'application le dit et reste comme avant.
+func TestEcoutePortPris(t *testing.T) {
+	lan := adresseDuReseau(t)
+	e, port := porteDeTest(t)
+	autre, err := net.Listen("tcp", net.JoinHostPort(lan, strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer autre.Close()
+	if err := e.changer(true); err == nil {
+		if runtime.GOOS == "linux" {
+			t.Fatal("ouverture acceptée, port pris")
+		}
+		return
+	}
+	if e.estOuvert() {
+		t.Fatal("dite ouverte après l'échec")
+	}
+	if err := ping(http.DefaultClient, "127.0.0.1", port); err != nil {
+		t.Fatalf("la fenêtre ne répond plus après l'échec : %v", err)
+	}
+	autre.Close()
+	if err := e.changer(true); err != nil {
+		t.Fatalf("second essai, port libre : %v", err)
 	}
 }
