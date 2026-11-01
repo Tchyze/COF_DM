@@ -14,11 +14,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,7 +38,6 @@ const (
 func RoleValide(role string) bool { return role == MJ || role == Auditeur || role == Joueur }
 
 const (
-	iterations  = 210000
 	MdpMin      = 10
 	MdpMinAdmin = 12
 	prefixe     = "cofdm_"
@@ -203,7 +204,20 @@ func copie(c *Compte) Compte {
 	return x
 }
 
-func hacher(mdp string, sel []byte) []byte {
+// Le coût d'une empreinte de mot de passe (recommandation OWASP pour PBKDF2-SHA256). Une empreinte
+// porte le sien : un compte passe au coût courant à sa prochaine connexion réussie.
+const (
+	formatEmpreinte     = "pbkdf2-sha256"
+	iterationsAnciennes = 210000 // « sel:empreinte », la forme d'avant
+	iterationsMax       = 100000000
+)
+
+var iterationsMdp = 600000
+
+// CoutReduitPourTests : les tests créent des centaines de comptes. Rien d'autre ne l'appelle.
+func CoutReduitPourTests() { iterationsMdp = 1000 }
+
+func deriver(mdp string, sel []byte, iterations int) []byte {
 	k, _ := pbkdf2.Key(sha256.New, mdp, sel, iterations, 32)
 	return k
 }
@@ -211,7 +225,40 @@ func hacher(mdp string, sel []byte) []byte {
 func empreinteMdp(mdp string) string {
 	sel := make([]byte, 16)
 	_, _ = rand.Read(sel)
-	return hex.EncodeToString(sel) + ":" + hex.EncodeToString(hacher(mdp, sel))
+	return fmt.Sprintf("%s$%d$%s$%s", formatEmpreinte, iterationsMdp, hex.EncodeToString(sel), hex.EncodeToString(deriver(mdp, sel, iterationsMdp)))
+}
+
+// empreinte : une empreinte de mot de passe relue. Illisible : aucun mot de passe n'y correspond.
+type empreinte struct {
+	iterations  int
+	sel, valeur []byte
+}
+
+func lireEmpreinte(texte string) empreinte {
+	var e empreinte
+	var sel, valeur string
+	if p := strings.Split(texte, "$"); len(p) == 4 && p[0] == formatEmpreinte {
+		n, err := strconv.Atoi(p[1])
+		if err != nil || n <= 0 || n > iterationsMax {
+			return empreinte{}
+		}
+		e.iterations, sel, valeur = n, p[2], p[3]
+	} else if s, h, ok := strings.Cut(texte, ":"); ok && !strings.Contains(texte, "$") {
+		e.iterations, sel, valeur = iterationsAnciennes, s, h
+	} else {
+		return empreinte{}
+	}
+	var err1, err2 error
+	e.sel, err1 = hex.DecodeString(sel)
+	e.valeur, err2 = hex.DecodeString(valeur)
+	if err1 != nil || err2 != nil || len(e.valeur) == 0 {
+		return empreinte{}
+	}
+	return e
+}
+
+func (e empreinte) correspond(mdp string) bool {
+	return e.iterations > 0 && subtle.ConstantTimeCompare(deriver(mdp, e.sel, e.iterations), e.valeur) == 1
 }
 
 func maintenant() float64 { return float64(time.Now().UnixNano()) / 1e9 }
@@ -313,17 +360,42 @@ func (r *Registre) Verifier(nom, mdp string) (Compte, bool) {
 		x = copie(c)
 	}
 	r.mu.Unlock()
-	sel, attendu := r.leurre, []byte(nil)
+	e := empreinte{}
 	if ok {
-		s, h, _ := strings.Cut(x.Mdp, ":")
-		sel, _ = hex.DecodeString(s)
-		attendu, _ = hex.DecodeString(h)
+		e = lireEmpreinte(x.Mdp)
 	}
-	bon := subtle.ConstantTimeCompare(hacher(mdp, sel), attendu) == 1
-	if !ok || !bon || x.Inactif || len(attendu) == 0 {
+	bon := e.correspond(mdp)
+	// un échec coûte le même calcul quel que soit le compte, inconnu ou d'avant la migration : le temps
+	// de réponse ne dit pas lequel existe
+	if reste := iterationsMdp - e.iterations; !bon && reste > 0 {
+		deriver(mdp, r.leurre, reste)
+	}
+	if !ok || !bon || x.Inactif {
 		return Compte{}, false
 	}
+	if e.iterations < iterationsMdp {
+		x.Mdp = r.migrer(x.Nom, x.Mdp, mdp)
+	}
 	return x, true
+}
+
+// migrer passe au coût courant l'empreinte d'un mot de passe qui vient d'être vérifié. Ni la version ni
+// la graine ne changent : les sessions ouvertes restent. Si l'écriture échoue, l'ancienne empreinte
+// reste, et la connexion réussit quand même.
+func (r *Registre) migrer(nom, avant, mdp string) string {
+	neuve := empreinteMdp(mdp)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.m[nom]
+	if !ok || c.Mdp != avant { // changé entre-temps : pas d'une ancienne valeur sur une nouvelle
+		return avant
+	}
+	c.Mdp = neuve
+	if err := r.ecrire(); err != nil {
+		c.Mdp = avant
+		return avant
+	}
+	return neuve
 }
 
 // Modifier applique f au compte et l'enregistre. Le dernier administrateur actif ne peut ni perdre
