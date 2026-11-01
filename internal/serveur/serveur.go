@@ -311,6 +311,10 @@ func (s *Serveur) routes() {
 			http.NotFound(w, r)
 			return
 		}
+		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") { // les dossiers de l'interface ne se listent pas
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"+socketsDeLaPage(r))
 		statique.ServeHTTP(w, r)

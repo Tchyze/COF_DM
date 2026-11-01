@@ -123,16 +123,18 @@ func (a *Application) accessibles(c comptes.Compte) []*universOuvert {
 // pas nul. Un univers en cours de fermeture répond 503 : ni « inconnu », ce qu'un bureau relié
 // prendrait pour une disparition, ni un autre univers à sa place, où la requête écrirait.
 func (a *Application) choisir(r *http.Request) (o *universOuvert, code int, msg string) {
+	c, connu, jeton := a.opt.acces.reconnaitre(r)
 	if id := universDemande(r); id != "" {
 		if o := a.tous[id]; o != nil {
 			return o, 0, ""
 		}
-		if a.fermetures[id] {
-			return nil, 503, msgFermeture
+		if connu { // un anonyme n'apprend pas quels univers existent : il passe, et l'accès le refusera
+			if a.fermetures[id] {
+				return nil, 503, msgFermeture
+			}
+			return nil, 404, "Univers inconnu : " + id
 		}
-		return nil, 404, "Univers inconnu : " + id
 	}
-	c, connu, jeton := a.opt.acces.reconnaitre(r)
 	if t, err := r.Cookie(cookieUnivers); err == nil && !jeton {
 		if o := a.tous[t.Value]; o != nil && (!connu || c.Role(t.Value) != "") {
 			return o, 0, ""
