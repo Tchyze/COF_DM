@@ -19,6 +19,11 @@ import (
 // sans note ni contexte, leurs images ; ni combat ni journal.
 func (s *Serveur) exporterObsidian(w http.ResponseWriter, r *http.Request) {
 	mj := r.URL.Query().Get("secrets") != "0"
+	libere, ok := s.exportPossible(w)
+	if !ok {
+		return
+	}
+	defer libere()
 	x, err := s.store.Exporter()
 	if err != nil {
 		erreurStore(w, err)

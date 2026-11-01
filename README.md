@@ -203,6 +203,21 @@ Les deux en-têtes `X-Forwarded-*` comptent : le premier donne à la limite d'es
 
 **Proxys de confiance.** L'application ne croit ces deux en-têtes que s'ils viennent d'une adresse déclarée : `-proxies` ou la variable `COF_DM_PROXIES`, une liste de réseaux en CIDR séparés par des virgules. Par défaut, `127.0.0.1/32,::1/128` : un nginx sur la même machine, rien à régler. Un proxy ailleurs (autre machine, autre conteneur) doit être déclaré, sinon tous les visiteurs comptent pour une seule adresse et le cookie perd `Secure`. `X-Forwarded-For` se lit depuis la droite : la première adresse hors de la liste est celle du visiteur. Ne déclarez que des adresses que vous tenez : toute machine de la liste peut dicter son adresse à l'application.
 
+### Limites d'un serveur partagé
+
+Un serveur héberge plusieurs groupes : aucun MJ ne doit pouvoir faire tomber les autres. Ces options de la ligne de commande (`command:` du compose) ont des valeurs par défaut, à ajuster au disque et à la mémoire de la machine :
+
+| Option | Défaut | Rôle |
+|---|---|---|
+| `-imports-simultanes` | `1` | Traitements lourds en même temps sur tout le serveur : imports, exports, sauvegardes demandées, écriture d'une copie pour un poste. Au-delà : `429`, à refaire un instant plus tard. |
+| `-quota-univers` | `2048` (Mo) | Au-delà, l'univers ne reçoit plus d'image ni d'import (`507`, `413`). Rien n'est retiré. `0` : aucun quota. |
+| `-quota-sauvegardes` | `5120` (Mo) | Volume des sauvegardes de chaque univers. `0` : aucun quota. |
+| `-sauvegardes-max` | `10` | Sauvegardes gardées par univers, demandées d'une part, d'avant une opération de l'autre. `0` : pas de plafond. |
+
+Une fois un plafond ou le volume dépassé, les plus anciennes sont effacées. Jamais celle qui vient d'être faite, la dernière de chaque sorte, ni celle d'avant une suppression, qui survit à son univers. Une sauvegarde demandée est refusée (`507`) plutôt que d'effacer ces dernières ; une sauvegarde d'avant une opération n'est jamais refusée pour le quota, elle le dépasse et le journal le dit. **Ces sauvegardes ne remplacent pas celles de tout `donnees/` hors de la machine.**
+
+Un export JSON ou un fichier d'univers reçu ne peut porter que 32 Mo de texte hors images, et une image de 64 Mo au plus : le texte se déplie en mémoire. Gardez `mem_limit` sur le conteneur : un import de 256 Mo peut demander environ 700 Mo.
+
 ### Journal de sécurité et fail2ban
 
 En mode serveur, le journal du programme (`docker logs`) note les événements de sécurité, une ligne chacun, sous une forme stable :
@@ -591,7 +606,7 @@ Le mode serveur (`-serveur`) n'existe que dans l'image Docker : l'application de
 
 Un univers est **un seul fichier** `.cofdm` : fiches, relations, images, calendrier et journal. Il peut être rangé n'importe où (Documents, clé USB, dossier synchronisé) et se copie tel quel. Le menu **Fichier**, en haut du menu latéral, permet de créer un univers, d'en ouvrir un autre, de rouvrir un univers récent et d'enregistrer une copie. L'application rouvre au lancement le dernier univers utilisé.
 
-Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes, exports et import** les liste et permet de revenir à l'une d'elles.
+Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé (sur un serveur, voir aussi « Limites d'un serveur partagé »). Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes, exports et import** les liste et permet de revenir à l'une d'elles.
 
 **Depuis une version précédente** : au premier lancement, l'ancienne base et ses images sont reprises dans `univers/Mon univers.cofdm`. Rien n'est effacé : `cof-dm.db` est renommé `cof-dm.db.ancien` et le dossier `medias/` reste en place ; vous pouvez les supprimer une fois l'univers vérifié.
 

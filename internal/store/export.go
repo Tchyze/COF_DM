@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -65,6 +66,8 @@ type Export struct {
 	// Feuilles de personnage des PJ. Absentes d'un export plus ancien : celles de l'univers sont
 	// gardées pour les fiches qui existent encore.
 	Feuilles []FeuilleExport `json:"feuilles,omitempty"`
+
+	imagesDe *Store // RestaurerDepuis : les images se lisent là, une à la fois
 }
 
 // DocumentExport : un document (monstre du bestiaire…) dans un export.
@@ -97,7 +100,10 @@ type RelationBrute struct {
 
 const formatExport = "cof-dm"
 
-func (s *Store) Exporter() (Export, error) {
+func (s *Store) Exporter() (Export, error) { return s.exporter(true) }
+
+// exporter : sans images, seul le nécessaire pour les relire une à une (Media.Differe).
+func (s *Store) exporter(images bool) (Export, error) {
 	x := Export{Format: formatExport, Version: 1, Donnees: versionDonnees, Modele: VersionModele, Date: time.Now().Format(time.RFC3339), Calendrier: s.Calendrier()}
 	var err error
 	if x.Entites, err = s.Toutes(); err != nil {
@@ -116,11 +122,17 @@ func (s *Store) Exporter() (Export, error) {
 			}
 		}
 		rows.Close()
-		rows, err = s.db.Query(`SELECT id, entite, fichier, nom_original, legende, principal, cree, contenu FROM medias ORDER BY id`)
+		colonne := "contenu"
+		if !images {
+			colonne = "NULL"
+		}
+		rows, err = s.db.Query(`SELECT id, entite, fichier, nom_original, legende, principal, cree, ` + colonne + `, COALESCE(length(contenu),0) FROM medias ORDER BY id`)
 		if err == nil {
 			for rows.Next() {
 				var m Media
-				if rows.Scan(&m.ID, &m.Entite, &m.Fichier, &m.NomOriginal, &m.Legende, &m.Principal, &m.Cree, &m.Contenu) == nil {
+				var taille int64
+				if rows.Scan(&m.ID, &m.Entite, &m.Fichier, &m.NomOriginal, &m.Legende, &m.Principal, &m.Cree, &m.Contenu, &taille) == nil {
+					m.differe = !images && taille > 0
 					x.Medias = append(x.Medias, m)
 				}
 			}
@@ -165,6 +177,138 @@ func (s *Store) Restaurer(x Export, auteur string) error {
 	return s.reparer()
 }
 
+// Ce qu'un fichier reçu peut porter. Le texte se déplie en mémoire : quelques octets de JSON y prennent
+// des dizaines de fois leur place. Le plafonner borne donc ce qu'un seul import peut demander au
+// serveur ; 32 Mo font déjà des milliers de fiches. Les images, elles, se lisent une à une.
+const (
+	imageMaxImport  = 64 << 20
+	texteMaxImport  = 32 << 20
+	imagesMaxImport = 200000
+)
+
+// LireExport lit un export JSON sans jamais le déplier d'un bloc : tout ce qui n'est pas une image
+// est d'abord compté, puis les images sont lues une à une. Dépassé, le refus est une ErrValidation ;
+// un fichier mal formé, une autre erreur.
+func LireExport(r io.Reader) (Export, error) {
+	var x Export
+	dec := json.NewDecoder(r)
+	if t, err := dec.Token(); err != nil {
+		return x, err
+	} else if t != json.Delim('{') {
+		return x, fmt.Errorf("export : un objet est attendu")
+	}
+	reste := map[string]json.RawMessage{}
+	texte := 0
+	for dec.More() {
+		t, err := dec.Token()
+		if err != nil {
+			return x, err
+		}
+		cle, _ := t.(string)
+		if cle == "medias" {
+			if x.Medias, err = lireImagesExport(dec); err != nil {
+				return x, err
+			}
+			continue
+		}
+		var brut json.RawMessage
+		if err := dec.Decode(&brut); err != nil {
+			return x, err
+		}
+		if texte += len(brut); texte > texteMaxImport {
+			return x, invalide("Ce fichier porte trop de texte pour un univers (%d Mo au plus).", texteMaxImport>>20)
+		}
+		reste[cle] = brut
+	}
+	b, err := json.Marshal(reste)
+	if err != nil {
+		return x, err
+	}
+	medias := x.Medias
+	if err := json.Unmarshal(b, &x); err != nil {
+		return x, err
+	}
+	x.Medias = medias
+	return x, nil
+}
+
+func lireImagesExport(dec *json.Decoder) ([]Media, error) {
+	t, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if t == nil {
+		return nil, nil
+	}
+	if t != json.Delim('[') {
+		return nil, fmt.Errorf("export : une liste d'images est attendue")
+	}
+	var l []Media
+	for dec.More() {
+		if len(l) >= imagesMaxImport {
+			return nil, invalide("Ce fichier porte trop d'images pour un univers.")
+		}
+		var m Media
+		if err := dec.Decode(&m); err != nil {
+			return nil, err
+		}
+		l = append(l, m)
+	}
+	_, err = dec.Token()
+	return l, err
+}
+
+// RestaurerDepuis : comme Restaurer, depuis un autre univers ouvert (un fichier reçu), dont les images
+// sont lues une à la fois : un gros univers ne tient pas en mémoire d'un bloc. Rend le nombre de
+// fiches et de relations reçues.
+func (s *Store) RestaurerDepuis(source *Store, auteur string) (int, int, error) {
+	if err := source.verifierTailles(); err != nil {
+		return 0, 0, err
+	}
+	x, err := source.exporter(false)
+	if err != nil {
+		return 0, 0, err
+	}
+	x.imagesDe = source
+	return len(x.Entites), len(x.Relations), s.Restaurer(x, auteur)
+}
+
+func (s *Store) verifierTailles() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var image, images, texte int64
+	if err := s.db.QueryRow(`SELECT COALESCE(MAX(length(CAST(contenu AS BLOB))),0), COUNT(*) FROM medias`).Scan(&image, &images); err != nil {
+		return err
+	}
+	if image > imageMaxImport {
+		return invalide("Ce fichier porte une image trop lourde.")
+	}
+	if images > imagesMaxImport {
+		return invalide("Ce fichier porte trop d'images pour un univers.")
+	}
+	if err := s.db.QueryRow(`SELECT
+		(SELECT COALESCE(SUM(length(CAST(data AS BLOB))),0) FROM entites) +
+		(SELECT COALESCE(SUM(length(CAST(data AS BLOB))),0) FROM documents) +
+		(SELECT COALESCE(SUM(length(CAST(data AS BLOB))),0) FROM feuilles) +
+		(SELECT COALESCE(SUM(length(CAST(valeur AS BLOB))),0) FROM meta) +
+		(SELECT COALESCE(SUM(length(CAST(note AS BLOB))),0) FROM relations)`).Scan(&texte); err != nil {
+		return err
+	}
+	if texte > texteMaxImport {
+		return invalide("Ce fichier porte trop de texte pour un univers (%d Mo au plus).", texteMaxImport>>20)
+	}
+	return nil
+}
+
+// contenuImage : l'octet par octet d'une image de cet univers.
+func (s *Store) contenuImage(id int64) ([]byte, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var b []byte
+	err := s.db.QueryRow(`SELECT contenu FROM medias WHERE id=?`, id).Scan(&b)
+	return b, err
+}
+
 func (s *Store) restaurer(x Export, auteur string) error {
 	if x.Format != formatExport {
 		return invalide("Ce fichier n'est pas un export COF DM.")
@@ -187,7 +331,7 @@ func (s *Store) restaurer(x Export, auteur string) error {
 	// un export d'avant les fichiers d'univers ne contient pas les images : celles de l'univers
 	// qui portent le même nom sont gardées
 	for i, m := range x.Medias {
-		if len(m.Contenu) == 0 {
+		if len(m.Contenu) == 0 && !m.differe {
 			_ = tx.QueryRow(`SELECT contenu FROM medias WHERE fichier=?`, m.Fichier).Scan(&x.Medias[i].Contenu)
 		}
 	}
@@ -317,8 +461,14 @@ func (s *Store) restaurer(x Export, auteur string) error {
 		principale[m.Entite] = principale[m.Entite] || m.Principal
 	}
 	for _, m := range x.Medias {
+		contenu := m.Contenu
+		if m.differe {
+			if contenu, err = x.imagesDe.contenuImage(m.ID); err != nil {
+				return fmt.Errorf("image n°%d : %w", m.ID, err)
+			}
+		}
 		if _, err := tx.Exec(`INSERT INTO medias (id, entite, fichier, nom_original, legende, principal, cree, contenu) VALUES (?,?,?,?,?,?,?,?)`,
-			m.ID, m.Entite, m.Fichier, m.NomOriginal, m.Legende, m.Principal, m.Cree, m.Contenu); err != nil {
+			m.ID, m.Entite, m.Fichier, m.NomOriginal, m.Legende, m.Principal, m.Cree, contenu); err != nil {
 			return fmt.Errorf("image n°%d : %w", m.ID, err)
 		}
 	}

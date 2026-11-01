@@ -380,7 +380,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		}
 		defer a.fermetureFinie(id)
 		// quand plus rien n'écrit : la sauvegarde a tout ce que l'univers contenait
-		s, err := sauvegarder(f.ouvert.st, dossier, "avant-suppression")
+		s, err := sauvegarder(f.ouvert.st, dossier, motifAvantSuppression)
 		if err != nil {
 			a.remettre(f.ouvert)
 			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
@@ -389,7 +389,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		sauvegarde = s
 		a.clore(f.ouvert)
 	} else {
-		sauvegarde = filepath.Join(dossier, nomSauvegarde("avant-suppression"))
+		sauvegarde = filepath.Join(dossier, nomSauvegarde(motifAvantSuppression))
 		if err := copierFichier(f.chemin, sauvegarde); err != nil {
 			_ = os.Remove(sauvegarde)
 			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())

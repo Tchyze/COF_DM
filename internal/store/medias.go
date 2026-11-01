@@ -20,6 +20,8 @@ type Media struct {
 	Principal   bool    `json:"principal"`
 	Cree        float64 `json:"cree"`
 	Contenu     []byte  `json:"contenu,omitempty"`
+
+	differe bool // RestaurerDepuis : le contenu se lit au dernier moment
 }
 
 var reNomMedia = regexp.MustCompile(`^[0-9a-f]{20}\.(png|jpg|webp|gif)$`)

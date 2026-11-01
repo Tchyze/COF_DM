@@ -367,6 +367,10 @@ func main() {
 	universFlag := flag.String("univers", "", "fichier d'univers (.cofdm) à ouvrir ; créé s'il n'existe pas")
 	reseau := flag.Bool("reseau", false, "écouter sur le réseau local (API avec jeton, interface avec le mot de passe MJ)")
 	modeServeur := flag.Bool("serveur", editionServeur, "mode serveur, derrière un reverse proxy : sans fenêtre, accès par comptes (édition serveur, image Docker)")
+	importsFlag := flag.Int("imports-simultanes", serveur.ImportsSimultanesParDefaut, "mode serveur : traitements lourds simultanés sur tout le serveur (imports, exports, sauvegardes demandées)")
+	quotaUniversFlag := flag.Int64("quota-univers", serveur.QuotaUniversParDefaut>>20, "mode serveur : taille d'un univers au-delà de laquelle il ne reçoit plus d'image ni d'import, en Mo (0 : aucune)")
+	quotaSauvegardesFlag := flag.Int64("quota-sauvegardes", serveur.QuotaSauvegardesParDefaut>>20, "mode serveur : volume des sauvegardes de chaque univers, en Mo (0 : aucun)")
+	sauvegardesMaxFlag := flag.Int("sauvegardes-max", serveur.SauvegardesMaxParDefaut, "mode serveur : sauvegardes gardées par univers, demandées d'une part, d'avant une opération de l'autre (0 : pas de plafond)")
 	proxiesFlag := flag.String("proxies", "", "mode serveur : réseaux des proxys de confiance, en CIDR séparés par des virgules (ou COF_DM_PROXIES ; par défaut "+serveur.ProxiesParDefaut+")")
 	desinstallerFlag := flag.Bool("desinstaller", false, "désinstaller l'application (Windows, lancé par « Applications installées »)")
 	modeMCP := flag.Bool("mcp", false, "serveur MCP pour Claude, sur l'entrée et la sortie standard : joint l'application lancée par son API (COF_DM_URL, COF_DM_JETON, COF_DM_UNIVERS)")
@@ -477,6 +481,7 @@ func main() {
 		if opt.Proxies, err = proxiesDemandes(*proxiesFlag); err != nil {
 			fatal("Option -proxies : %v", err)
 		}
+		opt.Limites = serveur.NouvellesLimites(*importsFlag, *quotaUniversFlag<<20, *quotaSauvegardesFlag<<20, *sauvegardesMaxFlag)
 		if opt.Comptes, err = comptes.Ouvrir(filepath.Join(dossier, "comptes.json")); err != nil {
 			fatal("Impossible de lire les comptes : %v", err)
 		}

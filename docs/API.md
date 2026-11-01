@@ -434,7 +434,7 @@ La page n'affiche aucun cadre. Sa politique de sécurité n'admet de WebSocket q
 
 | Requête | Effet |
 |---|---|
-| `POST /api/entites/{id}/medias` | Ajoute une image (PNG, JPEG, WebP, GIF ; 20 Mo au plus) : formulaire multipart avec le champ `fichier`, ou contenu brut de l'image avec `?nom=portrait.png`. La première image devient l'image principale. |
+| `POST /api/entites/{id}/medias` | Ajoute une image (PNG, JPEG, WebP, GIF ; 20 Mo au plus) : formulaire multipart avec le champ `fichier`, ou contenu brut de l'image avec `?nom=portrait.png`. La première image devient l'image principale. Sur un serveur : `507` au-delà du quota de l'univers. |
 | `PATCH /api/medias/{id}` `{"legende": "…", "principal": true}` | Légende, image principale. |
 | `DELETE /api/medias/{id}` | Supprime. |
 | `GET /medias/{fichier}` | L'image (rangée dans le fichier de l'univers). |
@@ -478,11 +478,11 @@ Le serveur MCP ne propose pas les outils d'une fonctionnalité coupée (il lit `
 | `GET /api/chronologie?campagne=3` | Toutes les dates en jeu, dans l'ordre (avec une campagne : la campagne et l'histoire du monde). |
 | `GET /api/calendrier`, `PUT /api/calendrier` | Calendrier du monde : `{"ere", "mois": [{"nom","jours"}], "semaine": [...]}`. |
 | `GET /api/journal?limite=100` | Dernières modifications (avec leur auteur). |
-| `GET /api/export` | Toutes les données de l'univers en JSON, images comprises (champ `contenu` de chaque média, en base64). |
+| `GET /api/export` | Toutes les données de l'univers en JSON, images comprises (champ `contenu` de chaque média, en base64). Sur un serveur : `413` au-delà de 256 Mo (une sauvegarde reste possible), `429` si un traitement lourd est déjà en cours. |
 | `GET /api/export/obsidian` | L'univers en notes Markdown pour un vault Obsidian, dans un zip (`cof-dm-obsidian-<date>.zip`) : une note par fiche (propriétés, sections, relations, images), la chronologie, les récapitulatifs des combats terminés et le journal. `?secrets=0` : seulement ce que voient les joueurs (fiches partagées, sans champ ni relation réservés au MJ, sans note de relation, sans combat ni journal) ; le zip s'appelle alors `…-joueurs.zip`. Fermé au rôle joueur. |
-| `POST /api/import/univers` (corps : un fichier `.cofdm`, brut ; `?remplacer=1`) | Serveur seulement, MJ : verse dans l'univers (créé vide par l'administrateur) les données d'un fichier d'univers — fiches, relations, images, bestiaire, règles, feuilles —, contrôlé comme une restauration. L'univers garde son identifiant, son nom, ses comptes et leurs rôles. `409` si l'univers a déjà des fiches, sans `remplacer=1` (une sauvegarde `avant-import` est faite avant) ; `413` : plus d'1 Go ; `422` : pas un univers, ou abîmé. Réponse comme `POST /api/restaurer`. |
-| `POST /api/restaurer` | Remplace tout par un export (sauvegarde faite avant). L'export est d'abord validé comme une saisie (noms, champs et références des fiches, relations, images, feuilles, bestiaire, règles) : au moindre refus, rien n'est modifié (422, avec la fiche ou la relation en cause). Un export d'un modèle plus ancien est remis en forme ; un export d'une version plus récente de COF DM est refusé. Un export sans le contenu des images garde celles de l'univers qui portent le même nom de fichier. |
-| `POST /api/sauvegarde` | Copie l'univers entier dans un fichier de sauvegarde : `{"fichier": "…/sauvegardes/<id>/<date>_manuelle.cofdm"}`. |
+| `POST /api/import/univers` (corps : un fichier `.cofdm`, brut ; `?remplacer=1`) | Serveur seulement, MJ : verse dans l'univers (créé vide par l'administrateur) les données d'un fichier d'univers — fiches, relations, images, bestiaire, règles, feuilles —, contrôlé comme une restauration. L'univers garde son identifiant, son nom, ses comptes et leurs rôles. `409` si l'univers a déjà des fiches, sans `remplacer=1` (une sauvegarde `avant-import` est faite avant) ; `413` : plus d'1 Go ; `422` : pas un univers, ou abîmé. Réponse comme `POST /api/restaurer`. `413` au-delà de 1 Go ou du quota de l'univers ; `422` au-delà de 32 Mo de texte ou d'une image de 64 Mo ; `429` si un fichier est déjà en cours d'envoi dans cet univers, ou un traitement lourd sur le serveur. |
+| `POST /api/restaurer` | Remplace tout par un export (sauvegarde faite avant). L'export est d'abord validé comme une saisie (noms, champs et références des fiches, relations, images, feuilles, bestiaire, règles) : au moindre refus, rien n'est modifié (422, avec la fiche ou la relation en cause). Un export d'un modèle plus ancien est remis en forme ; un export d'une version plus récente de COF DM est refusé. Un export sans le contenu des images garde celles de l'univers qui portent le même nom de fichier. `413` au-delà de 256 Mo ; `422` au-delà de 32 Mo de texte hors images ; `429` comme pour l'import. |
+| `POST /api/sauvegarde` | Copie l'univers entier dans un fichier de sauvegarde : `{"fichier": "…/sauvegardes/<id>/<date>_manuelle.cofdm"}`. Sur un serveur : `429` si un traitement lourd est en cours ; `507` si le quota de sauvegardes de l'univers est atteint (rien n'est écrit). |
 | `GET /api/parametres` | `{"version", "adresse", "jeton", "univers": {"nom", "id", "chemin"}, "donnees", "sauvegardes"}`. Depuis une session ouverte par mot de passe : ni jeton, ni chemins. |
 
 ## Univers
@@ -501,7 +501,7 @@ Ces routes touchent aux fichiers de l'ordinateur du MJ : elles ne répondent **q
 | `POST /api/univers/parcourir` `{"enregistrer": false, "nom": "…"}` | Ouvre la boîte « Ouvrir » ou « Enregistrer » du système : `{"chemin": "…"}` (`""` si le MJ annule). `501` : pas de boîte de dialogue sur ce système. |
 | `POST /api/univers/restaurer` `{"fichier": "<date>_<motif>.cofdm"}` | Remet l'univers ouvert dans l'état d'une de ses sauvegardes ; l'état actuel est sauvegardé avant (`motif` `avant-restauration`). `409` : requêtes encore en cours sur l'univers après 30 secondes (rien n'a changé). Sur l'ordinateur du MJ, ouvrir ou créer un univers répond de même si celui qu'il faut fermer sert encore des requêtes. |
 
-Sauvegardes automatiques : à l'ouverture d'un univers, toutes les demi-heures et à la fermeture, s'il a des fiches et a changé depuis la dernière. Les cinq dernières sont gardées, puis la dernière de chaque jour pendant quatorze jours ; les sauvegardes `manuelle` et `avant-restauration` ne sont jamais effacées.
+Sauvegardes automatiques : à l'ouverture d'un univers, toutes les demi-heures et à la fermeture, s'il a des fiches et a changé depuis la dernière. Les cinq dernières sont gardées, puis la dernière de chaque jour pendant quatorze jours ; les sauvegardes `manuelle` et `avant-restauration` ne sont jamais effacées. Sur un serveur, les sauvegardes demandées et celles d'avant une opération sont plafonnées par univers (`-sauvegardes-max`, `-quota-sauvegardes`) : les plus anciennes partent, jamais celle qui vient d'être faite ni celle d'avant une suppression.
 
 ## Synchronisation
 
@@ -511,7 +511,7 @@ L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}
 
 | Route | Rôle |
 |---|---|
-| `POST /api/sync/copie` `{"nom": "Portable de Marion"}` | Inscrit une copie et renvoie le fichier `.cofdm` qu'elle gardera, avec les en-têtes `X-COF-Replique` (son numéro) et `X-COF-Univers` (l'univers). |
+| `POST /api/sync/copie` `{"nom": "Portable de Marion"}` | Inscrit une copie et renvoie le fichier `.cofdm` qu'elle gardera, avec les en-têtes `X-COF-Replique` (son numéro) et `X-COF-Univers` (l'univers). `429` si un traitement lourd est en cours. |
 | `POST /api/sync` `{"replique", "curseur", "changements"}` | Un échange : la copie envoie les champs qu'elle a changés depuis son dernier envoi, et `curseur`, le dernier numéro d'ordre du serveur qu'elle a reçu. Réponse : `{"curseur", "changements", "conflits", "images_attendues"}`. `409` : copie inconnue de ce serveur. |
 | `PUT /api/sync/images/{fichier}` | Le contenu (corps brut) d'une image que le serveur attend. `415` si le contenu ne correspond pas à son format ; `404` pour une image inconnue. |
 | `GET /api/sync/copies` | Les copies inscrites : `{"copies": [{"numero", "nom", "compte", "cree", "vu", "version", "protocole", "modele"}]}`. `version`, `protocole`, `modele` : ceux de l'application qui tenait la copie à son dernier passage (`version` vide : application d'avant la 1.2.3). |

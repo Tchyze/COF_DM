@@ -73,6 +73,9 @@ func NouvelleApplication(opt Options) *Application {
 	if opt.Comptes != nil {
 		opt.acces = nouvelAcces(opt.Reglages, opt.Comptes, opt.Proxies)
 	}
+	if opt.Comptes != nil && opt.Limites == nil {
+		opt.Limites = LimitesParDefaut()
+	}
 	opt.partagerVoulu()
 	a := &Application{opt: opt, reg: opt.Reglages, mux: http.NewServeMux(), fin: make(chan struct{}), tous: map[string]*universOuvert{},
 		fermetures: map[string]bool{}, delaiFermeture: delaiFermeture}
@@ -863,6 +866,9 @@ func (a *Application) routeRestaurer(w http.ResponseWriter, r *http.Request) {
 		_ = os.Remove(tmp)
 		erreur(w, 500, "Sauvegarde impossible, rien n'a été modifié : "+err.Error())
 		return
+	}
+	if !a.opt.Limites.ranger(dossier, filepath.Base(avant), false) {
+		log.Printf("sauvegardes de l'univers « %s » : quota dépassé", nomUnivers(chemin))
 	}
 	a.clore(o)
 	echec := os.Rename(tmp, chemin)
