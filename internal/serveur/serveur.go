@@ -56,7 +56,8 @@ type Options struct {
 	// Comptes : mode serveur. L'accès passe par un compte (nom, mot de passe) ou son jeton d'API, et
 	// plus rien n'est accordé d'office aux requêtes de cet ordinateur (un reverse proxy en vient).
 	Comptes *comptes.Registre
-	acces   *acces // partagé par l'Application et les Serveurs des univers ouverts
+	acces   *acces       // partagé par l'Application et les Serveurs des univers ouverts
+	app     *Application // application de bureau : le combat et les dés en direct passent par elle (direct.go)
 	// Dialogue ouvre la boîte « Ouvrir » ou « Enregistrer » du système et renvoie le fichier choisi
 	// ("" : annulé) ; nil : le chemin se saisit dans l'interface.
 	Dialogue func(enregistrer bool, nom, dossier string) (string, error)
