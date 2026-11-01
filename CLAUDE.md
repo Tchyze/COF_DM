@@ -22,7 +22,7 @@ go build -tags sqlite_fts5 -o cof-dm .                          # bureau
 go build -tags "sqlite_fts5 nogui serveur" -o cof-dm-serveur .  # édition serveur (Docker)
 ```
 
-Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-reseau`, `-serveur` (édition serveur seulement), `-mcp` (serveur MCP sur stdio).
+Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-reseau`, `-serveur` et `-proxies` (édition serveur seulement), `-mcp` (serveur MCP sur stdio).
 
 ## Où se trouve quoi
 
@@ -62,7 +62,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 - **`/api/univers` et `/api/claude`** ne répondent qu'à l'ordinateur du MJ. `/api/claude` (bureau seulement) n'écrit que l'entrée `cof-dm` de la config Claude, le reste du fichier gardé.
 - **Secrets MJ** : champs `Secret` et relations réservées ne fuitent jamais vers les joueurs (page, comptes joueurs, export Obsidian « joueurs »).
 - **Bureau / serveur** : le bureau n'est qu'un éditeur, le mode serveur n'existe que dans l'édition serveur (`edition_serveur.go`). Relié à un serveur, le bureau ne répond plus au réseau local (`Options.Relie`, `msgReseauRelie`, `BureauRelie`). Connexion par nom et mot de passe échangés contre un jeton propre au poste, rendu au départ (`DELETE /api/compte/jeton`) ; jamais de mot de passe gardé.
-- **Mode serveur** : derrière un reverse proxy tout vient de `127.0.0.1` → **ne jamais se fier à `local()`**. Accès par `acces.entrer`, droits par `servirComptes` (`mj` : écrire ; `auditeur` : lire, toute route non-`GET` lui est refusée).
+- **Mode serveur** : derrière un reverse proxy tout vient de `127.0.0.1` → **ne jamais se fier à `local()`**. `X-Forwarded-*` ne se croit que d'un proxy déclaré (`-proxies`, `proxies.go`) : passer par `acces.adresse` et `acces.https`. Accès par `acces.entrer`, droits par `servirComptes` (`mj` : écrire ; `auditeur` : lire, toute route non-`GET` lui est refusée).
 - **Administrateur** (`admin.go`, `/api/admin/…`, serveur seulement : le bureau ne sert ni ces routes ni `admin.html`, et n'accepte pas de compte administrateur) : gère le serveur (univers, comptes, rôles) **sans jamais lire le contenu d'un univers**. `Compte.Role` lui renvoie toujours `""` (toute route d'un univers : `403`, sauf `/api/sante`) ; ni rôle, ni jeton d'API ; ses routes ne lisent du store que l'identifiant et le fichier, jamais une fiche ; son passage n'entre pas au journal d'un univers. Test de non-fuite : `TestAdminNeLitAucuneFiche` (toute nouvelle route de lecture s'y ajoute). Il donne `mj` et `auditeur` ; un joueur, il l'**admet** dans un univers (`Compte.Admis`), et c'est le MJ qui l'y joint et lui donne son PJ (`/api/joueurs/comptes`).
 - **Multi-univers** : univers visé = en-tête `X-COF-Univers`, sinon cookie, sinon premier univers du compte (un jeton multi-univers doit envoyer l'en-tête, sauf `proprePerso`). Dans `/api/univers`, jamais `a.st` : `a.vise(r)`. Rôle lu dans l'univers visé : `c.Role(s.store.ID())`.
 - **MCP** (`internal/mcp`) : chaque outil passe par l'API REST avec un jeton (jamais le store) ; description en français, annotations lecture / destructif, un test ; aucun effacement définitif ; stdout réservé au protocole, traces sur stderr.

@@ -61,6 +61,8 @@ type Options struct {
 	// Comptes : mode serveur. L'accès passe par un compte (nom, mot de passe) ou son jeton d'API, et
 	// plus rien n'est accordé d'office aux requêtes de cet ordinateur (un reverse proxy en vient).
 	Comptes *comptes.Registre
+	// Proxies : mode serveur, les adresses dont on croit les en-têtes X-Forwarded-* ; nil : ProxiesParDefaut.
+	Proxies []*net.IPNet
 	acces   *acces       // partagé par l'Application et les Serveurs des univers ouverts
 	app     *Application // application de bureau : le combat et les dés en direct passent par elle (direct.go)
 	// Dialogue ouvre la boîte « Ouvrir » ou « Enregistrer » du système et renvoie le fichier choisi
@@ -101,7 +103,7 @@ func Nouveau(st *store.Store, opt Options) *Serveur {
 		_ = s.reg.SetMeta("api_jeton", nouveauJeton())
 	}
 	if s.acces = opt.acces; s.acces == nil {
-		s.acces = nouvelAcces(s.reg, opt.Comptes)
+		s.acces = nouvelAcces(s.reg, opt.Comptes, opt.Proxies)
 	}
 	s.opt.partagerVoulu()
 	s.routes()

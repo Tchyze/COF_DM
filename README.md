@@ -171,6 +171,8 @@ server {
 
 Les deux en-têtes `X-Forwarded-*` comptent : le premier donne à la limite d'essais l'adresse réelle de chaque visiteur, le second fait poser le cookie de session en `Secure`. N'ouvrez pas le port 8100 au réseau : seul nginx doit le joindre.
 
+**Proxys de confiance.** L'application ne croit ces deux en-têtes que s'ils viennent d'une adresse déclarée : `-proxies` ou la variable `COF_DM_PROXIES`, une liste de réseaux en CIDR séparés par des virgules. Par défaut, `127.0.0.1/32,::1/128` : un nginx sur la même machine, rien à régler. Un proxy ailleurs (autre machine, autre conteneur) doit être déclaré, sinon tous les visiteurs comptent pour une seule adresse et le cookie perd `Secure`. `X-Forwarded-For` se lit depuis la droite : la première adresse hors de la liste est celle du visiteur. Ne déclarez que des adresses que vous tenez : toute machine de la liste peut dicter son adresse à l'application.
+
 ### Avec Docker
 
 Le mode serveur tourne derrière le nginx de la machine (Linux). Deux façons de l'obtenir : l'**image publiée** sur Docker Hub, ou l'image **construite** depuis le dépôt (`Dockerfile`, `docker-compose.yml`).
@@ -207,7 +209,7 @@ docker compose up -d --build
 docker compose logs cof-dm     # premier lancement : le mot de passe du compte « admin »
 ```
 
-- Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui permet à l'application de se fier aux en-têtes `X-Forwarded-*` de nginx : ne remplacez pas ce partage par un port publié.
+- Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui fait de nginx un proxy de confiance sans aucun réglage : avec un port publié ou un réseau Docker, il faudrait déclarer le proxy dans `-proxies`.
 - Les données sont dans `./donnees` : `comptes.json`, `reglages.json`, `univers/` (un fichier `.cofdm` par univers) et `sauvegardes/`. Pour mettre sur le serveur un univers préparé sur votre ordinateur : l'administrateur crée l'univers et vous en fait MJ, puis **Fichier → Importer un fichier d'univers…** ; ou son fichier dans `donnees/univers/` puis `docker compose restart`. Les univers archivés sont rangés dans `donnees/univers/archives/`.
 - Le conteneur tourne avec l'utilisateur `1000:1000`. Si `./donnees` appartient à un autre utilisateur, indiquez-le : `COF_UID=$(id -u) COF_GID=$(id -g) docker compose up -d`. `COF_PORT` change le port (8100 par défaut).
 - Mise à jour : avec l'image publiée, changer le tag (ou garder `latest`) puis `docker compose pull && docker compose up -d` ; construite depuis le dépôt, `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (onglet **Serveur** de sa page), avec la version des applications de bureau reliées. Sa version est celle de l'image publiée, ou vient de git pour une image construite (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. Construite depuis le dépôt, la première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.

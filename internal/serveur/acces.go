@@ -45,6 +45,7 @@ const (
 type acces struct {
 	reg     Reglages
 	comptes *comptes.Registre // mode serveur : nil sinon
+	proxies []*net.IPNet      // mode serveur : adresses dont on croit les en-têtes X-Forwarded-*
 	mu      sync.Mutex
 	echecs  map[string][]time.Time // limitation des essais par adresse
 	secret  []byte
@@ -53,8 +54,11 @@ type acces struct {
 	hachage sync.Mutex       // un seul calcul de mot de passe à la fois
 }
 
-func nouvelAcces(reg Reglages, c *comptes.Registre) *acces {
-	a := &acces{reg: reg, comptes: c, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond}
+func nouvelAcces(reg Reglages, c *comptes.Registre, proxies []*net.IPNet) *acces {
+	if proxies == nil {
+		proxies, _ = LireProxies(ProxiesParDefaut)
+	}
+	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond}
 	if v, ok := reg.Meta(metaSecret); ok {
 		a.secret, _ = hex.DecodeString(v)
 	}

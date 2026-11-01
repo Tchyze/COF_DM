@@ -60,23 +60,6 @@ func boucleLocale(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// adresse : l'adresse du client. En mode serveur, celle que le reverse proxy de cette machine a vue
-// (dernière de X-Forwarded-For) ; un client qui se connecte directement ne peut pas la dicter.
-func (a *acces) adresse(r *http.Request) string {
-	if a.comptes != nil && boucleLocale(r) {
-		l := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-		if ip := net.ParseIP(strings.TrimSpace(l[len(l)-1])); ip != nil {
-			return ip.String()
-		}
-	}
-	return adresseDe(r)
-}
-
-// https : la page est servie en HTTPS, directement ou par le reverse proxy de cette machine.
-func (a *acces) https(r *http.Request) bool {
-	return r.TLS != nil || (a.comptes != nil && boucleLocale(r) && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
-}
-
 // sessionCompte : jeton de session d'un compte, « échéance.identifiant.nom.version.signature ».
 func (a *acces) sessionCompte(c comptes.Compte, exp time.Time) string {
 	id := make([]byte, 9)

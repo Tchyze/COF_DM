@@ -367,6 +367,7 @@ func main() {
 	universFlag := flag.String("univers", "", "fichier d'univers (.cofdm) à ouvrir ; créé s'il n'existe pas")
 	reseau := flag.Bool("reseau", false, "écouter sur le réseau local (API avec jeton, interface avec le mot de passe MJ)")
 	modeServeur := flag.Bool("serveur", editionServeur, "mode serveur, derrière un reverse proxy : sans fenêtre, accès par comptes (édition serveur, image Docker)")
+	proxiesFlag := flag.String("proxies", "", "mode serveur : réseaux des proxys de confiance, en CIDR séparés par des virgules (ou COF_DM_PROXIES ; par défaut "+serveur.ProxiesParDefaut+")")
 	desinstallerFlag := flag.Bool("desinstaller", false, "désinstaller l'application (Windows, lancé par « Applications installées »)")
 	modeMCP := flag.Bool("mcp", false, "serveur MCP pour Claude, sur l'entrée et la sortie standard : joint l'application lancée par son API (COF_DM_URL, COF_DM_JETON, COF_DM_UNIVERS)")
 	flag.Parse()
@@ -469,6 +470,9 @@ func main() {
 	if *modeServeur {
 		opt.Dialogue, opt.Config, opt.VeilleMaj = nil, nil, true
 		opt.ChangerReseau = nil // un serveur reste derrière son reverse proxy
+		if opt.Proxies, err = proxiesDemandes(*proxiesFlag); err != nil {
+			fatal("Option -proxies : %v", err)
+		}
 		if opt.Comptes, err = comptes.Ouvrir(filepath.Join(dossier, "comptes.json")); err != nil {
 			fatal("Impossible de lire les comptes : %v", err)
 		}
@@ -534,6 +538,21 @@ func main() {
 		<-arret // l'univers est sauvegardé et fermé avant de quitter
 	}
 	_ = srv.Close()
+}
+
+// proxiesDemandes : la liste de -proxies, sinon de COF_DM_PROXIES, sinon celle par défaut.
+func proxiesDemandes(option string) ([]*net.IPNet, error) {
+	if option == "" {
+		option = os.Getenv("COF_DM_PROXIES")
+	}
+	if option == "" {
+		option = serveur.ProxiesParDefaut
+	}
+	l, err := serveur.LireProxies(option)
+	if err == nil && len(l) == 0 {
+		err = fmt.Errorf("aucun réseau dans %q", option)
+	}
+	return l, err
 }
 
 // premierAdmin crée le compte « admin » d'un serveur qui n'a encore aucun compte. Son mot de passe,

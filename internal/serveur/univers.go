@@ -65,7 +65,7 @@ func NouvelleApplication(opt Options) *Application {
 		opt.Reglages = reglages.Ouvrir(filepath.Join(opt.DossierDon, "reglages.json"))
 	}
 	if opt.Comptes != nil {
-		opt.acces = nouvelAcces(opt.Reglages, opt.Comptes)
+		opt.acces = nouvelAcces(opt.Reglages, opt.Comptes, opt.Proxies)
 	}
 	opt.partagerVoulu()
 	a := &Application{opt: opt, reg: opt.Reglages, mux: http.NewServeMux(), fin: make(chan struct{}), tous: map[string]*universOuvert{}}

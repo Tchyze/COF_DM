@@ -230,3 +230,22 @@ func TestEcoutePortPris(t *testing.T) {
 		t.Fatalf("second essai, port libre : %v", err)
 	}
 }
+
+func TestProxiesDemandes(t *testing.T) {
+	t.Setenv("COF_DM_PROXIES", "")
+	if l, err := proxiesDemandes(""); err != nil || len(l) != 2 {
+		t.Fatalf("défaut : %v %v", l, err)
+	}
+	t.Setenv("COF_DM_PROXIES", "10.0.0.0/8")
+	if l, err := proxiesDemandes(""); err != nil || len(l) != 1 || l[0].String() != "10.0.0.0/8" {
+		t.Fatalf("variable : %v %v", l, err)
+	}
+	if l, err := proxiesDemandes("172.30.0.0/24"); err != nil || len(l) != 1 || l[0].String() != "172.30.0.0/24" {
+		t.Fatalf("l'option passe avant la variable : %v %v", l, err)
+	}
+	for _, v := range []string{"pas-une-adresse", "0.0.0.0/0", ",,"} {
+		if _, err := proxiesDemandes(v); err == nil {
+			t.Errorf("%q accepté : le serveur doit refuser de démarrer", v)
+		}
+	}
+}
