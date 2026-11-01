@@ -8,7 +8,7 @@ Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de séc
 
 - **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, pas encore poussée. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
+- **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, en PR, à essayer par le MJ avant de fusionner. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
 - **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lots 1 à 3 finis, à essayer par le MJ avant la PR ; réglages GitHub (F-12) encore à faire. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
