@@ -18,8 +18,8 @@ import (
 	"github.com/Tchyze/cof_dm/internal/comptes"
 )
 
-// secretEssai : le secret TOTP des administrateurs de test.
-const secretEssai = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+// totpDeTest : la clé TOTP des administrateurs de test.
+const totpDeTest = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
 
 // Une horloge par registre, qui avance d'un pas à chaque code : un code de test n'est jamais un rejeu,
 // sauf quand un test le veut.
@@ -60,13 +60,13 @@ func horlogeDe(reg *comptes.Registre) *horlogeEssai {
 
 // codeSuivant : un code valable pour le secret de test, jamais encore donné.
 func codeSuivant(reg *comptes.Registre) string {
-	return comptes.CodeTOTP(secretEssai, horlogeDe(reg).avancer())
+	return comptes.CodeTOTP(totpDeTest, horlogeDe(reg).avancer())
 }
 
 // doterDeFacteur : un administrateur qui a déjà son TOTP, pour les tests qui ne portent pas là-dessus.
 func doterDeFacteur(t *testing.T, reg *comptes.Registre, nom string) []string {
 	t.Helper()
-	codes, err := reg.ActiverTOTP(nom, secretEssai, codeSuivant(reg))
+	codes, err := reg.ActiverTOTP(nom, totpDeTest, codeSuivant(reg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestConnexionTOTP(t *testing.T) {
 		t.Fatalf("jeton d'un administrateur : %d", c)
 	}
 	// le code d'une connexion ne sert pas à une autre
-	code := comptes.CodeTOTP(secretEssai, horlogeDe(reg).avancer())
+	code := comptes.CodeTOTP(totpDeTest, horlogeDe(reg).avancer())
 	n := anonymeDe(a, t, reg)
 	n.faire("POST", "/api/acces/connexion", map[string]any{"nom": "chef", "mdp": mdpEssai("chef")})
 	if c, v := n.faire("POST", routeSecondFacteur, map[string]any{"facteur": "totp", "code": code}); c != 200 {
