@@ -3,7 +3,7 @@
 Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Application de bureau Windows / Linux (fenêtre native autour d'une interface web embarquée), un fichier SQLite `.cofdm` par univers. Une édition serveur (image Docker) héberge plusieurs univers avec des comptes ; le bureau s'y synchronise. Le projet frère tracker_COF (bestiaire, feuilles, rencontres, combat) y est entièrement fusionné.
 
 - **Tout en français** : code, identifiants, commentaires, commits, docs.
-- **Avant de reprendre** : lire `SUIVI.md` (état, consignes du MJ, décisions) et `PROJETS.md` (chantiers et priorités). Pour un gros chantier, poser les questions de fond au MJ avant de coder.
+- **Avant de reprendre** : lire `SUIVI.md` (état, consignes du MJ, décisions), `PROJETS.md` (chantiers et priorités) et, s'il existe, `LOCAL.md` (installation du MJ, hors dépôt). Pour un gros chantier, poser les questions de fond au MJ avant de coder.
 
 ## Stack et commandes
 
@@ -88,7 +88,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 1. `gofmt -l .`, `go vet` et `go test` passent avec les tags ci-dessus.
 2. Écrans touchés vérifiés dans Chrome (CDP) à 1300 et 390 px, sans erreur de console.
 3. `docs/API.md` et `SUIVI.md` à jour.
-4. Rien de local committé : ni `.db`, `.cofdm`, `.log`, ni médias réels, ni `donnees/`.
+4. Rien de local committé : ni `.db`, `.cofdm`, `.log`, ni médias réels, ni `donnees/`. Le dépôt et l'image Docker sont publics : aucune donnée du MJ (univers, règles, bestiaire), ni rien de son installation (machine, chemins, fichiers, sauvegardes) dans un fichier suivi ; tout cela va dans `LOCAL.md`.
 
 ## Git et publication
 
