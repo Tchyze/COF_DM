@@ -71,6 +71,14 @@ func (a *acces) sessionCompte(c comptes.Compte, exp time.Time) string {
 	return a.signer(strings.Join([]string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version), c.Graine}, "."))
 }
 
+// dureeDe : la durée d'une session de ce compte.
+func dureeDe(c comptes.Compte) time.Duration {
+	if c.Admin {
+		return dureeSessionAdmin
+	}
+	return dureeSession
+}
+
 // compteDeSession : le compte actif dont c'est la session, tant que son mot de passe n'a pas changé
 // et que c'est bien ce compte, pas un autre recréé sous le même nom.
 func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, bool) {
@@ -78,12 +86,16 @@ func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, bool) {
 	if err != nil {
 		return comptes.Compte{}, false
 	}
-	id, _, plus, ok := a.lireSession(t.Value)
+	id, fin, plus, ok := a.lireSession(t.Value)
 	if !ok || len(plus) != 3 || !a.ouverte(id) {
 		return comptes.Compte{}, false
 	}
 	c, ok := a.comptes.Lire(plus[0])
 	if !ok || c.Inactif || strconv.Itoa(c.Version) != plus[1] || c.Graine == "" || c.Graine != plus[2] {
+		return comptes.Compte{}, false
+	}
+	// une session plus longue que permis : ouverte avant que le compte devienne administrateur
+	if time.Until(time.Unix(fin, 0)) > dureeDe(c)+time.Minute {
 		return comptes.Compte{}, false
 	}
 	return c, true
@@ -285,7 +297,7 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 	s.acces.rendreEssai(parCouple)
 	s.acces.rendreEssai(parNom)
 	s.acces.noter(r, "connexion_ok", c.Nom)
-	exp := time.Now().Add(dureeSession)
+	exp := time.Now().Add(dureeDe(c))
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	repondre(w, 200, map[string]any{"mj": c.Role(s.store.ID()) != "", "compte": s.vueCompte(c)})
 }
@@ -352,7 +364,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, _ = s.acces.comptes.Lire(c.Nom)
-	exp := time.Now().Add(dureeSession)
+	exp := time.Now().Add(dureeDe(c))
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	s.noterCompte(c, "mot de passe changé")
 	s.acces.noter(r, "mdp_change", c.Nom, "jetons_retires="+strconv.Itoa(retires))

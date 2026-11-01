@@ -148,7 +148,7 @@ async function vueComptes(el, moi) {
         <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons ? ` <span class="hint">· ${c.jetons} jeton(s)</span>` : ""}</td>
         <td><div class="ligne" style="gap:4px">${places(c)}</div></td>
         <td><label class="adm-actif"><input type="checkbox" data-a="actif" aria-label="${esc(c.nom)} actif" ${c.inactif ? "" : "checked"}><span>actif</span></label></td>
-        <td style="text-align:right;white-space:nowrap"><button class="ghost petit" data-a="mdp">Mot de passe…</button>${c.nom === moi ? "" : `<button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
+        <td style="text-align:right;white-space:nowrap">${c.nom === moi ? `<a class="hint" href="#/compte">Mon compte</a>` : `<button class="ghost petit" data-a="mdp">Mot de passe…</button><button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
       </tr>`).join("")}
     </tbody></table></div>
     <form id="adm-compte" class="panneau colonne" style="gap:10px">
@@ -170,7 +170,8 @@ async function vueComptes(el, moi) {
       catch (err) { toast(err.message, true); }
       maj();
     };
-    $('[data-a="mdp"]', tr).onclick = () => saisirMdp(nom);
+    const mdp = $('[data-a="mdp"]', tr); // pas sur sa propre ligne : son mot de passe se change dans « Mon compte »
+    if (mdp) mdp.onclick = () => saisirMdp(nom);
     const suppr = $('[data-a="suppr"]', tr);
     if (suppr) armer(suppr, "Confirmer", async () => {
       try { await api("DELETE", "/api/admin/comptes/" + encodeURIComponent(nom)); toast(`Compte ${nom} supprimé.`); }

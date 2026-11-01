@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
 )
@@ -473,5 +474,50 @@ func TestMdpInitialAChanger(t *testing.T) {
 	}
 	if c, v := chef.faire("GET", "/api/acces", nil); c != 200 || v["compte"].(map[string]any)["doit_changer"] != nil {
 		t.Fatalf("état après le changement : %d %v", c, v)
+	}
+}
+
+// La session d'un administrateur est plus courte : à la connexion, et pour une session ouverte avant
+// sa nomination.
+func TestSessionAdministrateurCourte(t *testing.T) {
+	_, reg, connecter := serveurMulti(t)
+	chef, meneur := connecter("chef"), connecter("meneur")
+	duree := func(n *navigateur) time.Duration { return time.Until(n.cookies[cookieMJ].Expires) }
+	if d := duree(chef); d > dureeSessionAdmin+time.Minute || d < dureeSessionAdmin-time.Minute {
+		t.Fatalf("session de l'administrateur : %v", d)
+	}
+	if d := duree(meneur); d < dureeSession-time.Minute {
+		t.Fatalf("session d'un autre compte : %v", d)
+	}
+	// une session de 30 jours, ouverte avant : elle tombe dès que le compte est administrateur
+	if c, _ := meneur.faire("GET", "/api/compte", nil); c != 200 {
+		t.Fatalf("avant : %d", c)
+	}
+	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Admin = true; return nil })
+	if c, _ := meneur.faire("GET", "/api/admin/univers", nil); c != 401 {
+		t.Fatalf("session longue d'un nouvel administrateur : %d", c)
+	}
+	// changer son mot de passe garde une session courte
+	if c, v := chef.faire("POST", "/api/compte/mdp", map[string]any{"ancien": mdpEssai("chef"), "nouveau": "une-phrase-bien-longue"}); c != 200 {
+		t.Fatalf("changement : %d %v", c, v)
+	}
+	if d := duree(chef); d > dureeSessionAdmin+time.Minute {
+		t.Fatalf("après le changement : %v", d)
+	}
+}
+
+// L'administration ne change pas le mot de passe de celui qui s'en sert : Mon compte demande l'ancien.
+func TestAdminPasSonPropreMdp(t *testing.T) {
+	_, _, connecter := serveurMulti(t)
+	chef := connecter("chef")
+	connecter("cible")
+	if c, _ := chef.faire("PATCH", "/api/admin/comptes/CHEF", map[string]any{"mdp": "une-phrase-bien-longue"}); c != 403 {
+		t.Fatalf("son propre mot de passe : %d", c)
+	}
+	if c, _ := chef.faire("GET", "/api/admin/univers", nil); c != 200 {
+		t.Fatalf("il reste connecté : %d", c)
+	}
+	if c, v := chef.faire("PATCH", "/api/admin/comptes/cible", map[string]any{"mdp": "une-phrase-bien-longue"}); c != 200 {
+		t.Fatalf("celui d'un autre : %d %v", c, v)
 	}
 }

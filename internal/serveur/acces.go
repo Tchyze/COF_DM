@@ -33,13 +33,15 @@ import (
 const (
 	cookieMJ     = "cof_dm_mj"
 	dureeSession = 30 * 24 * time.Hour
-	iterations   = 210000
-	metaMdp      = "mj_mdp"
-	metaSecret   = "mj_secret"
-	metaFermees  = "mj_fermees" // sessions fermées avant leur terme : {"identifiant": échéance}
-	mdpMin       = 8
-	essaisMax    = 8 // essais ratés par adresse (mode serveur : par nom et par adresse)
-	essaisDuree  = 5 * time.Minute
+	// dureeSessionAdmin : une session d'administrateur volée donne le serveur entier
+	dureeSessionAdmin = 12 * time.Hour
+	iterations        = 210000
+	metaMdp           = "mj_mdp"
+	metaSecret        = "mj_secret"
+	metaFermees       = "mj_fermees" // sessions fermées avant leur terme : {"identifiant": échéance}
+	mdpMin            = 8
+	essaisMax         = 8 // essais ratés par adresse (mode serveur : par nom et par adresse)
+	essaisDuree       = 5 * time.Minute
 )
 
 type acces struct {

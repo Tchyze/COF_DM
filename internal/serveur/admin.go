@@ -495,6 +495,10 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		}
 	}
 	nom := r.PathValue("nom")
+	if in.Mdp != nil && comptes.Normaliser(nom) == auteurDe(r) { // une session volée ne verrouille pas son titulaire
+		erreur(w, 403, "Changez votre propre mot de passe dans « Mon compte » : il y demande l'actuel.")
+		return
+	}
 	if in.Mdp != nil { // refusé avant tout le reste : rien ne change à moitié, et un futur administrateur y passe
 		cible, _ := a.opt.Comptes.Lire(nom)
 		admin := cible.Admin
