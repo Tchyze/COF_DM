@@ -135,11 +135,15 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Archiver** : l'univers sort de toutes les listes et n'est plus accessible, fichier et rôles gardés ; seul l'administrateur le désarchive. **Supprimer** : sauvegarde automatique, puis nom de l'univers retapé pour confirmer.
 - **Passage** : les comptes administrateurs actuels restent administrateurs (sans plus aucun accès au contenu) ; le MJ recrée lui-même ses comptes MJ.
 
-### Client, tablettes et combat en direct (1er novembre 2026, lot E, à préciser)
+### Client, tablettes et combat en direct (1er novembre 2026, lot E)
 
-- Le **mode local reste** : un MJ sans serveur peut ouvrir son PC aux tablettes depuis Paramètres → Tablette et réseau. Idée d'un client seulement relié à un serveur écartée.
-- **Combat** : synchronisation en direct entre le client relié et le serveur (les joueurs du serveur suivent un combat mené dans le client). Aujourd'hui, un combat en cours n'est pas synchronisé avant sa fin.
-- Questions posées au MJ : combat hors connexion, dés, ouverture du réseau sans relance.
+- Le **mode local reste** : un MJ sans serveur peut ouvrir son PC aux tablettes. Idée d'un client seulement relié à un serveur écartée ; les univers locaux ne changent pas.
+- **E1, ouverture du réseau sans relance** (Paramètres → Tablette et réseau) : cocher ouvre aussitôt, décocher referme et coupe les tablettes ; mot de passe MJ exigé et QR code gardés ; relié à un serveur, le réseau reste fermé.
+- **E2, combat et dés en direct** : client connecté, le combat tourne sur le serveur et le client y transmet chaque action (écran gardé dans le client, joueurs à jour aussitôt). Au lancement, le client envoie d'abord ses changements ; à la fin, synchro immédiate (PV, chance, récapitulatif).
+  - Connexion perdue en plein combat : « connexion perdue », actions bloquées, reprise seule au retour du serveur ; pas de continuation en local.
+  - Combat lancé hors connexion : reste local, invisible des joueurs, envoyé une fois terminé (comme aujourd'hui).
+  - Jets de dés : même chemin ; les jets cachés restent invisibles des joueurs.
+- E1 et E2 partent de `main` une fois les lots A à D fusionnés, après l'essai du MJ.
 
 ### Butin et pot commun (31 octobre 2026, projet 14, avant le code)
 
