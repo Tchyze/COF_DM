@@ -198,7 +198,7 @@ function saisirMdp(nom) {
     <form class="colonne" style="gap:10px">
       <label class="champ"><span>Nouveau mot de passe</span><input type="password" id="m-mdp" autocomplete="new-password" placeholder="${MDP_MIN} caractères au moins" required></label>
       <label class="champ"><span>Confirmation</span><input type="password" id="m-mdp2" autocomplete="new-password" required></label>
-      <p class="hint">Les appareils connectés à ce compte seront déconnectés.</p>
+      <p class="hint">Les appareils connectés à ce compte seront déconnectés, et ses jetons d'API retirés : ses postes de bureau reliés devront se reconnecter.</p>
       <div class="ligne"><button class="primary" type="submit">Enregistrer</button><button type="button" class="ghost" id="m-annuler">Annuler</button></div>
     </form>`);
   $("#m-annuler", voile).onclick = fermer;

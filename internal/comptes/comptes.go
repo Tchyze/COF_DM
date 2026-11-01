@@ -40,6 +40,8 @@ const (
 	MdpMin     = 10
 	prefixe    = "cofdm_"
 	jetonsMax  = 20
+	// utiliseTous : le fichier des comptes ne s'écrit pas à chaque requête d'un poste relié
+	utiliseTous = 3600.0
 )
 
 var (
@@ -62,6 +64,7 @@ type Jeton struct {
 	Nom       string  `json:"nom"`
 	Empreinte string  `json:"empreinte"`
 	Cree      float64 `json:"cree"`
+	Utilise   float64 `json:"utilise,omitempty"` // dernière utilisation, à une heure près : voir ParJeton
 }
 
 type Compte struct {
@@ -348,15 +351,33 @@ func (r *Registre) resteUnAdmin() bool {
 
 // DefinirMdp change le mot de passe : les sessions ouvertes du compte tombent.
 func (r *Registre) DefinirMdp(nom, mdp string) error {
+	_, err := r.ChangerMdp(nom, mdp, false)
+	return err
+}
+
+// ReinitialiserMdp : le mot de passe est changé par un autre que le titulaire. Tous les jetons du
+// compte tombent : qui a volé un jeton ne garde pas l'accès.
+func (r *Registre) ReinitialiserMdp(nom, mdp string) error {
+	_, err := r.ChangerMdp(nom, mdp, true)
+	return err
+}
+
+// ChangerMdp change le mot de passe, et retire tous les jetons du compte si retirerJetons. Renvoie le
+// nombre de jetons retirés ; en cas d'erreur, rien n'a changé.
+func (r *Registre) ChangerMdp(nom, mdp string, retirerJetons bool) (int, error) {
 	if len([]rune(mdp)) < MdpMin {
-		return ErrMdp
+		return 0, ErrMdp
 	}
+	retires := 0
 	_, err := r.Modifier(nom, func(c *Compte) error {
 		c.Mdp = empreinteMdp(mdp)
 		c.Version++
+		if retirerJetons {
+			retires, c.Jetons = len(c.Jetons), nil
+		}
 		return nil
 	})
-	return err
+	return retires, err
 }
 
 func (r *Registre) Supprimer(nom string) error {
@@ -475,10 +496,15 @@ func (r *Registre) ParJeton(clair string) (Compte, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, c := range r.m {
-		for _, j := range c.Jetons {
+		for i := range c.Jetons {
+			j := &c.Jetons[i]
 			if subtle.ConstantTimeCompare(e, []byte(j.Empreinte)) == 1 {
 				if c.Inactif {
 					return Compte{}, false
+				}
+				if t := maintenant(); t-j.Utilise >= utiliseTous {
+					j.Utilise = t
+					_ = r.ecrire() // cette date n'est qu'une indication : le jeton reste valable sans elle
 				}
 				return copie(c), true
 			}

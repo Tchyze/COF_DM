@@ -194,3 +194,59 @@ func TestGraineDuCompte(t *testing.T) {
 		t.Fatalf("compte recréé : %+v %v", n2, err)
 	}
 }
+
+// La date d'utilisation d'un jeton s'écrit à l'heure près, et survit à une réouverture.
+func TestJetonUtilise(t *testing.T) {
+	chemin := filepath.Join(t.TempDir(), "comptes.json")
+	r, _ := Ouvrir(chemin)
+	r.Creer("aline", "un-bon-mot-de-passe", false)
+	clair, j, err := r.NouveauJeton("aline", "poste")
+	if err != nil || j.Utilise != 0 {
+		t.Fatalf("%+v %v", j, err)
+	}
+	if _, ok := r.ParJeton(clair); !ok {
+		t.Fatal("jeton refusé")
+	}
+	c, _ := r.Lire("aline")
+	premiere := c.Jetons[0].Utilise
+	if premiere == 0 {
+		t.Fatal("utilisation non notée")
+	}
+	avant, _ := os.Stat(chemin)
+	r.ParJeton(clair)
+	if apres, _ := os.Stat(chemin); !apres.ModTime().Equal(avant.ModTime()) {
+		t.Fatal("le fichier s'écrit à chaque requête")
+	}
+	if c, _ = r.Lire("aline"); c.Jetons[0].Utilise != premiere {
+		t.Fatal("date changée dans l'heure")
+	}
+	r2, _ := Ouvrir(chemin)
+	if c, _ = r2.Lire("aline"); c.Jetons[0].Utilise != premiere {
+		t.Fatal("date perdue à la réouverture")
+	}
+}
+
+// ChangerMdp : trop court, rien ne change ; ReinitialiserMdp retire tout.
+func TestChangerMdpJetons(t *testing.T) {
+	r, _ := Ouvrir(filepath.Join(t.TempDir(), "comptes.json"))
+	r.Creer("aline", "un-bon-mot-de-passe", false)
+	clair, _, _ := r.NouveauJeton("aline", "poste")
+	if n, err := r.ChangerMdp("aline", "court", true); !errors.Is(err, ErrMdp) || n != 0 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if _, ok := r.ParJeton(clair); !ok {
+		t.Fatal("jeton retiré par un changement refusé")
+	}
+	if n, err := r.ChangerMdp("aline", "deuxieme-mot-de-passe", false); err != nil || n != 0 {
+		t.Fatalf("%d %v", n, err)
+	}
+	if _, ok := r.ParJeton(clair); !ok {
+		t.Fatal("jeton retiré sans le demander")
+	}
+	if err := r.ReinitialiserMdp("aline", "troisieme-mot-de-passe"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.ParJeton(clair); ok {
+		t.Fatal("jeton gardé après la réinitialisation")
+	}
+}

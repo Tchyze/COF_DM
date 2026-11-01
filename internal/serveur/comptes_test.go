@@ -864,3 +864,13 @@ func TestUniversParOnglet(t *testing.T) {
 		t.Fatal("lecture d'un univers sans rôle par ?univers=")
 	}
 }
+
+// connecter2 : la connexion d'un compte dont le mot de passe a changé.
+func (b *banc) connecter2(nom, mdp string) func(*http.Request) {
+	b.t.Helper()
+	c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdp}, nil)
+	if c != 200 || cookie == nil {
+		b.t.Fatalf("connexion de %s : %d", nom, c)
+	}
+	return func(r *http.Request) { r.AddCookie(cookie) }
+}

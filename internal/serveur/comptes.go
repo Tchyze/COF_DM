@@ -178,7 +178,11 @@ func (s *Serveur) routesComptes() {
 func (s *Serveur) vueCompte(c comptes.Compte) map[string]any {
 	jetons := []map[string]any{}
 	for _, j := range c.Jetons {
-		jetons = append(jetons, map[string]any{"id": j.ID, "nom": j.Nom, "cree": j.Cree})
+		v := map[string]any{"id": j.ID, "nom": j.Nom, "cree": j.Cree}
+		if j.Utilise != 0 {
+			v["utilise"] = j.Utilise
+		}
+		jetons = append(jetons, v)
 	}
 	out := map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "jetons": jetons, "cree": c.Cree}
 	if !c.Admin {
@@ -293,6 +297,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Ancien  string `json:"ancien"`
 		Nouveau string `json:"nouveau"`
+		Retirer bool   `json:"retirer_jetons"`
 	}
 	if err := lireJSON(r, &req); err != nil {
 		erreurStore(w, err)
@@ -312,7 +317,8 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.acces.rendreEssai(cle)
-	if err := s.acces.comptes.DefinirMdp(c.Nom, req.Nouveau); err != nil {
+	retires, err := s.acces.comptes.ChangerMdp(c.Nom, req.Nouveau, req.Retirer)
+	if err != nil {
 		erreurCompte(w, err)
 		return
 	}
@@ -320,7 +326,7 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	exp := time.Now().Add(dureeSession)
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	s.noterCompte(c, "mot de passe changé")
-	repondre(w, 200, map[string]any{"ok": true})
+	repondre(w, 200, map[string]any{"ok": true, "jetons_retires": retires})
 }
 
 // monJeton : {"nom": "…"} crée un jeton d'API, montré cette seule fois.

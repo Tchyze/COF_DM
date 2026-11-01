@@ -524,7 +524,7 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 	if err == nil && in.Mdp != nil {
-		if err = a.opt.Comptes.DefinirMdp(nom, *in.Mdp); err == nil {
+		if err = a.opt.Comptes.ReinitialiserMdp(nom, *in.Mdp); err == nil {
 			c, _ = a.opt.Comptes.Lire(nom)
 		}
 	}
