@@ -28,10 +28,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
+	"github.com/Tchyze/cof_dm/internal/installation"
 	"github.com/Tchyze/cof_dm/internal/majour"
 	"github.com/Tchyze/cof_dm/internal/reglages"
 	"github.com/Tchyze/cof_dm/internal/serveur"
@@ -48,27 +50,9 @@ type config struct {
 	Reseau bool `json:"reseau,omitempty"` // écouter sur le réseau local (tablette du MJ)
 }
 
-// dossierPortable : un dossier « COF DM - données » posé à côté du programme (ou de l'AppImage)
-// est utilisé à la place du dossier de l'utilisateur, pour emporter l'application sur une clé USB.
-func dossierPortable() string {
-	exe := os.Getenv("APPIMAGE")
-	if exe == "" {
-		exe, _ = os.Executable()
-	}
-	if exe == "" {
-		return ""
-	}
-	d := filepath.Join(filepath.Dir(exe), "COF DM - données")
-	if fi, err := os.Stat(d); err == nil && fi.IsDir() {
-		return d
-	}
-	return ""
-}
-
+// dossierParDefaut : le dossier des données de l'utilisateur. L'ancien mode portable (un dossier
+// « COF DM - données » à côté du programme) n'existe plus : reprendrePortable y range ses données.
 func dossierParDefaut() string {
-	if d := dossierPortable(); d != "" {
-		return d
-	}
 	switch runtime.GOOS {
 	case "windows":
 		if d := os.Getenv("APPDATA"); d != "" {
@@ -184,6 +168,26 @@ func programmeCourant() string {
 // envRelance : présent quand l'application vient d'être relancée par une mise à jour.
 const envRelance = "COF_DM_RELANCE"
 
+// envAvertir : un mot pour le MJ, transmis au programme installé qui s'ouvre à la place de celui-ci.
+const envAvertir = "COF_DM_AVERTIR"
+
+// reprendrePortable : le mode portable n'existe plus ; un dossier « COF DM - données » posé à côté
+// du programme (ou de l'AppImage) passe dans le dossier de l'utilisateur, sans rien perdre. Renvoie
+// un mot pour le MJ, s'il y a lieu.
+func reprendrePortable() string {
+	portable := installation.PortableDe(programmeCourant())
+	if portable == "" {
+		return ""
+	}
+	r, err := installation.ReprendrePortable(portable, dossierParDefaut())
+	if err != nil {
+		log.Printf("mode portable : %v", err)
+		return fmt.Sprintf("Les données de « %s » n'ont pas pu rejoindre votre dossier de données (%v) : elles y sont toujours. Fermez ce qui les utilise, puis relancez COF DM.", portable, err)
+	}
+	log.Printf("mode portable : données de %s reprises dans %s", r.Depuis, r.Vers)
+	return r.Avertissement
+}
+
 // attendrePort laisse jusqu'à dix secondes à l'instance d'avant pour libérer le port, afin que
 // l'application relancée garde la même adresse.
 func attendrePort(hote string, port int) {
@@ -226,8 +230,13 @@ func main() {
 	universFlag := flag.String("univers", "", "fichier d'univers (.cofdm) à ouvrir ; créé s'il n'existe pas")
 	reseau := flag.Bool("reseau", false, "écouter sur le réseau local (API avec jeton, interface avec le mot de passe MJ)")
 	modeServeur := flag.Bool("serveur", editionServeur, "mode serveur, derrière un reverse proxy : sans fenêtre, accès par comptes (édition serveur, image Docker)")
+	desinstallerFlag := flag.Bool("desinstaller", false, "désinstaller l'application (Windows, lancé par « Applications installées »)")
 	modeMCP := flag.Bool("mcp", false, "serveur MCP pour Claude, sur l'entrée et la sortie standard : joint l'application lancée par son API (COF_DM_URL, COF_DM_JETON, COF_DM_UNIVERS)")
 	flag.Parse()
+	if *desinstallerFlag {
+		desinstaller()
+		return
+	}
 	if *modeMCP {
 		lancerMCP(*dataFlag, *portFlag)
 		return
@@ -238,6 +247,26 @@ func main() {
 	*modeServeur = editionServeur // l'édition serveur n'a pas d'autre mode
 	if *modeServeur {
 		*headless = true
+	}
+
+	// application de bureau : reprise de l'ancien mode portable, puis installation dans le dossier de
+	// l'utilisateur (Windows) ; le programme installé est alors lancé à la place de celui-ci
+	var avertissements []string
+	if m := os.Getenv(envAvertir); m != "" {
+		avertissements = append(avertissements, m)
+		os.Unsetenv(envAvertir)
+	}
+	if !*modeServeur && *dataFlag == "" && !*headless {
+		if m := reprendrePortable(); m != "" {
+			avertissements = append(avertissements, m)
+		}
+		sortir, m := installerAuLancement(strings.Join(avertissements, " "))
+		if sortir {
+			return
+		}
+		if m != "" {
+			avertissements = append(avertissements, m)
+		}
 	}
 
 	dossier := *dataFlag
@@ -325,6 +354,10 @@ func main() {
 	app = serveur.NouvelleApplication(opt)
 	if err := app.Demarrer(*universFlag); err != nil {
 		fatal("Impossible d'ouvrir l'univers : %v", err)
+	}
+	for _, m := range avertissements {
+		log.Print(m)
+		app.Avertir(m)
 	}
 	defer app.Fermer()
 	// délais : une connexion lente ou muette ne reste pas ouverte indéfiniment (les plus longs

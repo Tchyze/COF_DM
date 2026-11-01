@@ -220,24 +220,70 @@ func (s *Serveur) ecrireConfigClaude(c cibleClaude, actif bool) error {
 		delete(serveurs, nomMCP)
 	}
 	cfg["mcpServers"] = serveurs
+	return ecrireFichierClaude(c.Chemin, cfg)
+}
+
+// ecrireFichierClaude écrit une configuration de Claude, avec une copie du fichier d'avant la
+// première fois.
+func ecrireFichierClaude(chemin string, cfg map[string]any) error {
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	if avant, err := os.ReadFile(c.Chemin); err == nil {
-		copie := c.Chemin + ".avant-cof-dm"
+	if avant, err := os.ReadFile(chemin); err == nil {
+		copie := chemin + ".avant-cof-dm"
 		if _, err := os.Stat(copie); errors.Is(err, os.ErrNotExist) {
 			_ = os.WriteFile(copie, avant, 0o600)
 		}
 	}
 	// écrit à côté puis remplace : jamais de fichier à moitié écrit
-	tmp := c.Chemin + ".cof-dm.tmp"
+	tmp := chemin + ".cof-dm.tmp"
 	if err := os.WriteFile(tmp, append(b, '\n'), 0o600); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, c.Chemin); err != nil {
+	if err := os.Rename(tmp, chemin); err != nil {
 		_ = os.Remove(tmp)
 		return err
 	}
 	return nil
+}
+
+// SuivreClaude : le programme a changé de place (installé dans le dossier de l'utilisateur) : chaque
+// entrée cof-dm de Claude qui lançait « ancien » lance désormais « nouveau », avec les mêmes
+// arguments. « nouveau » vide (désinstallation) : l'entrée est retirée. Une entrée qui lance un
+// autre programme, et le reste des fichiers, ne sont pas touchés ; un fichier absent n'est pas créé.
+func SuivreClaude(ancien, nouveau string) error {
+	var echecs []error
+	for _, c := range ciblesClaude() {
+		cfg, err := lireConfigClaude(c.Chemin)
+		if err != nil {
+			echecs = append(echecs, err)
+			continue
+		}
+		serveurs, _ := cfg["mcpServers"].(map[string]any)
+		e, ok := serveurs[nomMCP].(map[string]any)
+		if !ok {
+			continue
+		}
+		if cmd, _ := e["command"].(string); cmd == "" || !memeProgramme(cmd, ancien) {
+			continue
+		}
+		if nouveau == "" {
+			delete(serveurs, nomMCP)
+		} else {
+			e["command"] = nouveau
+		}
+		if err := ecrireFichierClaude(c.Chemin, cfg); err != nil {
+			echecs = append(echecs, err)
+		}
+	}
+	return errors.Join(echecs...)
+}
+
+// memeProgramme compare deux chemins comme le système de fichiers (sans la casse sous Windows).
+func memeProgramme(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
+	}
+	return filepath.Clean(a) == filepath.Clean(b)
 }

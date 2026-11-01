@@ -249,6 +249,17 @@ func (a *Application) parChemin(chemin string) *universOuvert {
 	return nil
 }
 
+// Avertir ajoute un mot pour le MJ, montré avec l'univers ouvert au lancement (données reprises du
+// mode portable, installation…).
+func (a *Application) Avertir(msg string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.avertissement != "" {
+		a.avertissement += " "
+	}
+	a.avertissement += msg
+}
+
 // choisi : le MJ vient de choisir son univers, l'avertissement du lancement n'a plus lieu d'être.
 func (a *Application) choisi() {
 	a.mu.Lock()

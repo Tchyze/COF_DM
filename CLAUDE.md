@@ -36,6 +36,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 | `internal/combat`, `internal/des` | Moteur de combat (lit la partie `combat` des règles) ; formules de dés. |
 | `internal/synchro`, `internal/majour` | Client de synchro du bureau ; mises à jour signées (Ed25519 sur `SHA256SUMS`, clé privée = secret `COF_DM_SIGNATURE`, jamais dans le dépôt). |
 | `internal/mcp`, `internal/obsidian` | Serveur MCP ; export vers Obsidian. |
+| `internal/installation` | Bureau Windows : installation pour l'utilisateur au premier lancement (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis, « Applications installées », `-desinstaller`), sans CGO : ses tests se compilent pour Windows (`GOOS=windows go test -c`) et s'y lancent. Reprise de l'ancien mode portable (supprimé). |
 | `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `style.css`, `combat.css`. |
 | `docs/API.md` | Documentation de l'API. |
 

@@ -281,7 +281,7 @@ func TestNettoyer(t *testing.T) {
 	}
 	// le programme d'avant tourne encore deux essais, un autre reste tenu tout du long
 	simulerVerrous(t, verrous{filepath.Join(dir, "COF-DM.exe.ancien"): 2, filepath.Join(dir, "COF-DM.exe.ancien-3"): -1})
-	err := nettoyer(cible)
+	err := NettoyerA(cible)
 	if err == nil || !strings.Contains(err.Error(), "ancien-3") {
 		t.Fatalf("un fichier toujours tenu doit être signalé : %v", err)
 	}
@@ -295,7 +295,7 @@ func TestNettoyer(t *testing.T) {
 	}
 	// au lancement suivant, il n'est plus tenu
 	simulerVerrous(t, verrous{})
-	if err := nettoyer(cible); err != nil {
+	if err := NettoyerA(cible); err != nil {
 		t.Fatalf("lancement suivant : %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "COF-DM.exe.ancien-3")); !errors.Is(err, os.ErrNotExist) {
