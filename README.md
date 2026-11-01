@@ -441,7 +441,7 @@ Le script d'import relit cet export, avec ses limites : il ne connaît ni les ob
 
 ## Développement
 
-Go 1.26 (1.26.9 au moins) et un compilateur C (SQLite). La recherche utilise le module FTS5 de SQLite : **toujours compiler avec `-tags sqlite_fts5`** (sinon la compilation s'arrête avec un message).
+Go 1.26 (1.26.10 au moins) et un compilateur C (SQLite). La recherche utilise le module FTS5 de SQLite : **toujours compiler avec `-tags sqlite_fts5`** (sinon la compilation s'arrête avec un message).
 
 ```bash
 go test -tags "sqlite_fts5 nogui" ./...                 # tests

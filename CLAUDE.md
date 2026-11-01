@@ -7,7 +7,7 @@ Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Applica
 
 ## Stack et commandes
 
-- Go ≥ 1.26.9 (`go.mod`), **CGO obligatoire** (`mattn/go-sqlite3`).
+- Go ≥ 1.26.10 (`go.mod`), **CGO obligatoire** (`mattn/go-sqlite3`).
 - Tag **`sqlite_fts5` toujours** (sans lui, `internal/store/fts5_requis.go` fait échouer la compilation). Tag `nogui` : sans fenêtre (tests, CI, headless). Tag `serveur` : édition serveur.
 - Fenêtre : `webview/webview_go` (WebView2 / GTK 3 + WebKitGTK 4.1).
 - Frontend : HTML / CSS / JS **sans framework, sans dépendance, sans build**, embarqué par `//go:embed frontend`. Jamais de npm ni de bundler.

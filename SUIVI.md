@@ -34,7 +34,7 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 ## Pour reprendre sur un autre poste
 
 1. **Cloner le dépôt** `COF_DM`.
-2. **Outils** : Go 1.26.9 au moins (fixé par `go.mod`) et un compilateur C pour SQLite (CGO). Commandes dans `CLAUDE.md`.
+2. **Outils** : Go 1.26.10 au moins (fixé par `go.mod`) et un compilateur C pour SQLite (CGO). Commandes dans `CLAUDE.md`.
 3. **Copier à la main les fichiers hors dépôt** et `LOCAL.md`, qui les liste : ils ne sont dans aucun dépôt, volontairement.
 4. Vérifier que tout passe : `gofmt -l .`, `go vet -tags "sqlite_fts5 nogui" ./...`, `go test -tags "sqlite_fts5 nogui" ./...`.
 
