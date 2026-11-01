@@ -438,3 +438,40 @@ func TestAdminRegleDesMotsDePasse(t *testing.T) {
 		t.Fatal("un refus ne change rien")
 	}
 }
+
+// Le mot de passe initial, passé par les journaux, ne donne accès à rien avant d'être changé.
+func TestMdpInitialAChanger(t *testing.T) {
+	_, reg, connecter := serveurMulti(t)
+	chef := connecter("chef")
+	if err := reg.ExigerChangement("chef"); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range [][2]string{{"GET", "/api/admin/univers"}, {"GET", "/api/admin/comptes"}, {"GET", "/api/mes-univers"}, {"GET", "/api/univers/version"}} {
+		c, v := chef.faire(x[0], x[1], nil)
+		if c != 403 || v["changer_mdp"] != true {
+			t.Fatalf("%s %s avant le changement : %d %v", x[0], x[1], c, v)
+		}
+	}
+	if c, v := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "intrus", "mdp": "une-phrase-bien-longue", "admin": true}); c != 403 {
+		t.Fatalf("création d'un compte avant le changement : %d %v", c, v)
+	}
+	// le compte, la santé du serveur et la page restent : c'est par là qu'on en sort
+	if c, v := chef.faire("GET", "/api/acces", nil); c != 200 || v["compte"].(map[string]any)["doit_changer"] != true {
+		t.Fatalf("état du compte : %d %v", c, v)
+	}
+	if c, _ := chef.faire("GET", "/api/sante", nil); c != 200 {
+		t.Fatalf("santé : %d", c)
+	}
+	if c, v := chef.faire("POST", "/api/compte/mdp", map[string]any{"ancien": mdpEssai("chef"), "nouveau": mdpEssai("chef")}); c != 422 {
+		t.Fatalf("le même mot de passe ne lève pas l'obligation : %d %v", c, v)
+	}
+	if c, v := chef.faire("POST", "/api/compte/mdp", map[string]any{"ancien": mdpEssai("chef"), "nouveau": "une-phrase-bien-longue"}); c != 200 {
+		t.Fatalf("changement : %d %v", c, v)
+	}
+	if c, v := chef.faire("GET", "/api/admin/univers", nil); c != 200 {
+		t.Fatalf("après le changement : %d %v", c, v)
+	}
+	if c, v := chef.faire("GET", "/api/acces", nil); c != 200 || v["compte"].(map[string]any)["doit_changer"] != nil {
+		t.Fatalf("état après le changement : %d %v", c, v)
+	}
+}

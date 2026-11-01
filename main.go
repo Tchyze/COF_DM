@@ -564,21 +564,47 @@ func proxiesDemandes(option string) ([]*net.IPNet, error) {
 	return l, err
 }
 
-// premierAdmin crée le compte « admin » d'un serveur qui n'a encore aucun compte. Son mot de passe,
-// tiré au hasard, n'est affiché qu'ici (et pas dans le fichier journal) : il est à changer aussitôt.
+// envMdpAdmin : le fichier qui donne le mot de passe du premier compte (un secret Docker), lu au premier
+// lancement seulement.
+const envMdpAdmin = "COF_DM_ADMIN_MDP_FICHIER"
+
+// premierAdmin crée le compte « admin » d'un serveur qui n'a encore aucun compte. Avec un secret, son
+// mot de passe n'est écrit nulle part. Sinon il est tiré au hasard et n'est affiché qu'ici (et pas
+// dans le fichier journal) : il reste lisible dans les journaux du conteneur, et le compte n'a accès à
+// rien d'autre que son propre compte tant qu'il ne l'a pas changé.
 func premierAdmin(reg *comptes.Registre) error {
 	if !reg.Vide() {
 		return nil
 	}
-	b := make([]byte, 15)
-	if _, err := rand.Read(b); err != nil {
-		return err
+	if fichier := os.Getenv(envMdpAdmin); fichier != "" {
+		b, err := os.ReadFile(fichier)
+		if err != nil {
+			return fmt.Errorf("%s : %w", envMdpAdmin, err)
+		}
+		if _, err := reg.Creer("admin", strings.TrimRight(string(b), "\r\n"), true); err != nil {
+			return fmt.Errorf("%s : %w", envMdpAdmin, err)
+		}
+		fmt.Printf("\nPremier lancement du serveur : compte administrateur créé, nom d'utilisateur admin, avec le mot de passe de %s.\n\n", envMdpAdmin)
+		return nil
 	}
-	mdp := base64.RawURLEncoding.EncodeToString(b)
+	var mdp string
+	for {
+		b := make([]byte, 15)
+		if _, err := rand.Read(b); err != nil {
+			return err
+		}
+		mdp = base64.RawURLEncoding.EncodeToString(b)
+		if comptes.MdpAcceptable("admin", mdp, true) == nil {
+			break
+		}
+	}
 	if _, err := reg.Creer("admin", mdp, true); err != nil {
 		return err
 	}
-	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nNotez-le et changez-le après la première connexion : il ne sera plus affiché.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
+	if err := reg.ExigerChangement("admin"); err != nil {
+		return err
+	}
+	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nÀ changer dès la première connexion : le compte n'a accès à rien d'autre avant, et ce mot de passe reste lisible dans les journaux du conteneur tant qu'il n'est pas changé.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
 	return nil
 }
 

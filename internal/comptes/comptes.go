@@ -82,6 +82,9 @@ type Compte struct {
 	Version int               `json:"version"` // change avec le mot de passe : les sessions ouvertes tombent
 	Cree    float64           `json:"cree"`
 	Graine  string            `json:"graine"` // tirée à la création : une session n'ouvre que ce compte-là, pas un homonyme recréé
+	// DoitChanger : son mot de passe est passé par les journaux ; il n'a accès à rien d'autre qu'à son
+	// compte tant qu'il ne l'a pas changé.
+	DoitChanger bool `json:"doit_changer,omitempty"`
 }
 
 // Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
@@ -411,12 +414,22 @@ func (r *Registre) ChangerMdp(nom, mdp string, retirerJetons bool) (int, error) 
 		}
 		c.Mdp = empreinteMdp(mdp)
 		c.Version++
+		c.DoitChanger = false
 		if retirerJetons {
 			retires, c.Jetons = len(c.Jetons), nil
 		}
 		return nil
 	})
 	return retires, err
+}
+
+// ExigerChangement : ce compte devra changer son mot de passe avant tout le reste.
+func (r *Registre) ExigerChangement(nom string) error {
+	_, err := r.Modifier(nom, func(c *Compte) error {
+		c.DoitChanger = true
+		return nil
+	})
+	return err
 }
 
 func (r *Registre) Supprimer(nom string) error {

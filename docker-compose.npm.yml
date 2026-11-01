@@ -15,6 +15,8 @@ services:
     # et le HTTPS à l'application : COF DM et NPM seuls sur ce réseau.
     command: ["-serveur", "-reseau", "-proxies", "172.30.0.0/24", "-port", "8100", "-data", "/data"]
     environment:
+      # pour que le mot de passe initial ne passe pas par les journaux : un secret Docker (ci-dessous)
+      # COF_DM_ADMIN_MDP_FICHIER: /run/secrets/cof_dm_admin
       # les imports passent par des fichiers temporaires, trop gros pour le /tmp en mémoire
       TMPDIR: /data/tmp
     volumes:
@@ -32,9 +34,15 @@ services:
     pids_limit: 256
     restart: unless-stopped
 
+    # secrets: [cof_dm_admin]
+
 volumes:
   cof-dm-donnees:
 
 networks:
   cof-dm-proxy:
     external: true
+
+# secrets:
+#   cof_dm_admin:
+#     file: ./admin.mdp

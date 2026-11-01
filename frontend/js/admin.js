@@ -232,11 +232,16 @@ async function route(moi) {
   const acces = await api("GET", "/api/acces").catch(() => null);
   // la connexion se fait sur la page de l'application, qui renvoie ici un administrateur
   if (!acces?.serveur || !acces.connecte || !acces.compte?.admin) { location.replace("/"); return; }
-  $("#adm-nav").hidden = false;
   const sortir = $("#adm-sortir");
   sortir.hidden = false;
   sortir.title = `Fermer la session de ${acces.compte.nom}`;
   sortir.onclick = async () => { await api("POST", "/api/acces/deconnexion").catch(() => {}); location.replace("/"); };
+  if (acces.compte.doit_changer) { // le mot de passe initial, passé par les journaux : rien d'autre avant
+    $("#vue").innerHTML = `<div class="alerte">Ce mot de passe a été écrit dans les journaux du serveur : changez-le avant de continuer.</div><div class="panneau" id="adm-panneau"></div>`;
+    await panneauCompte($("#adm-panneau"), { jetons: false, apres: () => location.reload() });
+    return;
+  }
+  $("#adm-nav").hidden = false;
   window.addEventListener("hashchange", () => route(acces.compte.nom));
   route(acces.compte.nom);
 })();

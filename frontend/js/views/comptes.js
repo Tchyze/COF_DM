@@ -28,7 +28,7 @@ export function aideEditionJoueurs(acces = window.cofAcces || {}) {
 
 /** Mon compte : changer son mot de passe, créer et retirer ses jetons d'API (pas sur la page des
  * joueurs : jetons: false). */
-export async function panneauCompte(box, { jetons = true } = {}) {
+export async function panneauCompte(box, { jetons = true, apres = null } = {}) {
   const c = await api("GET", "/api/compte");
   const qui = c.admin ? "Administrateur du serveur" : `${ROLES[c.role || ""]} de cet univers`;
   box.innerHTML = `<h3>Mon compte</h3>
@@ -36,7 +36,7 @@ export async function panneauCompte(box, { jetons = true } = {}) {
     <form id="cpt-mdp" class="colonne" style="gap:10px">
       <label class="champ"><span>Mot de passe actuel</span><input type="password" id="cpt-ancien" autocomplete="current-password" required></label>
       <div class="org-form">
-        <label class="champ"><span>Nouveau mot de passe</span><input type="password" id="cpt-nouveau" autocomplete="new-password" placeholder="${MDP_MIN} caractères au moins" required></label>
+        <label class="champ"><span>Nouveau mot de passe</span><input type="password" id="cpt-nouveau" autocomplete="new-password" placeholder="${c.admin ? MDP_MIN + 2 : MDP_MIN} caractères au moins" required></label>
         <label class="champ"><span>Confirmation</span><input type="password" id="cpt-nouveau2" autocomplete="new-password" required></label>
       </div>
       ${c.jetons.length ? `<label class="t-coche"><input type="checkbox" id="cpt-retirer" checked><span>Retirer aussi mes jetons d'API (${c.jetons.length})<small>À laisser coché si vous craignez qu'on ait pris votre mot de passe. Vos postes de bureau reliés devront se reconnecter ; leurs copies et leurs changements restent sur l'ordinateur.</small></span></label>` : ""}
@@ -58,7 +58,7 @@ export async function panneauCompte(box, { jetons = true } = {}) {
     try {
       const r = await api("POST", "/api/compte/mdp", { ancien: $("#cpt-ancien", box).value, nouveau, retirer_jetons: !!retirer?.checked });
       toast(r.jetons_retires ? `Mot de passe changé, ${r.jetons_retires} jeton${r.jetons_retires > 1 ? "s" : ""} retiré${r.jetons_retires > 1 ? "s" : ""}.` : "Mot de passe changé.");
-      maj();
+      if (apres) apres(); else maj();
     }
     catch (err) { toast(err.message, true); }
   };

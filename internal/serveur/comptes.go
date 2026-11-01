@@ -118,8 +118,21 @@ func (a *acces) entrer(w http.ResponseWriter, r *http.Request) (*http.Request, b
 		}
 		return r.WithContext(context.WithValue(ctx, cleAnonyme{}, true)), true
 	}
+	if c.DoitChanger && mdpAChanger(r.URL.Path) {
+		repondre(w, 403, map[string]any{"detail": "Changez d'abord le mot de passe initial de ce compte (Mon compte).", "changer_mdp": true})
+		return nil, false
+	}
 	ctx = context.WithValue(ctx, cleCompte{}, c)
 	return r.WithContext(context.WithValue(ctx, cleContexte{}, c.Nom)), true
+}
+
+// mdpAChanger : la route est fermée à un compte qui doit changer son mot de passe. Il garde son compte
+// (pour en sortir), la santé du serveur et les pages, qui ne portent aucune donnée.
+func mdpAChanger(chemin string) bool {
+	if !strings.HasPrefix(chemin, "/api/") && !strings.HasPrefix(chemin, "/medias/") {
+		return false
+	}
+	return !proprePerso(chemin) && chemin != "/api/sante"
 }
 
 // proprePerso : ce qui touche au compte lui-même, ouvert à tout compte quel que soit son rôle.
@@ -185,6 +198,9 @@ func (s *Serveur) vueCompte(c comptes.Compte) map[string]any {
 		jetons = append(jetons, v)
 	}
 	out := map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "jetons": jetons, "cree": c.Cree}
+	if c.DoitChanger {
+		out["doit_changer"] = true
+	}
 	if !c.Admin {
 		out["role"], out["roles"], out["pj"] = c.Role(s.store.ID()), c.Roles, c.Persos[s.store.ID()]
 	}
@@ -326,6 +342,10 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.acces.rendreEssai(cle)
+	if c.DoitChanger && req.Nouveau == req.Ancien {
+		erreur(w, 422, "Choisissez un autre mot de passe : celui-ci a été écrit dans les journaux du serveur.")
+		return
+	}
 	retires, err := s.acces.comptes.ChangerMdp(c.Nom, req.Nouveau, req.Retirer)
 	if err != nil {
 		erreurCompte(w, err)

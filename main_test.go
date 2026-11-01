@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/Tchyze/cof_dm/internal/comptes"
 )
 
 // Un autre programme tient 127.0.0.1 sur le port voulu (comme le relais de WSL sous Windows) :
@@ -247,5 +249,61 @@ func TestProxiesDemandes(t *testing.T) {
 		if _, err := proxiesDemandes(v); err == nil {
 			t.Errorf("%q accepté : le serveur doit refuser de démarrer", v)
 		}
+	}
+}
+
+// Le premier compte : un mot de passe tiré, affiché et à changer ; ou celui d'un secret, jamais affiché.
+func TestPremierAdmin(t *testing.T) {
+	ouvrir := func() *comptes.Registre {
+		r, err := comptes.Ouvrir(filepath.Join(t.TempDir(), "comptes.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	t.Setenv(envMdpAdmin, "")
+	r := ouvrir()
+	if err := premierAdmin(r); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := r.Lire("admin"); !ok || !c.Admin || !c.DoitChanger {
+		t.Fatalf("mot de passe tiré : %+v", c)
+	}
+
+	secret := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(secret, []byte("une-phrase-bien-longue\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(envMdpAdmin, secret)
+	r = ouvrir()
+	if err := premierAdmin(r); err != nil {
+		t.Fatal(err)
+	}
+	if c, ok := r.Verifier("admin", "une-phrase-bien-longue"); !ok || c.DoitChanger {
+		t.Fatalf("mot de passe du secret : %+v %v", c, ok)
+	}
+	// un compte existe déjà : le secret n'y change rien
+	if err := os.WriteFile(secret, []byte("une-tout-autre-phrase\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := premierAdmin(r); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.Verifier("admin", "une-phrase-bien-longue"); !ok {
+		t.Fatal("le compte existant ne change pas")
+	}
+	// un secret faible ou absent : le serveur le dit et ne crée rien
+	if err := os.WriteFile(secret, []byte("1234567890\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	r = ouvrir()
+	if err := premierAdmin(r); err == nil || !r.Vide() {
+		t.Fatalf("secret faible : %v", err)
+	}
+	if err := os.Remove(secret); err != nil {
+		t.Fatal(err)
+	}
+	if err := premierAdmin(r); err == nil || !r.Vide() {
+		t.Fatalf("secret absent : %v", err)
 	}
 }
