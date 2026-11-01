@@ -77,6 +77,9 @@ type Univers struct {
 	Role string `json:"role"`
 }
 
+// ErrCompteAdmin : un compte administrateur ne relie pas le bureau au serveur.
+var ErrCompteAdmin = errors.New("compte administrateur")
+
 // Connecter ouvre une session avec le compte, crée un jeton d'API au nom de ce poste, puis ferme la
 // session : seul le jeton est gardé (jamais le mot de passe). Les jetons que ce poste aurait laissés
 // (serveur injoignable quand il l'a quitté) sont retirés d'abord : un poste n'en a qu'un. Renvoie
@@ -89,6 +92,7 @@ func Connecter(base, nom, mdp, poste string) (jeton string, univers []Univers, e
 	}
 	libelle := LibelleJeton(poste)
 	var compte struct {
+		Admin  bool `json:"admin"`
 		Jetons []struct {
 			ID  string `json:"id"`
 			Nom string `json:"nom"`
@@ -107,6 +111,9 @@ func Connecter(base, nom, mdp, poste string) (jeton string, univers []Univers, e
 	err = c.appel("POST", "/api/compte/jetons", map[string]string{"nom": libelle}, &j)
 	_ = c.appel("POST", "/api/acces/deconnexion", nil, nil)
 	if err != nil {
+		if compte.Admin { // sans jeton : il n'entre dans aucun univers, et se gère sur la page du serveur
+			return "", nil, ErrCompteAdmin
+		}
 		return "", nil, err
 	}
 	if j.Jeton == "" {

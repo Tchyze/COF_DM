@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -24,6 +25,12 @@ const (
 	regArchives    = "serveur_archives" // {"identifiant": "fichier"} : les univers archivés, dans DossierArchives
 	dossierArchive = "archives"
 )
+
+// pageAdmin : les fichiers de la page d'administration, que l'application de bureau ne sert pas.
+func pageAdmin(chemin string) bool {
+	chemin = path.Clean(chemin)
+	return chemin == "/admin.html" || chemin == "/js/admin.js"
+}
 
 // DossierArchives : les fichiers des univers archivés, hors du dossier ouvert au démarrage.
 func (a *Application) DossierArchives() string {

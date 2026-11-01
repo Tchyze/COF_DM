@@ -60,7 +60,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 
 | Requête | Effet |
 |---|---|
-| `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`). |
+| `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`) ; un administrateur (`compte.admin`) est renvoyé vers `/admin.html`. |
 | `POST /api/acces/connexion` `{"nom", "mdp"}` | Ouvre la session (cookie `cof_dm_mj`, 30 jours, `Secure` en HTTPS). `401` : nom ou mot de passe incorrect ; `429` : huit essais ratés en cinq minutes depuis cette adresse, ou vingt sur ce nom. |
 | `POST /api/acces/deconnexion` | Ferme la session. |
 | `GET /api/compte` | Son compte : `{"nom", "admin", "inactif", "role"` (dans l'univers ouvert)`, "roles"` (par identifiant d'univers)`, "pj", "jetons": [{"id", "nom", "cree"}], "cree"}` ; pour un administrateur, ni `role`, ni `roles`, ni `pj`. |
@@ -71,7 +71,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 
 ### Administration
 
-Routes de l'administrateur, connecté par son mot de passe (`403` à tout autre compte et à tout jeton, `404` sur l'application de bureau). Elles ne lisent d'un univers que son identifiant, son nom (celui de son fichier), sa taille et sa date : jamais une fiche. Les actions sont notées dans le journal du serveur, pas dans celui des univers.
+Routes de l'administrateur, connecté par son mot de passe (`403` à tout autre compte et à tout jeton, `404` sur l'application de bureau, qui ne sert pas non plus la page `/admin.html`). Elles ne lisent d'un univers que son identifiant, son nom (celui de son fichier), sa taille et sa date : jamais une fiche. Les actions sont notées dans le journal du serveur, pas dans celui des univers.
 
 | Requête | Effet |
 |---|---|
@@ -521,7 +521,7 @@ L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}
 | Route | Rôle |
 |---|---|
 | `GET /api/univers/serveur` | Le mode et l'univers ouvert : `{"mode", "serveur", "reseau", "relie", "actif", "pause", "copie", "url", "compte", "nom_copie", "synchro": {"etat", "derniere", "erreur", "bilan"}, "conflits"}`. `mode` : `local` ou `serveur`. `serveur` (mode serveur) : `{"url", "compte", "etat", "verifie", "erreur"}`, `etat` valant `connecte`, `hors_ligne`, `refuse` (jeton retiré sur le serveur : se reconnecter) ou `inconnu`. `relie` : l'univers ouvert est une copie reliée ; `actif` : elle se synchronise ; `pause` : elle attend son serveur. `synchro.etat` : `a_jour`, `hors_ligne`, `version` (le serveur est plus récent : mettre l'application à jour), `erreur` ou `jamais`. `synchro.ecart` : `serveur_recent` ou `bureau_recent` (réception seule), avec `version_serveur` et `message` ; `synchro.bilan` : `envoyes`, `recus`, `conflits`, `images`, `en_attente` (objets changés ici qui attendent le serveur), `recus_en_attente` (objets reçus que cette application ne sait pas encore appliquer). |
-| `POST /api/univers/serveur/connexion` `{"url", "nom", "mdp"}` | Passe en mode serveur (HTTPS, sauf sur l'ordinateur ou le réseau local) et renvoie l'état, avec `univers` : ceux du compte (`ici` : déjà sur cet ordinateur). Une connexion d'avant est remplacée et son jeton rendu à son serveur (`avertissement` s'il ne répond pas) ; les copies d'un autre serveur passent en pause. Les appareils qui suivaient la page des joueurs sont coupés. |
+| `POST /api/univers/serveur/connexion` `{"url", "nom", "mdp"}` | Passe en mode serveur (HTTPS, sauf sur l'ordinateur ou le réseau local) et renvoie l'état, avec `univers` : ceux du compte (`ici` : déjà sur cet ordinateur). Une connexion d'avant est remplacée et son jeton rendu à son serveur (`avertissement` s'il ne répond pas) ; les copies d'un autre serveur passent en pause. Les appareils qui suivaient la page des joueurs sont coupés. `422` avec un compte administrateur : il se gère dans un navigateur, à l'adresse du serveur. |
 | `POST /api/univers/serveur/local` | Repasse en mode local : le jeton du poste est rendu au serveur (`avertissement` s'il ne répond pas : à retirer dans « Mon compte »), les copies restent, en pause. |
 | `GET /api/univers/serveur/univers` | Les univers du serveur où le compte a un rôle, par nom : `{"url", "univers": [{"id", "nom", "role", "ici", "ouvert"}]}` (`ici` : le fichier de sa copie sur cet ordinateur ; `ouvert` : c'est l'univers ouvert). Serveur injoignable : `"hors_ligne": true` et les seules copies de ce serveur rangées ici. `409` en mode local. |
 | `POST /api/univers/serveur/ouvrir` `{"univers", "copie"?}` | Passe à un univers du serveur : sa copie sur cet ordinateur s'ouvre (même hors connexion) ; sans copie, elle est d'abord tirée, comme `relier`. Réponse : l'état de `GET /api/univers`. `409` en mode local. |

@@ -60,7 +60,7 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
     </div>
     <h3 style="margin-top:14px">D'un univers à l'autre</h3>
     <p class="hint">Reprend le bestiaire, le fichier de règles et les profils et voies d'un autre univers. Rien n'est retiré : les fiches officielles déjà présentes sont mises à jour, un monstre maison du même nom n'est pas ajouté deux fois.</p>
-    ${autres.length ? `<div class="ligne"><select id="bib-source" aria-label="Univers">${autres.map(x => `<option value="${esc(x.chemin)}">${esc(x.nom)}</option>`).join("")}</select><button id="bib-reprendre">Reprendre depuis cet univers</button></div>` : ""}
+    ${autres.length ? `<div class="ligne"><select id="bib-source" aria-label="Univers">${autres.map(x => `<option value="${esc(x.chemin || x.id)}">${esc(x.nom)}</option>`).join("")}</select><button id="bib-reprendre">Reprendre depuis cet univers</button></div>` : ""}
     <div class="ligne">
       <a href="${lien("/api/bibliotheque")}" download><button>⬇ Exporter la bibliothèque</button></a>
       <button id="bib-imp">⬆ Importer une bibliothèque…</button><input type="file" id="bib-imp-f" accept="application/json,.json" hidden>
@@ -113,7 +113,7 @@ export async function panneauBibliotheque(box, { peutReprendre }) {
   };
   const reprendre = $("#bib-reprendre", box);
   if (reprendre) reprendre.onclick = async () => {
-    try { dire(esc(recu(await api("POST", "/api/univers/bibliotheque", { source: $("#bib-source", box).value })))); }
+    try { dire(esc(recu(await api("POST", "/api/univers/bibliotheque", window.cofAcces?.serveur ? { univers: $("#bib-source", box).value } : { source: $("#bib-source", box).value })))); }
     catch (err) { toast(err.message, true); }
   };
 }

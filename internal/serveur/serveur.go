@@ -277,6 +277,10 @@ func (s *Serveur) routes() {
 
 	statique := http.FileServer(http.FS(s.opt.Frontend))
 	m.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.acces.comptes == nil && pageAdmin(r.URL.Path) { // l'administration n'existe que sur un serveur
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"+socketsDeLaPage(r))
 		statique.ServeHTTP(w, r)

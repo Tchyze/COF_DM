@@ -606,6 +606,8 @@ func erreurDistante(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, synchro.ErrInjoignable):
 		erreur(w, 502, "Le serveur ne répond pas : vérifiez l'adresse et la connexion.")
+	case errors.Is(err, synchro.ErrCompteAdmin):
+		erreur(w, 422, "Ce compte est administrateur : l'administration se fait dans un navigateur, à l'adresse du serveur, pas dans l'application de bureau. Connectez-vous ici avec un compte MJ.")
 	case errors.As(err, &se):
 		erreur(w, 422, "Le serveur refuse : "+se.Msg)
 	default:

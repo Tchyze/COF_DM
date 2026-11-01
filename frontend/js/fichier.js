@@ -1,17 +1,11 @@
 // Menu Fichier : l'univers ouvert est un fichier .cofdm de cet ordinateur. Nouvel univers, ouvrir,
-// univers récents, enregistrer une copie, sauvegarder. Réservé à l'ordinateur du MJ.
+// univers récents, enregistrer une copie, sauvegarder. Réservé à l'ordinateur du MJ ; sur un
+// serveur, au MJ de l'univers, qui y importe ses données (l'administrateur crée les univers).
 import { actif } from "./schema.js";
-import { $, esc, api, toast, choisirUniversOnglet, lien, dialogue } from "./ui.js";
+import { $, esc, api, toast, choisirUniversOnglet, lien, dialogue, taille } from "./ui.js";
 import { ouvrirPanneau } from "./connexion.js";
 
-/** Taille lisible d'un fichier. */
-export function taille(octets) {
-  if (!octets) return "";
-  const unites = ["o", "Ko", "Mo", "Go"];
-  let n = octets, i = 0;
-  while (n >= 1024 && i < unites.length - 1) { n /= 1024; i++; }
-  return (i ? n.toFixed(n < 10 ? 1 : 0).replace(".", ",") : n) + " " + unites[i];
-}
+export { taille };
 
 /** L'univers a changé : tout est à relire. Sur un serveur, l'onglet suit l'univers que le serveur
  * vient de donner au navigateur (créé, ouvert ou déposé). */
@@ -76,23 +70,32 @@ async function dialogueNouveau() {
   champ.focus();
 }
 
-/** Serveur : l'administrateur y ajoute un univers existant en déposant son fichier. */
-function dialogueDeposer() {
-  const { voile, fermer } = dialogue("Déposer un univers", `
-    <p class="hint">Ajoute au serveur un univers existant : son fichier <code>.cofdm</code> est contrôlé, puis rangé avec les autres. Vous en êtes MJ ; donnez un rôle aux autres comptes dans Paramètres.</p>
+/** Serveur : le MJ verse dans son univers (créé par l'administrateur) les données d'un fichier
+ * d'univers ; un univers qui a déjà des fiches n'est remplacé qu'après confirmation. */
+function dialogueImporter(etat) {
+  const { voile, fermer } = dialogue("Importer un fichier d'univers", `
+    <p class="hint">Verse dans « ${esc(etat.courant.nom)} » les données d'un fichier <code>.cofdm</code> préparé ailleurs : fiches, relations, images, bestiaire, règles, feuilles. Le nom de l'univers, ses comptes et leurs rôles ne changent pas.</p>
     <label class="champ"><span>Fichier d'univers <small>(.cofdm)</small></span><input type="file" id="u-fichier" accept=".cofdm"></label>
-    <label class="champ"><span>Nom sur le serveur</span><input id="u-nom" autocomplete="off" maxlength="80"></label>
-    <div class="ligne"><button class="primary" id="u-deposer">Déposer</button><button class="ghost" id="u-annuler">Annuler</button></div>`);
-  const fichier = $("#u-fichier", voile), nom = $("#u-nom", voile), bouton = $("#u-deposer", voile);
-  fichier.onchange = () => { if (fichier.files[0] && !nom.value.trim()) nom.value = fichier.files[0].name.replace(/\.cofdm$/i, ""); };
+    <div class="ligne"><button class="primary" id="u-importer">Importer</button><button class="ghost" id="u-annuler">Annuler</button></div>`);
+  const fichier = $("#u-fichier", voile), bouton = $("#u-importer", voile);
+  let remplacer = false;
+  fichier.onchange = () => { remplacer = false; bouton.textContent = "Importer"; bouton.className = "primary"; };
   $("#u-annuler", voile).onclick = fermer;
   bouton.onclick = async () => {
     if (!fichier.files[0]) { fichier.focus(); return; }
-    if (!nom.value.trim()) { nom.focus(); return; }
+    const texte = bouton.textContent;
     bouton.disabled = true;
     bouton.textContent = "Envoi…";
-    try { await api("POST", "/api/univers/deposer?nom=" + encodeURIComponent(nom.value.trim()), fichier.files[0]); recharger(); }
-    catch (e) { toast(e.message, true); bouton.disabled = false; bouton.textContent = "Déposer"; }
+    try {
+      const r = await api("POST", "/api/import/univers" + (remplacer ? "?remplacer=1" : ""), fichier.files[0]);
+      toast(`${r.fiches} fiche${r.fiches > 1 ? "s" : ""} importée${r.fiches > 1 ? "s" : ""}.`);
+      recharger();
+    } catch (e) {
+      bouton.disabled = false;
+      bouton.textContent = texte;
+      if (e.status === 409 && !remplacer) { remplacer = true; bouton.textContent = "Remplacer tout le contenu"; bouton.className = "danger"; }
+      toast(e.message, true);
+    }
   };
 }
 
@@ -156,10 +159,13 @@ function ouvrirMenu(bouton, etat) {
   menu.className = "menu menu-fichier";
   menu.setAttribute("role", "menu");
   const recents = etat.recents.filter(u => u.present).slice(0, 5);
-  menu.innerHTML = `
+  // sur un serveur, l'univers existe déjà (l'administrateur l'a créé) : son MJ y importe ses données
+  menu.innerHTML = etat.serveur ? `
+    <button data-a="importer"><span class="ic">⬆</span>Importer un fichier d'univers…</button>
+    <a href="${esc(lien("/api/export"))}" download role="menuitem"><button tabindex="-1"><span class="ic">⬇</span>Exporter en JSON</button></a>
+    <hr>` : `
     <button data-a="nouveau"><span class="ic">✚</span>Nouvel univers…</button>
     <button data-a="ouvrir"><span class="ic">📂</span>Ouvrir un univers…</button>
-    ${etat.serveur ? `<button data-a="deposer"><span class="ic">⬆</span>Déposer un univers…</button>` : ""}
     ${recents.length ? `<h4>Récents</h4>${recents.map(u => `<button data-chemin="${esc(u.chemin)}" title="${esc(u.chemin)}"><span class="ic">🌍</span>${esc(u.nom)}</button>`).join("")}<hr>` : "<hr>"}
     <button data-a="copie"><span class="ic">⎘</span>Enregistrer une copie…</button>
     <button data-a="sauver"><span class="ic">💾</span>Sauvegarder maintenant</button>
@@ -178,11 +184,12 @@ function ouvrirMenu(bouton, etat) {
   document.addEventListener("mousedown", dehors, true);
   document.addEventListener("keydown", echap, true);
   menu.onclick = e => {
+    if (e.target.closest("a[download]")) { setTimeout(fermer, 0); return; } // l'export : le lien télécharge
     const b = e.target.closest("button");
     if (!b) return;
     fermer();
     if (b.dataset.chemin) { ouvrir(b.dataset.chemin); return; }
-    const action = { nouveau: dialogueNouveau, ouvrir: dialogueOuvrir, deposer: dialogueDeposer, copie: enregistrerCopie, sauver: sauvegarder,
+    const action = { nouveau: dialogueNouveau, ouvrir: dialogueOuvrir, importer: () => dialogueImporter(etat), copie: enregistrerCopie, sauver: sauvegarder,
       sauvegardes: () => { location.hash = "#/parametres/donnees"; }, obsidian: dialogueObsidian,
       serveur: ouvrirPanneau }[b.dataset.a];
     Promise.resolve(action()).catch(err => toast(err.message, true));
@@ -196,7 +203,7 @@ export async function initFichier() {
   try { etat = await api("GET", "/api/univers"); } catch { return; }
   if (!etat.courant) return;
   $("#univers-nom").textContent = etat.courant.nom;
-  bouton.title = etat.courant.chemin;
+  bouton.title = etat.courant.chemin || etat.courant.nom;
   bouton.hidden = false;
   document.title = etat.courant.nom + " — COF DM";
   bouton.onclick = async () => {
