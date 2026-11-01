@@ -264,6 +264,10 @@ func (s *Serveur) indicesRecus() ([]indiceRecu, error) {
 // aucun) ; sinon (MJ, page libre à la maison) celui de ?pj=.
 func (s *Serveur) pjDocuments(w http.ResponseWriter, r *http.Request) (int64, bool) {
 	if pj, restreint := s.pjDuCompte(r); restreint {
+		if e, err := s.store.Lire(pj); pj == 0 || err != nil || !partagee(e) {
+			erreurStore(w, store.ErrIntrouvable)
+			return 0, false
+		}
 		return pj, true
 	}
 	pj := entierParam(r, "pj")

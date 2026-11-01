@@ -321,6 +321,7 @@ func TestButinCompteJoueur(t *testing.T) {
 	camp := creer("campagne", "Les Brumes", nil)
 	lea := creer("pj", "Léandre", map[string]any{"campagne": camp})
 	tom := creer("pj", "Tomas", map[string]any{"campagne": camp})
+	b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", lea), map[string]any{"partage": true}, mj)
 	b.proxy("POST", fmt.Sprintf("/api/campagnes/%v/pot/ajouter", camp), map[string]any{"pieces": map[string]any{"po": 8}}, mj)
 	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
@@ -343,5 +344,53 @@ func TestButinCompteJoueur(t *testing.T) {
 	// et rien du pot côté MJ
 	if c, _, _ := b.proxy("GET", fmt.Sprintf("/api/campagnes/%v/pot", camp), nil, joueuse); c != 403 {
 		t.Fatalf("pot du MJ lu par la joueuse : %d", c)
+	}
+}
+
+// Un PJ que le MJ n'a pas (ou plus) partagé n'existe pas pour son joueur : ni son pot, ni ses documents.
+func TestPJNonPartageCacheAuJoueur(t *testing.T) {
+	b, reg := bancServeur(t)
+	mj := b.connecter("meneur")
+	creer := func(typ, nom string, data map[string]any) float64 {
+		c, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": typ, "nom": nom, "data": data}, mj)
+		if c != 201 {
+			t.Fatalf("création de %s : %d %v", nom, c, v)
+		}
+		return v["id"].(float64)
+	}
+	camp := creer("campagne", "Les Brumes", nil)
+	lea := creer("pj", "Léandre", map[string]any{"campagne": camp})
+	b.proxy("POST", fmt.Sprintf("/api/campagnes/%v/pot/ajouter", camp), map[string]any{"pieces": map[string]any{"po": 8}}, mj)
+	reg.Creer("joueuse", mdpEssai("joueuse"), false)
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		c.Persos[b.s.store.ID()] = int64(lea)
+		return nil
+	})
+	joueuse := b.connecter("joueuse")
+	lectures := []string{"/api/joueur/pot", "/api/joueur/documents"}
+	partage := func(oui bool) {
+		if c, v, _ := b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", lea), map[string]any{"partage": oui}, mj); c != 200 {
+			t.Fatalf("partage : %d %v", c, v)
+		}
+	}
+	for _, u := range lectures {
+		if c, v, _ := b.proxy("GET", u, nil, joueuse); c != 404 || strings.Contains(toJSON(v), "Brumes") {
+			t.Fatalf("%s, PJ non partagé : %d %v", u, c, v)
+		}
+	}
+	if c, _, _ := b.proxy("POST", "/api/joueur/pot/propositions", map[string]any{"pieces": map[string]any{"po": 1}}, joueuse); c != 404 {
+		t.Fatalf("proposition, PJ non partagé : %d", c)
+	}
+	partage(true)
+	for _, u := range lectures {
+		if c, v, _ := b.proxy("GET", u, nil, joueuse); c != 200 {
+			t.Fatalf("%s, PJ partagé : %d %v", u, c, v)
+		}
+	}
+	partage(false)
+	if c, _, _ := b.proxy("GET", "/api/joueur/pot", nil, joueuse); c != 404 {
+		t.Fatalf("pot, partage retiré : %d", c)
 	}
 }
