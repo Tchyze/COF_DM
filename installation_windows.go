@@ -114,6 +114,20 @@ func apresInstallation(w installation.Windows, installee string) {
 
 // desinstaller : lancé par « Applications installées ». Retire le programme, ses raccourcis et son
 // inscription ; les données ne partent que si l'utilisateur le demande.
+// rangerCacheFenetre : le cache de WebView2 va dans le dossier des données, et non dans un second
+// dossier de %APPDATA% au nom du programme ; l'ancien est retiré, en fond (une ancienne fenêtre peut
+// le tenir encore un instant).
+func rangerCacheFenetre(donnees string) {
+	if err := os.Setenv(installation.VariableCacheFenetre, installation.CacheFenetre(donnees)); err != nil {
+		log.Printf("cache de la fenêtre : %v", err)
+	}
+	go func() {
+		if err := installation.RetirerAncienCache(os.Getenv("APPDATA")); err != nil {
+			log.Printf("ancien cache de la fenêtre non retiré (il le sera à un prochain lancement) : %v", err)
+		}
+	}()
+}
+
 func desinstaller() {
 	const titre = "Désinstaller COF DM"
 	w := installation.ParDefaut()
@@ -134,6 +148,12 @@ func desinstaller() {
 		return
 	}
 	message := "COF DM est désinstallé. Vos données restent dans « " + donnees + " »."
+	// le cache de la fenêtre n'est pas une donnée : il part dans tous les cas
+	for _, err := range []error{installation.RetirerAncienCache(os.Getenv("APPDATA")), os.RemoveAll(installation.CacheFenetre(donnees))} {
+		if err != nil {
+			log.Printf("cache de la fenêtre : %v", err)
+		}
+	}
 	if supprimer {
 		if err := os.RemoveAll(donnees); err != nil {
 			message = "COF DM est désinstallé, mais une partie de vos données n'a pas pu être supprimée de « " + donnees + " » : " + err.Error()
