@@ -375,10 +375,11 @@ func Nettoyer() error {
 	if cible == "" {
 		return nil
 	}
-	return nettoyer(cible)
+	return NettoyerA(cible)
 }
 
-func nettoyer(cible string) error {
+// NettoyerA : Nettoyer, pour le programme « cible » (celui qu'une installation vient de remplacer).
+func NettoyerA(cible string) error {
 	dir, base := filepath.Split(cible)
 	entrees, err := os.ReadDir(dir)
 	if err != nil {
