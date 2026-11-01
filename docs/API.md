@@ -351,6 +351,8 @@ Un jet : `{"id", "quand", "qui", "pj"?, "mj"?, "cache"?, "libelle"?, "formule", 
 
 ## Combats
 
+**Application de bureau connectée** (univers ouvert : copie reliée, serveur connecté) : ces routes et celles du lanceur de dés du MJ sont relayées au serveur avec le jeton du poste ; aucune route nouvelle, ni côté serveur ni dans l'échange. `POST /api/combats` envoie d'abord les changements de l'ordinateur ; serveur injoignable, ou de numéros différents : le combat reste local, invisible des joueurs, et part une fois terminé. Un combat en cours sur l'ordinateur y reste. Un combat du serveur, connexion perdue : `503` `{"detail": "Connexion perdue…"}` sur ses routes, sans suite locale ; son WebSocket reste branché et envoie `{"type": "connexion", "etat": "perdue"}` puis `"retablie"`, suivi de l'état, au retour du serveur. À la fin d'un combat ou à sa suppression, la synchronisation part aussitôt. `GET /api/combats` donne les combats du serveur et ceux qui ne sont que sur l'ordinateur. Dés, serveur injoignable : le jet reste sur l'ordinateur.
+
 Les combats vivent dans l'univers, en cours ou terminés. Le serveur est la seule source de vérité : une action est appliquée par le moteur avec les règles de l'univers, enregistrée, puis diffusée aux écrans qui suivent le combat. Les PV, les points de chance et les points de mana des PJ sont reportés sur leur feuille de personnage à chaque action, annulation comprise. Réservés au MJ (l'auditeur lit et suit, sans agir).
 
 | Requête | Effet |

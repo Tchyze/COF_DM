@@ -220,6 +220,8 @@ En bas à gauche de la fenêtre, une zone dit comment travaille l'application :
 - **Connecté** : l'application est reliée à un serveur COF DM (l'image Docker). Ses univers y sont copiés et se synchronisent tout seuls toutes les 30 secondes. Les joueurs et les autres MJ continuent pendant ce temps sur le serveur.
 - **Hors connexion** : reliée, mais le serveur ne répond pas. Travaillez normalement : vos changements partiront à son retour.
 
+Connecté, un combat et les jets de dés se jouent sur le serveur : l'écran reste le même et les joueurs suivent aussitôt, les jets cachés restant cachés. Si la connexion se perd en plein combat, l'écran affiche « connexion perdue », bloque les actions et reprend seul au retour du serveur. Un combat lancé hors connexion reste sur l'ordinateur, invisible des joueurs, et part une fois terminé.
+
 Relié à un serveur, un bouton **Univers du serveur** apparaît sous le bouton Fichier : il ouvre la liste des univers du serveur où vous avez un rôle (l'univers ouvert, ceux déjà copiés sur l'ordinateur, ceux qui ne sont que sur le serveur). Un clic passe à l'un d'eux : sa copie s'ouvre, ou elle est d'abord tirée la première fois (il faut en être MJ). Hors connexion, la liste montre les copies de l'ordinateur, qui s'ouvrent normalement.
 
 Un clic sur la zone ouvre le panneau : passer de **Client seul** à **Serveur** et inversement, **changer de serveur**, copier un univers du serveur, envoyer celui-ci, synchroniser tout de suite, voir les conflits. **Fichier → Serveur et synchronisation…** ouvre le même panneau.

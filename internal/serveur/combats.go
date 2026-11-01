@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"runtime/debug"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,15 +29,15 @@ import (
 const collCombats = "combats"
 
 func (s *Serveur) routesCombats() {
-	s.salles = &salles{s: s, ouvertes: map[int64]*salle{}}
+	s.salles = &salles{s: s, ouvertes: map[int64]*salle{}, distants: map[int64]bool{}, suivis: map[*ecran]bool{}}
 	m := s.mux
-	m.HandleFunc("GET /api/combats", s.combatsLister)
-	m.HandleFunc("POST /api/combats", s.combatCreer)
-	m.HandleFunc("GET /api/combats/{id}", s.combatLire)
-	m.HandleFunc("PATCH /api/combats/{id}", s.combatModifier)
-	m.HandleFunc("DELETE /api/combats/{id}", s.combatSupprimer)
-	m.HandleFunc("POST /api/combats/{id}/actions", s.combatAgir)
-	m.HandleFunc("GET /api/combats/{id}/direct", s.combatDirect)
+	m.HandleFunc("GET /api/combats", s.combatsListerDirect)
+	m.HandleFunc("POST /api/combats", s.combatCreerDirect)
+	m.HandleFunc("GET /api/combats/{id}", s.direct(s.combatLire))
+	m.HandleFunc("PATCH /api/combats/{id}", s.direct(s.combatModifier))
+	m.HandleFunc("DELETE /api/combats/{id}", s.direct(s.combatSupprimer))
+	m.HandleFunc("POST /api/combats/{id}/actions", s.direct(s.combatAgir))
+	m.HandleFunc("GET /api/combats/{id}/direct", s.combatSuivreDirect)
 }
 
 // Fermer coupe les écrans qui suivent un combat : l'univers va être fermé.
@@ -58,6 +57,8 @@ type salles struct {
 	s        *Serveur
 	mu       sync.Mutex
 	ouvertes map[int64]*salle
+	distants map[int64]bool  // combats en cours sur le serveur, vus d'une copie reliée (direct.go)
+	suivis   map[*ecran]bool // écrans qui suivent ici un combat du serveur
 }
 
 type salle struct {
@@ -147,6 +148,9 @@ func (h *salles) fermer() {
 		}
 		sa.mu.Unlock()
 		delete(h.ouvertes, id)
+	}
+	for e := range h.suivis {
+		_ = e.conn.Close()
 	}
 }
 
@@ -459,10 +463,18 @@ func resumer(id int64, modifie float64, st *combat.Etat) resumeCombat {
 // combatsLister : les combats de l'univers, ceux en cours d'abord, le plus récent en tête.
 // ?seance=12 : ceux d'une séance ; ?en_cours=1 : ceux qui ne sont pas terminés.
 func (s *Serveur) combatsLister(w http.ResponseWriter, r *http.Request) {
-	docs, err := s.store.ListerDocs(collCombats)
+	out, err := s.listeCombats(r)
 	if err != nil {
 		erreurStore(w, err)
 		return
+	}
+	repondre(w, 200, out)
+}
+
+func (s *Serveur) listeCombats(r *http.Request) ([]resumeCombat, error) {
+	docs, err := s.store.ListerDocs(collCombats)
+	if err != nil {
+		return nil, err
 	}
 	seance, enCours := entierParam(r, "seance"), r.URL.Query().Get("en_cours") != ""
 	out := []resumeCombat{}
@@ -476,13 +488,8 @@ func (s *Serveur) combatsLister(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, resumer(d.ID, d.Modifie, &st))
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].Termine != out[j].Termine {
-			return !out[i].Termine
-		}
-		return out[i].Updated > out[j].Updated
-	})
-	repondre(w, 200, out)
+	trierCombats(out)
+	return out, nil
 }
 
 // combatCreer lance un combat. Avec « rencontre » : ses créatures, ses PNJ présents qui ont un

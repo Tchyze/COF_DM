@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gorilla/websocket"
+
 	"github.com/Tchyze/cof_dm/internal/comptes"
 	"github.com/Tchyze/cof_dm/internal/reglages"
 	"github.com/Tchyze/cof_dm/internal/store"
@@ -69,6 +71,7 @@ func NouvelleApplication(opt Options) *Application {
 	a := &Application{opt: opt, reg: opt.Reglages, mux: http.NewServeMux(), fin: make(chan struct{}), tous: map[string]*universOuvert{}}
 	if opt.Comptes == nil {
 		a.opt.Relie = a.Relie
+		a.opt.app = a
 	}
 	m := a.mux
 	m.HandleFunc("GET /api/univers", a.etat)
@@ -385,6 +388,10 @@ func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		a.servirAdmin(w, r)
 		return
 	}
+	if websocket.IsWebSocketUpgrade(r) {
+		a.servirSuivi(w, r)
+		return
+	}
 	a.mu.RLock()
 	defer a.mu.RUnlock()
 	if a.srv == nil {
@@ -396,6 +403,30 @@ func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	a.srv.ServeHTTP(w, r)
+}
+
+// servirSuivi : un écran en direct reste branché longtemps. Il ne garde pas le verrou de l'application :
+// fermer ou changer un univers l'attendrait sans fin, et toutes les requêtes avec. La fermeture d'un
+// univers coupe ses écrans (Serveur.Fermer).
+func (a *Application) servirSuivi(w http.ResponseWriter, r *http.Request) {
+	a.mu.RLock()
+	srv, code, msg := a.srv, 0, ""
+	if srv != nil && a.multi() {
+		var o *universOuvert
+		if o, code, msg = a.choisir(r); code == 0 {
+			srv = o.srv
+		}
+	}
+	a.mu.RUnlock()
+	switch {
+	case srv == nil:
+		erreur(w, 503, "Aucun univers n'est ouvert.")
+	case code != 0:
+		enTetes(w)
+		erreur(w, code, msg)
+	default:
+		srv.ServeHTTP(w, r)
+	}
 }
 
 // servirUnivers : le menu Fichier touche aux fichiers de l'ordinateur du MJ, il ne répond donc qu'à
