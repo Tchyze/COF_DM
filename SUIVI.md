@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 1).
+Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 2).
 
 ## Où on en est
 
 - **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, pas encore poussée. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
-- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lot 1 fini, à essayer par le MJ ; lots 2 et 3 à venir. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
+- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lots 1 et 2 finis, à essayer par le MJ ; lot 3 à venir. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -227,6 +227,14 @@ Lot 1, avant la mise en ligne :
 - **Jetons** : retirés par une réinitialisation de l'administrateur, au choix du titulaire quand il change son mot de passe (case cochée par défaut) ; date de dernière utilisation. Un poste de bureau au jeton retiré demande de se reconnecter.
 - **Journal de sécurité** au format stable (`securite evenement=…`), filtre fail2ban d'exemple.
 - **Déploiement** : `docker-compose.npm.yml`, section « Derrière Nginx Proxy Manager et Portainer » du README, configuration nginx revue. Essayés sur un NPM et un nginx réels, en local ; pas de stack Portainer réelle ni de vrai certificat.
+
+**Lot 2, avant d'accueillir d'autres groupes.**
+
+- **Verrous (F-05)** : le verrou de l'application ne couvre plus les requêtes, seulement le choix de l'univers ; un second verrou sérialise les opérations sur les univers. Chaque univers compte son travail en cours, et une fermeture l'attend 30 secondes au plus, sinon `409` et rien ne change. Pendant ce temps, l'univers répond `503`, et aucun autre ne prend sa place. Conception et tests dans `fermeture.go`.
+- **Écrans en direct (F-07)** : les trois WebSockets revoient leurs droits toutes les 30 secondes (`suivi.go`), PJ d'un joueur compris.
+- **Imports et sauvegardes (F-09)** : limite de traitements lourds, corps reçus sur disque, texte plafonné avant décodage, images lues une à une ; quotas et purge sur un serveur (`limites.go`), rien sur le bureau.
+- **Débit (F-10)** : propositions de partage plafonnées par PJ, débit des jets de dés.
+- **Mots de passe (F-11, F-15)** : règle des nouveaux mots de passe, comptes existants non bloqués ; mot de passe initial à changer d'abord, ou donné par un secret Docker.
 
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
