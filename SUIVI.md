@@ -135,6 +135,12 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Archiver** : l'univers sort de toutes les listes et n'est plus accessible, fichier et rôles gardés ; seul l'administrateur le désarchive. **Supprimer** : sauvegarde automatique, puis nom de l'univers retapé pour confirmer.
 - **Passage** : les comptes administrateurs actuels restent administrateurs (sans plus aucun accès au contenu) ; le MJ recrée lui-même ses comptes MJ.
 
+### Client, tablettes et combat en direct (1er novembre 2026, lot E, à préciser)
+
+- Le **mode local reste** : un MJ sans serveur peut ouvrir son PC aux tablettes depuis Paramètres → Tablette et réseau. Idée d'un client seulement relié à un serveur écartée.
+- **Combat** : synchronisation en direct entre le client relié et le serveur (les joueurs du serveur suivent un combat mené dans le client). Aujourd'hui, un combat en cours n'est pas synchronisé avant sa fin.
+- Questions posées au MJ : combat hors connexion, dés, ouverture du réseau sans relance.
+
 ### Butin et pot commun (31 octobre 2026, projet 14, avant le code)
 
 - **Butin de la rencontre en lignes chiffrées** : pièces (po / pa / pc) et objets (fiche « Objet » ou objet courant, quantité). Le texte libre « Butin » reste pour la description.
