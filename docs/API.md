@@ -540,6 +540,16 @@ Ces routes touchent aux fichiers de l'ordinateur du MJ : elles ne répondent **q
 
 Sauvegardes automatiques : à l'ouverture d'un univers, toutes les demi-heures et à la fermeture, s'il a des fiches et a changé depuis la dernière. Les cinq dernières sont gardées, puis la dernière de chaque jour pendant quatorze jours ; les sauvegardes `manuelle` et `avant-restauration` ne sont jamais effacées. Sur un serveur, les sauvegardes demandées et celles d'avant une opération sont plafonnées par univers (`-sauvegardes-max`, `-quota-sauvegardes`) : les plus anciennes partent, jamais celle qui vient d'être faite ni celle d'avant une suppression.
 
+### Fenêtre « Mes univers »
+
+Application de bureau seulement : sur un serveur, ces routes n'existent pas (`403`). Elles ne répondent qu'à l'interface de l'application, sur l'ordinateur du MJ : tout en-tête `Authorization` est refusé (`403`), même depuis cet ordinateur, de même qu'un `Origin` étranger. Elles ne reçoivent jamais de chemin : `{cle}` désigne un univers de la liste, et une clé qui n'y est pas répond `404`.
+
+| Requête | Effet |
+|---|---|
+| `GET /api/univers/gestion` | `{"univers": [...], "dossier", "dossier_archives", "parcourir"}`, l'univers ouvert d'abord, puis par nom : l'univers ouvert, le dossier des univers, les récents, les copies reliées, les archives. Chaque univers : `{"cle", "nom", "chemin", "taille", "modifie", "ouvert", "lieu", "gerable", "interrompu"?, "copie"?, "actions"}`. `lieu` : `dossier`, `ailleurs`, `archive` ou `introuvable`. `gerable` : un fichier d'univers ordinaire (ni lien symbolique, ni autre extension, ni autre chose qu'un univers). `interrompu` : une écriture s'est arrêtée en route, l'ouvrir la répare. `copie` : `{"url", "compte", "copie", "nom", "etat"}`, `etat` valant `actif` ou `pause`. `actions` : celles que le fichier permet. Rien n'est écrit : un univers fermé est lu en lecture seule. |
+| `POST /api/univers/gestion/{cle}/renommer` `{"nom": "…"}` | Renomme le fichier sur place : `{"univers": {…}}`. Les récents, le lien avec le serveur et le dernier univers ouvert le suivent ; le serveur n'est jamais touché ; les sauvegardes restent. `422` : nom impossible, ou fichier qui n'est pas `gerable`. `409` : nom déjà pris (y compris entre le dossier et les archives ; rien n'est écrasé), écriture interrompue, ou requêtes et échange encore en cours après 30 secondes sur l'univers ouvert (rien n'a changé). |
+| `POST /api/univers/gestion/{cle}/oublier` | Retire de la liste un univers rangé ailleurs ou disparu ; le fichier ne bouge jamais. Le lien d'une copie disparue part avec, et elle peut être tirée de nouveau. `409` : univers ouvert, rangé dans le dossier ou les archives, ou copie reliée présente. |
+
 ## Synchronisation
 
 Une application de bureau garde une **copie** d'un univers du serveur et la tient à jour, y compris après un travail hors ligne. Ces routes n'existent qu'en mode serveur, pour les comptes qui écrivent dans l'univers (MJ) ; l'auditeur, le joueur et l'administrateur en sont exclus.

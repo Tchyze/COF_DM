@@ -95,6 +95,7 @@ func NouvelleApplication(opt Options) *Application {
 	a.routesDistant()
 	if !a.multi() {
 		a.routesMaj()
+		a.routesGestion()
 	} else {
 		a.routesMajServeur()
 		a.admin = a.routesAdmin()
