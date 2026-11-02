@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"image/png"
 	"io"
 	"net"
 	"net/http"
@@ -370,5 +372,62 @@ func TestCommandeReinitialiserSecondFacteur(t *testing.T) {
 	}
 	if !strings.Contains(ligneReinitLocale("chef"), `securite evenement=second_facteur_reinitialise_local nom="chef" ip=local`) {
 		t.Fatal(ligneReinitLocale("chef"))
+	}
+}
+
+// L'application s'installe sur une tablette : un manifeste lisible, des icônes aux tailles qu'il annonce, et
+// toutes les pages y renvoient. Pas de service worker : aucune donnée ne reste sur l'appareil.
+func TestManifesteDeLApplication(t *testing.T) {
+	b, err := frontend.ReadFile("frontend/manifest.webmanifest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m struct {
+		Nom    string `json:"name"`
+		Court  string `json:"short_name"`
+		Debut  string `json:"start_url"`
+		Portee string `json:"scope"`
+		Mode   string `json:"display"`
+		Icones []struct {
+			Src     string `json:"src"`
+			Tailles string `json:"sizes"`
+			Usage   string `json:"purpose"`
+		} `json:"icons"`
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Nom == "" || m.Court == "" || m.Debut != "/" || m.Portee != "/" || m.Mode != "fullscreen" {
+		t.Fatalf("manifeste : %+v", m)
+	}
+	usages := map[string]bool{}
+	for _, i := range m.Icones {
+		f, err := frontend.Open("frontend" + i.Src)
+		if err != nil {
+			t.Fatalf("icône %s : %v", i.Src, err)
+		}
+		c, err := png.DecodeConfig(f)
+		f.Close()
+		if err != nil {
+			t.Fatalf("icône %s : %v", i.Src, err)
+		}
+		if fmt.Sprintf("%dx%d", c.Width, c.Height) != i.Tailles {
+			t.Errorf("icône %s : %dx%d, annoncée %s", i.Src, c.Width, c.Height, i.Tailles)
+		}
+		usages[i.Usage+" "+i.Tailles] = true
+	}
+	for _, attendu := range []string{"any 192x192", "any 512x512", "maskable 512x512"} {
+		if !usages[attendu] {
+			t.Errorf("il manque l'icône %s : %v", attendu, usages)
+		}
+	}
+	for _, page := range []string{"index.html", "joueur.html", "admin.html"} {
+		h, err := frontend.ReadFile("frontend/" + page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(h), `<link rel="manifest" href="/manifest.webmanifest">`) {
+			t.Errorf("%s ne renvoie pas au manifeste", page)
+		}
 	}
 }

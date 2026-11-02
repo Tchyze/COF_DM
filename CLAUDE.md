@@ -37,7 +37,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 | `internal/synchro`, `internal/majour` | Client de synchro du bureau ; mises à jour signées (Ed25519 sur `SHA256SUMS`, clé privée = secret `COF_DM_SIGNATURE`, jamais dans le dépôt). |
 | `internal/mcp`, `internal/obsidian` | Serveur MCP ; export vers Obsidian. |
 | `internal/installation` | Bureau Windows : installation pour l'utilisateur au premier lancement (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis, « Applications installées », `-desinstaller`), sans CGO : ses tests se compilent pour Windows (`GOOS=windows go test -c`) et s'y lancent. Reprise de l'ancien mode portable (supprimé). Cache de WebView2 dans le dossier des données (`webview/`). |
-| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `admin.html` + `js/admin.js` (administrateur d'un serveur : seulement `/api/admin/…`, sa version et son compte) ; `style.css`, `combat.css`. |
+| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `admin.html` + `js/admin.js` (administrateur d'un serveur : seulement `/api/admin/…`, sa version et son compte) ; `style.css`, `combat.css` ; `manifest.webmanifest`, `icones/`, `js/installer.js` (installation sur une tablette, sans service worker : rien ne reste sur l'appareil). |
 | `docs/API.md` | Documentation de l'API. |
 
 ## Invariants à ne jamais casser
