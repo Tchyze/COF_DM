@@ -21,6 +21,9 @@ name: Release
 # son tag (une version d'avant ce job, ou un envoi raté), sans compiler les lanceurs. Dans tous les
 # cas, latest ne passe sur une version que si c'est la plus récente des versions stables.
 #
+# Environnement « publication » (réglages du dépôt) : signer une version, ou envoyer une image sur Docker
+# Hub, attend l'approbation du MJ. La clé de signature est rangée dans cet environnement.
+#
 # Chaîne de publication : les actions sont épinglées par SHA (la version en commentaire) ; les
 # outils téléchargés le sont par version et vérifiés par leur empreinte. Pour les mettre à jour,
 # relever le nouveau SHA ou la nouvelle empreinte sur la page de la version.
@@ -163,6 +166,8 @@ jobs:
   docker:
     needs: [version, tests]
     runs-on: ubuntu-latest
+    # l'envoi seulement : sur une branche, pas d'approbation à donner, ni de jeton Docker Hub à portée
+    environment: ${{ (startsWith(github.ref, 'refs/tags/v') || inputs.docker != '') && 'publication' || '' }}
     env:
       VERSION: ${{ inputs.docker || needs.version.outputs.version }}
       REPUBLIER: ${{ inputs.docker }}
@@ -253,6 +258,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') || inputs.canal == 'test'
     needs: [version, linux, windows]
     runs-on: ubuntu-latest
+    environment: publication # la clé de signature n'en sort qu'après approbation
     permissions:
       contents: write
     steps:
