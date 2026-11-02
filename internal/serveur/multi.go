@@ -41,7 +41,7 @@ func (a *Application) servis() map[string]string {
 	return m
 }
 
-// noterServis retient quel fichier tient chaque univers (verrou tenu). Ce qui était noté pour un
+// noterServis retient quel fichier tient chaque univers (a.mu ou a.gestion tenu). Ce qui était noté pour un
 // univers pas encore rouvert est gardé ; un fichier disparu est oublié.
 func (a *Application) noterServis() {
 	m := a.servis()
@@ -77,12 +77,12 @@ func (a *Application) ouvrirDossier() {
 			log.Printf("univers %s non ouvert : %v", e.Name(), err)
 		}
 	}
-	a.mu.Lock()
+	a.gestion.Lock()
 	a.noterServis()
-	a.mu.Unlock()
+	a.gestion.Unlock()
 }
 
-// ordre : les univers ouverts, par nom (verrou tenu).
+// ordre : les univers ouverts, par nom (a.mu ou a.gestion tenu).
 func (a *Application) ordre() []*universOuvert {
 	l := make([]*universOuvert, 0, len(a.tous))
 	for _, o := range a.tous {
@@ -108,7 +108,7 @@ func (a *acces) reconnaitre(r *http.Request) (c comptes.Compte, connu, jeton boo
 	return c, connu, false
 }
 
-// accessibles : les univers où le compte a un rôle (verrou tenu).
+// accessibles : les univers où le compte a un rôle (a.mu ou a.gestion tenu).
 func (a *Application) accessibles(c comptes.Compte) []*universOuvert {
 	var l []*universOuvert
 	for _, o := range a.ordre() {
@@ -119,21 +119,36 @@ func (a *Application) accessibles(c comptes.Compte) []*universOuvert {
 	return l
 }
 
-// choisir renvoie l'univers que vise la requête (verrou tenu). En cas de refus, code n'est pas nul.
+// choisir renvoie l'univers que vise la requête (a.mu ou a.gestion tenu). En cas de refus, code n'est
+// pas nul. Un univers en cours de fermeture répond 503 : ni « inconnu », ce qu'un bureau relié
+// prendrait pour une disparition, ni un autre univers à sa place, où la requête écrirait.
 func (a *Application) choisir(r *http.Request) (o *universOuvert, code int, msg string) {
+	c, connu, jeton := a.opt.acces.reconnaitre(r)
 	if id := universDemande(r); id != "" {
 		if o := a.tous[id]; o != nil {
 			return o, 0, ""
 		}
-		return nil, 404, "Univers inconnu : " + id
+		if connu { // un anonyme n'apprend pas quels univers existent : il passe, et l'accès le refusera
+			if a.fermetures[id] {
+				return nil, 503, msgFermeture
+			}
+			return nil, 404, "Univers inconnu : " + id
+		}
 	}
-	c, connu, jeton := a.opt.acces.reconnaitre(r)
 	if t, err := r.Cookie(cookieUnivers); err == nil && !jeton {
 		if o := a.tous[t.Value]; o != nil && (!connu || c.Role(t.Value) != "") {
 			return o, 0, ""
 		}
+		if a.fermetures[t.Value] && (!connu || c.Role(t.Value) != "") {
+			return nil, 503, msgFermeture
+		}
 	}
 	if connu {
+		for id := range a.fermetures {
+			if c.Role(id) != "" { // ce pourrait être son premier univers
+				return nil, 503, msgFermeture
+			}
+		}
 		l := a.accessibles(c)
 		if jeton && len(l) > 1 && !proprePerso(r.URL.Path) {
 			return nil, 400, "Ce compte a accès à plusieurs univers : précisez lequel avec l'en-tête " + enTeteUnivers + " (identifiants : GET /api/mes-univers)."
@@ -141,6 +156,9 @@ func (a *Application) choisir(r *http.Request) (o *universOuvert, code int, msg 
 		if len(l) > 0 {
 			return l[0], 0, ""
 		}
+	}
+	if a.st == nil {
+		return nil, 503, msgFermeture
 	}
 	return a.tous[a.st.ID()], 0, ""
 }
@@ -158,16 +176,19 @@ func universDemande(r *http.Request) string {
 	return ""
 }
 
-// vise : l'univers sur lequel porte une requête déjà admise (verrou tenu). Hors serveur, le seul
-// univers ouvert.
+// vise : l'univers sur lequel porte une requête déjà admise (a.mu ou a.gestion tenu). Hors serveur, le
+// seul univers ouvert. Nil si aucun : celui qu'elle visait a pu fermer depuis son admission, et ce
+// n'est jamais un autre à sa place.
 func (a *Application) vise(r *http.Request) *universOuvert {
 	if a.st == nil {
 		return nil
 	}
 	if a.multi() {
-		if o, code, _ := a.choisir(r); code == 0 {
-			return o
+		o, code, _ := a.choisir(r)
+		if code != 0 {
+			return nil
 		}
+		return o
 	}
 	return a.tous[a.st.ID()]
 }
@@ -179,21 +200,6 @@ func (a *Application) viser(w http.ResponseWriter, r *http.Request, o *universOu
 	r = r.Clone(r.Context())
 	r.Header.Set(enTeteUnivers, o.st.ID())
 	return r
-}
-
-// servirMulti route une requête du mode serveur vers l'univers qu'elle vise (verrou de lecture tenu).
-func (a *Application) servirMulti(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/api/mes-univers" || strings.HasPrefix(r.URL.Path, "/api/mes-univers/") {
-		a.mesUnivers(w, r)
-		return
-	}
-	o, code, msg := a.choisir(r)
-	if code != 0 {
-		enTetes(w)
-		erreur(w, code, msg)
-		return
-	}
-	o.srv.ServeHTTP(w, r)
 }
 
 // mesUnivers : GET /api/mes-univers liste les univers où le compte a un rôle ;
@@ -212,6 +218,7 @@ func (a *Application) mesUnivers(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/mes-univers":
 		liste := []map[string]any{}
+		a.mu.RLock()
 		for _, o := range a.accessibles(c) {
 			liste = append(liste, map[string]any{"id": o.st.ID(), "nom": nomUnivers(o.st.Chemin()), "role": c.Role(o.st.ID())})
 		}
@@ -219,6 +226,7 @@ func (a *Application) mesUnivers(w http.ResponseWriter, r *http.Request) {
 		if o, code, _ := a.choisir(r); code == 0 && c.Role(o.st.ID()) != "" {
 			courant = o.st.ID()
 		}
+		a.mu.RUnlock()
 		// la version et les numéros du serveur : le bureau les lit ici sans viser d'univers
 		repondre(w, 200, map[string]any{"univers": liste, "courant": courant, "version": a.opt.Version,
 			"protocole": store.VersionProtocole, "modele": store.VersionModele})
@@ -230,7 +238,9 @@ func (a *Application) mesUnivers(w http.ResponseWriter, r *http.Request) {
 			erreurStore(w, err)
 			return
 		}
+		a.mu.RLock()
 		o := a.tous[in.ID]
+		a.mu.RUnlock()
 		if o == nil || c.Role(in.ID) == "" { // inconnu ou fermé à ce compte : la même réponse
 			erreur(w, 404, "Univers inconnu, ou auquel votre compte n'a pas accès.")
 			return

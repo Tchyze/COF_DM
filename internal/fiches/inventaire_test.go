@@ -129,7 +129,11 @@ func TestGarderChiffres(t *testing.T) {
 		{"nom":"Pierre trouvée"},
 		{"id":1,"nom":"Mon casque","porte":true,"bonus":[{"cible":"def","valeur":9}]},
 		{"id":7,"nom":"Épée trouvée","quantite":2,"emplacement":"main_principale","arme":{"dm":"3d6"},"bonus":[{"cible":"att","valeur":5}]}]}`)
-	f, err := NormaliserFeuille(GarderChiffres(raw, ancienne), 1, nil)
+	garde, err := GarderChiffres(raw, ancienne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := NormaliserFeuille(garde, 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,6 +146,77 @@ func TestGarderChiffres(t *testing.T) {
 	}
 	if b.ID != 3 || b.Bonus != nil || b.Arme != nil || b.Quantite != 2 || b.Emplacement != "main_principale" {
 		t.Fatalf("ligne ajoutée : %+v", b)
+	}
+}
+
+// La casse de la clé ne change rien, qu'elle soit seule ou répétée ; aucune variante ne reste dans le
+// résultat, qui ne se lit plus que d'une façon.
+func TestGarderChiffresCasse(t *testing.T) {
+	ancienne, _ := NormaliserFeuille([]byte(`{"pv":5,"inventaire":[{"id":1,"nom":"Casque","fiche":3,"bonus":[{"cible":"def","valeur":2}]}]}`), 1, nil)
+	forge := `[{"nom":"Forgé","fiche":9,"bonus":[{"cible":"def","valeur":20}],"arme":{"dm":"3d6"}}]`
+	for _, corps := range []string{
+		`{"pv":5,"Inventaire":` + forge + `}`,
+		`{"pv":5,"INVENTAIRE":` + forge + `}`,
+		`{"pv":5,"inventaire":[],"Inventaire":` + forge + `}`,
+		`{"pv":5,"Inventaire":` + forge + `,"inventaire":[]}`,
+		`{"pv":5,"inventaire":` + forge + `,"inventaire":` + forge + `}`,
+	} {
+		garde, err := GarderChiffres([]byte(corps), ancienne)
+		if err != nil {
+			t.Fatalf("%s : %v", corps, err)
+		}
+		var champs map[string]json.RawMessage
+		_ = json.Unmarshal(garde, &champs)
+		if _, reste := champs["Inventaire"]; reste || champs["INVENTAIRE"] != nil {
+			t.Fatalf("%s : une variante de la clé reste : %s", corps, garde)
+		}
+		f, err := NormaliserFeuille(garde, 1, nil)
+		if err != nil {
+			t.Fatalf("%s : %v", corps, err)
+		}
+		for _, o := range f.Inventaire {
+			if o.Fiche != 0 || o.Bonus != nil || o.Arme != nil {
+				t.Fatalf("%s : ligne non contrôlée : %+v", corps, o)
+			}
+		}
+	}
+}
+
+// Ce qui n'est pas une feuille lisible est une erreur ; sans inventaire, les lignes d'avant restent et
+// l'ancien texte d'équipement n'en ajoute aucune.
+func TestGarderChiffresCorpsInattendu(t *testing.T) {
+	ancienne, _ := NormaliserFeuille([]byte(`{"pv":5,"inventaire":[{"id":1,"nom":"Casque","bonus":[{"cible":"def","valeur":2}]}]}`), 1, nil)
+	for _, corps := range []string{`pas du json`, `null`, `[]`, `"texte"`, `{"inventaire":5}`, `{"Inventaire":"x"}`, `{"inventaire":[{"fiche":"3"}]}`} {
+		if garde, err := GarderChiffres([]byte(corps), ancienne); err == nil {
+			t.Errorf("%s accepté : %s", corps, garde)
+		}
+	}
+	garde, err := GarderChiffres([]byte(`{"pv":5,"armure":{"nom":"Forgée","bonus":15},"equipement":"Autre"}`), ancienne)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := NormaliserFeuille(garde, 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Inventaire) != 1 || f.Inventaire[0].Nom != "Casque" || f.Inventaire[0].Bonus[0].Valeur != 2 {
+		t.Fatalf("sans inventaire : %+v", f.Inventaire)
+	}
+	if garde, err = GarderChiffres([]byte(`{"pv":5,"armure":{"nom":"Forgée","bonus":15}}`), nil); err != nil {
+		t.Fatal(err)
+	}
+	if f, err = NormaliserFeuille(garde, 1, nil); err != nil || len(f.Inventaire) != 0 {
+		t.Fatalf("première feuille d'un joueur : %+v %v", f, err)
+	}
+}
+
+func TestLiesAjoutes(t *testing.T) {
+	ancienne := &Feuille{Inventaire: []Objet{{Fiche: 3}, {Nom: "libre"}}}
+	if (&Feuille{Inventaire: []Objet{{Fiche: 3}, {Nom: "autre"}}}).LiesAjoutes(ancienne) {
+		t.Fatal("objet déjà lié signalé")
+	}
+	if !(&Feuille{Inventaire: []Objet{{Fiche: 4}}}).LiesAjoutes(ancienne) || !(&Feuille{Inventaire: []Objet{{Fiche: 4}}}).LiesAjoutes(nil) {
+		t.Fatal("nouvel objet lié non signalé")
 	}
 }
 

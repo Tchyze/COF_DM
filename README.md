@@ -109,7 +109,7 @@ Le MJ déverrouille les feuilles dans **Paramètres** (Tablette et réseau à la
 
 Pour héberger COF DM sur une machine distante, utilisez l'**image Docker** (ci-dessous, « Avec Docker ») : le mode serveur n'existe que dans cette édition (compilée avec l'étiquette `serveur`) ; l'application de bureau n'est qu'un éditeur, qui se relie à un serveur ou travaille seule. Le serveur tourne sans fenêtre, n'écoute que sur `127.0.0.1` et attend un reverse proxy qui porte le HTTPS. Dans ce mode, plus de mot de passe MJ ni de jeton unique : chacun entre avec **son compte** (nom d'utilisateur et mot de passe), et rien n'est accordé d'office aux requêtes venues de la machine.
 
-Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche une seule fois dans le terminal : notez-le, puis changez-le (administration → **Mon compte**). Les comptes sont rangés dans `comptes.json` (mots de passe hachés).
+Au premier lancement, le compte `admin` est créé et son mot de passe s'affiche une seule fois dans le terminal. La première connexion impose de le changer : le compte n'a accès à rien d'autre avant. **Sous Docker, ce mot de passe reste visible dans les journaux du conteneur, donc aussi dans ceux affichés par Portainer, tant qu'il n'est pas changé** : connectez-vous aussitôt. Pour qu'il n'y passe jamais, donnez-le par un secret Docker : la variable `COF_DM_ADMIN_MDP_FICHIER` désigne le fichier qui le contient (12 caractères au moins, ni le nom du compte, ni un mot de passe courant ; lisible par l'utilisateur du conteneur, lu au premier lancement seulement : retirez ensuite le secret). Un secret refusé ou illisible arrête le serveur, sans rien créer. Ce compte-là n'a pas à changer son mot de passe, qui n'est écrit dans aucun journal. Les comptes sont rangés dans `comptes.json` (mots de passe hachés).
 
 **L'administrateur gère le serveur sans rien voir du contenu des univers.** Connecté, il arrive sur sa page d'administration (`/admin.html`) :
 - **Univers** : créer un univers (vide), le renommer, l'archiver (il n'est plus accessible à personne, fichier et comptes gardés, jusqu'à ce qu'il soit désarchivé), le supprimer (en retapant son nom ; une sauvegarde est faite avant). **Comptes…** donne à chaque compte sa place dans cet univers : MJ, auditeur, joueur possible, ou aucun accès.
@@ -138,38 +138,139 @@ Le serveur héberge **plusieurs univers à la fois** : tous les fichiers `.cofdm
 Exemple de configuration nginx :
 
 ```nginx
+# dans le bloc http (par exemple /etc/nginx/conf.d/cof-dm-zones.conf)
+limit_req_zone $binary_remote_addr zone=cof_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=cof_login:10m rate=10r/m;
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ""      close;
+}
+
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    http2 on;
     server_name jdr.example.org;
     ssl_certificate     /etc/letsencrypt/live/jdr.example.org/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/jdr.example.org/privkey.pem;
 
-    client_max_body_size 1g;            # dépôt d'un univers, ou restauration d'un export, avec ses images
     add_header Strict-Transport-Security "max-age=31536000" always;
+
+    client_max_body_size 8m;            # une fiche, une feuille : plus large seulement sur les routes d'import, plus bas
+    limit_req zone=cof_api burst=100 nodelay;
+    limit_req_status 429;
+
+    # WebSocket compris : combat suivi, page des joueurs, bureau relié
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade           $http_upgrade;
+    proxy_set_header Connection        $connection_upgrade;
+    proxy_set_header Host              $host;    # sur un port autre que 443 : $http_host, le WebSocket compare Origin à Host, port compris
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 600s;
 
     location / {
         proxy_pass http://127.0.0.1:8100;
-        proxy_set_header Host              $host;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 600s;
     }
 
-    # suivi d'un combat en direct (WebSocket)
-    location ~ ^/api/combats/[0-9]+/direct$ {
+    location = /api/acces/connexion {
+        limit_req zone=cof_login burst=5 nodelay;
         proxy_pass http://127.0.0.1:8100;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade           $http_upgrade;
-        proxy_set_header Connection        "upgrade";
-        proxy_set_header Host              $host;
-        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 3600s;
+    }
+
+    # dépôt d'un univers, avec ses images
+    location = /api/import/univers {
+        client_max_body_size 1g;
+        proxy_pass http://127.0.0.1:8100;
+    }
+
+    # restauration d'un export
+    location = /api/restaurer {
+        client_max_body_size 300m;
+        proxy_pass http://127.0.0.1:8100;
+    }
+
+    # images, imports de fiches et de règles, synchronisation d'un bureau
+    location ~ ^/api/(import/fiches|sync|sync/images/[^/]+|entites/[0-9]+/medias|(bestiaire|reference|regles)/import|bibliotheque)$ {
+        client_max_body_size 64m;
+        proxy_pass http://127.0.0.1:8100;
     }
 }
 ```
 
+Les limites de taille s'appliquent avant toute session : nginx garde le corps d'une requête dans ses fichiers temporaires avant de le transmettre, y compris pour un anonyme. Laissez cette mise en tampon active (`proxy_request_buffering on`, le défaut). La limite de 20 requêtes par seconde laisse passer le chargement d'une page (`burst`) ; celle de la connexion vient en plus de la limite d'essais de l'application.
+
 Les deux en-têtes `X-Forwarded-*` comptent : le premier donne à la limite d'essais l'adresse réelle de chaque visiteur, le second fait poser le cookie de session en `Secure`. N'ouvrez pas le port 8100 au réseau : seul nginx doit le joindre.
+
+**Proxys de confiance.** L'application ne croit ces deux en-têtes que s'ils viennent d'une adresse déclarée : `-proxies` ou la variable `COF_DM_PROXIES`, une liste de réseaux en CIDR séparés par des virgules. Par défaut, `127.0.0.1/32,::1/128` : un nginx sur la même machine, rien à régler. Un proxy ailleurs (autre machine, autre conteneur) doit être déclaré, sinon tous les visiteurs comptent pour une seule adresse et le cookie perd `Secure`. `X-Forwarded-For` se lit depuis la droite : la première adresse hors de la liste est celle du visiteur. Ne déclarez que des adresses que vous tenez : toute machine de la liste peut dicter son adresse à l'application.
+
+### Limites d'un serveur partagé
+
+Un serveur héberge plusieurs groupes : aucun MJ ne doit pouvoir faire tomber les autres. Ces options de la ligne de commande (`command:` du compose) ont des valeurs par défaut, à ajuster au disque et à la mémoire de la machine :
+
+| Option | Défaut | Rôle |
+|---|---|---|
+| `-imports-simultanes` | `1` | Traitements lourds en même temps sur tout le serveur : imports, exports, sauvegardes demandées, écriture d'une copie pour un poste. Au-delà : `429`, à refaire un instant plus tard. |
+| `-quota-univers` | `2048` (Mo) | Au-delà, l'univers ne reçoit plus d'image ni d'import (`507`, `413`). Rien n'est retiré. `0` : aucun quota. |
+| `-quota-sauvegardes` | `5120` (Mo) | Volume des sauvegardes de chaque univers. `0` : aucun quota. |
+| `-sauvegardes-max` | `10` | Sauvegardes gardées par univers, demandées d'une part, d'avant une opération de l'autre. `0` : pas de plafond. |
+
+Une fois un plafond ou le volume dépassé, les plus anciennes sont effacées. Jamais celle qui vient d'être faite, la dernière de chaque sorte, ni celle d'avant une suppression, qui survit à son univers. Une sauvegarde demandée est refusée (`507`) plutôt que d'effacer ces dernières ; une sauvegarde d'avant une opération n'est jamais refusée pour le quota, elle le dépasse et le journal le dit. **Ces sauvegardes ne remplacent pas celles de tout `donnees/` hors de la machine.**
+
+En dur : 10 propositions de partage en attente par PJ, et une rafale de 20 jets de dés par compte, puis 2 par seconde. L'application ne limite pas le débit des autres routes : c'est le rôle de `limit_req` dans le proxy, ci-dessous et dans la section sur NPM.
+
+Un export JSON ou un fichier d'univers reçu ne peut porter que 32 Mo de texte hors images, et une image de 64 Mo au plus : le texte se déplie en mémoire. Gardez `mem_limit` sur le conteneur : un import de 256 Mo peut demander environ 700 Mo.
+
+### Ce que voient l'administrateur et l'hébergeur
+
+À dire aux groupes que vous hébergez, avant qu'ils y mettent leurs données :
+
+- **L'administrateur** ne lit pas le contenu des univers par l'API. Il peut toutefois créer un compte et se donner le rôle de MJ : cette barrière évite les erreurs, elle ne protège pas d'un administrateur qui voudrait lire. Ces changements sont notés au journal du programme.
+- **Celui qui a accès à la machine** lit tout : les fichiers `.cofdm`, leurs sauvegardes et `comptes.json` ne sont pas chiffrés (les mots de passe y sont hachés). Chiffrer le disque du serveur protège d'un disque volé, pas de cette personne.
+- **Sauvegardes.** Les sauvegardes d'un univers restent dans `sauvegardes/<identifiant>/` après sa suppression, y compris celle faite juste avant : supprimer un univers n'efface pas ses données. Pour les effacer vraiment, supprimez ce dossier à la main, et attendez la fin de la conservation de vos sauvegardes externes. Les plafonds sont dans « Limites d'un serveur partagé ».
+- **Journaux.** Ils gardent des noms de comptes et des adresses IP, ainsi que les opérations de l'administrateur.
+- **Données personnelles.** Si d'autres personnes utilisent votre serveur, le RGPD peut s'appliquer : dites-leur qui héberge, ce qui est gardé et combien de temps, et comment demander l'effacement.
+
+### Journal de sécurité et fail2ban
+
+En mode serveur, le journal du programme (`docker logs`) note les événements de sécurité, une ligne chacun, sous une forme stable :
+
+```text
+securite evenement=<événement> [champ=valeur…] nom="<compte>" ip=<adresse du visiteur>
+```
+
+| Événement | Quand |
+|---|---|
+| `connexion_ok`, `connexion_echec` | Une connexion réussie ou ratée. `nom` est ce qui a été saisi, entre guillemets et échappé. |
+| `limite_atteinte portee=adresse` ou `portee=couple` | Un essai refusé : quota de l'adresse, ou de ce nom depuis cette adresse. |
+| `limite_atteinte portee=nom` | Un essai ralenti, jamais refusé : ce nom reçoit des essais de nombreuses adresses. Le visiteur peut être le vrai titulaire : ne pas bannir sur cette ligne. |
+| `limite_atteinte portee=mdp`, `mdp_echec`, `mdp_change`, `mdp_reinitialise` | Changement de mot de passe par le titulaire (essais de trop, ancien mot de passe faux, réussi) ; réinitialisation par un administrateur (`par`). `jetons_retires` : le nombre de jetons tombés. |
+| `jeton_cree`, `jeton_retire`, `jeton_rendu` | Jeton d'API créé, retiré, ou rendu par un poste de bureau qui quitte le serveur. |
+| `direct_coupe` | Un écran en direct coupé : ses droits ont changé depuis son ouverture. |
+
+Ni mot de passe ni jeton n'y figurent. L'adresse est celle des proxys de confiance : tant que `-proxies` n'est pas juste, elle est fausse. Un nom saisi par erreur à la place du mot de passe y resterait lisible : ce journal se garde comme une donnée sensible. Ces adresses sont des données personnelles : fixez une durée de conservation.
+
+**Filtre fail2ban d'exemple** (non essayé sur un vrai fail2ban : seule l'expression a été vérifiée sur des lignes du journal). `/etc/fail2ban/filter.d/cof-dm.conf` :
+
+```ini
+[Definition]
+failregex = securite evenement=(?:connexion_echec|limite_atteinte portee=(?:adresse|couple)) .*ip=<HOST>(?:\\n"|\s*$)
+```
+
+`/etc/fail2ban/jail.d/cof-dm.local`, pour le journal `json-file` de Docker, sur l'hôte :
+
+```ini
+[cof-dm]
+enabled   = true
+filter    = cof-dm
+logpath   = /var/lib/docker/containers/*/*-json.log
+maxretry  = 10
+findtime  = 10m
+bantime   = 1h
+port      = http,https
+chain     = DOCKER-USER
+```
+
+`DOCKER-USER` : le trafic vers un conteneur ne passe pas par la chaîne `INPUT`, où un bannissement ordinaire resterait sans effet. Le chemin par défaut lit le journal de tous les conteneurs : un autre conteneur pourrait y écrire une ligne imitée et faire bannir une adresse.
 
 ### Avec Docker
 
@@ -207,10 +308,117 @@ docker compose up -d --build
 docker compose logs cof-dm     # premier lancement : le mot de passe du compte « admin »
 ```
 
-- Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui permet à l'application de se fier aux en-têtes `X-Forwarded-*` de nginx : ne remplacez pas ce partage par un port publié.
+- Ce `docker-compose.yml` suit le cas d'un nginx installé sur la machine. Avec un proxy en conteneur, voir « Derrière Nginx Proxy Manager et Portainer ».
+- Le conteneur partage le réseau de la machine : COF DM n'écoute que sur `127.0.0.1:8100`, exactement comme sans Docker, et la configuration nginx ci-dessus s'applique telle quelle. Aucun port n'est publié. C'est aussi ce qui fait de nginx un proxy de confiance sans aucun réglage : avec un port publié ou un réseau Docker, il faudrait déclarer le proxy dans `-proxies`.
 - Les données sont dans `./donnees` : `comptes.json`, `reglages.json`, `univers/` (un fichier `.cofdm` par univers) et `sauvegardes/`. Pour mettre sur le serveur un univers préparé sur votre ordinateur : l'administrateur crée l'univers et vous en fait MJ, puis **Fichier → Importer un fichier d'univers…** ; ou son fichier dans `donnees/univers/` puis `docker compose restart`. Les univers archivés sont rangés dans `donnees/univers/archives/`.
 - Le conteneur tourne avec l'utilisateur `1000:1000`. Si `./donnees` appartient à un autre utilisateur, indiquez-le : `COF_UID=$(id -u) COF_GID=$(id -g) docker compose up -d`. `COF_PORT` change le port (8100 par défaut).
 - Mise à jour : avec l'image publiée, changer le tag (ou garder `latest`) puis `docker compose pull && docker compose up -d` ; construite depuis le dépôt, `git pull && docker compose up -d --build`. Le serveur ne s'installe rien, mais il cherche les versions publiées et le dit à l'administrateur (onglet **Serveur** de sa page), avec la version des applications de bureau reliées. Sa version est celle de l'image publiée, ou vient de git pour une image construite (`1.2.3`, ou `1.2.3+4.1a2b3c4` quelques commits après). L'univers est sauvegardé et fermé proprement à l'arrêt du conteneur. Construite depuis le dépôt, la première construction prend une à deux minutes, dont près d'une minute sans rien afficher à l'étape `go build` (compilation de SQLite) : elle n'est pas bloquée. Les suivantes réutilisent ce travail et prennent quelques secondes ; `--no-cache` n'est pas utile.
+
+### Derrière Nginx Proxy Manager et Portainer
+
+Pour un serveur où [Nginx Proxy Manager](https://nginxproxymanager.com/) (NPM) tourne en conteneur, exposé directement sur Internet, sur le même hôte Docker que COF DM. Le fichier [`docker-compose.npm.yml`](docker-compose.npm.yml) sert d'exemple : pas de `build:`, pas de réseau `host`, aucun port publié, conteneur en lecture seule, sans capacité, avec des limites de mémoire et de processus.
+
+**Essayé** sur un banc jetable en local, avec un vrai NPM (`jc21/nginx-proxy-manager:2`) et un certificat de test : tout ce qui suit, sauf ce qui est indiqué plus bas comme non essayé.
+
+**1. Le réseau.** Un réseau Docker pour NPM et COF DM **seulement**, à sous-réseau fixe : tout conteneur de ce réseau peut dicter son adresse et le HTTPS à l'application. Dans Portainer : *Networks → Add network*, nom `cof-dm-proxy`, sous-réseau `172.30.0.0/24` ; ou :
+
+```bash
+docker network create --subnet 172.30.0.0/24 cof-dm-proxy
+```
+
+Un autre sous-réseau convient, à reporter dans `-proxies`. NPM rejoint ce réseau depuis sa propre stack :
+
+```yaml
+services:
+  npm:
+    # … sa configuration habituelle …
+    networks: [default, cof-dm-proxy]
+networks:
+  cof-dm-proxy:
+    external: true
+```
+
+**2. La stack COF DM.** Dans Portainer : *Stacks → Add stack*, éditeur web, y coller `docker-compose.npm.yml` en remplaçant `X.Y.Z` par une version publiée précise, jamais `latest`. Au premier lancement, le mot de passe du compte `admin` s'affiche dans les journaux du conteneur. **Portainer les montre à quiconque y a accès, et Docker les garde : changez ce mot de passe aussitôt.**
+
+**3. Les limites de débit de NPM, avant le reste.** Les zones de `limit_req` se déclarent dans le bloc `http`, que le champ « Advanced » n'atteint pas : elles vont dans `/data/nginx/custom/http_top.conf`, un fichier que NPM inclut s'il existe, dans son propre volume de données :
+
+```nginx
+limit_req_zone $binary_remote_addr zone=cof_api:10m rate=20r/s;
+limit_req_zone $binary_remote_addr zone=cof_login:10m rate=10r/m;
+```
+
+Sans ce fichier, le bloc « Advanced » ci-dessous fait échouer le contrôle de la configuration, et NPM met le site hors ligne. Après l'avoir créé, enregistrez l'hôte de nouveau pour que NPM recharge nginx.
+
+**4. L'hôte dans NPM.** *Hosts → Proxy Hosts → Add Proxy Host* :
+
+| Réglage | Valeur | Ce qu'il fait dans NPM |
+|---|---|---|
+| Scheme, Forward Hostname, Forward Port | `http`, `cof-dm`, `8100` | Le nom du service, résolu sur le réseau partagé. |
+| Websockets Support | **Activé** | Transmet `Upgrade` et `Connection`. Sans lui, le suivi en direct reçoit `400`. |
+| Cache Assets | **Désactivé** | Activé, NPM met en cache public tout chemin finissant par `.png`, `.js`… **en ignorant `Cache-Control`** : essayé, une image de `/medias/` vue par le MJ est ensuite servie à un anonyme. |
+| Block Common Exploits | Au choix | Non essayé avec l'application : des motifs sur l'URL, dont COF DM n'a pas besoin. |
+| SSL : Force SSL | **Activé** | Redirige le HTTP vers le HTTPS (`301`). NPM recopie le `X-Forwarded-Proto` du client s'il vaut `http` ou `https` : c'est cette redirection qui empêche de se faire passer pour du HTTPS. |
+| SSL : HTTP/2 Support | Activé | `http2 on`. |
+| SSL : HSTS Enabled | Activé, une fois le HTTPS validé | NPM envoie `max-age=63072000; preload` : les navigateurs refuseront ce domaine sans HTTPS pendant deux ans. HSTS Subdomains : désactivé, sauf si tout le domaine est en HTTPS. |
+
+Onglet **Advanced**, à coller tel quel :
+
+```nginx
+# NPM croit X-Real-IP pour les adresses privées et les plages de CDN : un client vu sous l'une d'elles
+# dicterait son adresse, à la limite d'essais comme au journal. Personne n'est de confiance ici.
+set_real_ip_from 127.0.0.1/32;
+
+client_max_body_size 8m;
+proxy_read_timeout 600s;
+
+limit_req zone=cof_api burst=100 nodelay;
+limit_req_status 429;
+
+location = /api/acces/connexion {
+  limit_req zone=cof_login burst=5 nodelay;
+  include conf.d/include/proxy.conf;
+}
+location = /api/import/univers {
+  client_max_body_size 1g;
+  include conf.d/include/proxy.conf;
+}
+location = /api/restaurer {
+  client_max_body_size 300m;
+  include conf.d/include/proxy.conf;
+}
+location ~ ^/api/(import/fiches|sync|sync/images/[^/]+|entites/[0-9]+/medias|(bestiaire|reference|regles)/import|bibliotheque)$ {
+  client_max_body_size 64m;
+  include conf.d/include/proxy.conf;
+}
+```
+
+Si NPM était placé derrière un CDN, la première ligne serait à revoir : ce guide suppose NPM exposé directement.
+
+**Sur un port public autre que 443**, ajoutez ce bloc. NPM transmet `Host` sans le port, alors que le navigateur l'indique dans `Origin` : sans ce bloc, l'application refuse le WebSocket (`403`).
+
+```nginx
+location ~ ^/api/(combats/[0-9]+|joueur)/direct$ {
+  proxy_set_header Upgrade           $http_upgrade;
+  proxy_set_header Connection        $http_connection;
+  proxy_http_version 1.1;
+  proxy_set_header Host              $http_host;
+  proxy_set_header X-Forwarded-Proto $x_forwarded_proto;
+  proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+  proxy_pass $forward_scheme://$server:$port$request_uri;
+}
+```
+
+**5. À vérifier ensuite.** Le cookie `cof_dm_mj` porte `Secure` ; après une connexion ratée, `docker logs` montre votre vraie adresse dans la ligne `securite evenement=connexion_echec` (sinon, revoir `-proxies`) ; le port 8100 ne répond pas depuis l'extérieur ; le suivi en direct fonctionne.
+
+**Ne jamais exposer sur Internet :** le port 81 de NPM (son administration) et l'interface de Portainer. La socket Docker reste réservée à Portainer : ni NPM ni COF DM ne la montent, car elle donne la main sur tout l'hôte.
+
+**Sauvegardes :** tout le volume, pas seulement les univers : il contient `comptes.json` et `reglages.json` (dont le secret qui signe les sessions), à garder chiffrés. Par exemple, conteneur arrêté (le nom exact du volume porte celui de la stack) :
+
+```bash
+docker run --rm -v <stack>_cof-dm-donnees:/data:ro -v "$PWD":/sauvegarde debian:bookworm-slim tar czf /sauvegarde/cof-dm-donnees.tar.gz -C /data .
+```
+
+**Non essayé :** une vraie stack déployée par Portainer (le compose a été lancé avec `docker compose`) ; un vrai certificat Let's Encrypt ; de vrais clients sur Internet (le banc les voit tous sous une adresse de la passerelle Docker). `mem_limit: 1g` et les imports les plus lourds n'ont pas été mesurés ensemble ; le volume de données doit aussi avoir la place d'accueillir `TMPDIR` pendant un import.
 
 ### Mode de travail : local ou serveur
 
@@ -410,7 +618,7 @@ Le mode serveur (`-serveur`) n'existe que dans l'image Docker : l'application de
 
 Un univers est **un seul fichier** `.cofdm` : fiches, relations, images, calendrier et journal. Il peut être rangé n'importe où (Documents, clé USB, dossier synchronisé) et se copie tel quel. Le menu **Fichier**, en haut du menu latéral, permet de créer un univers, d'en ouvrir un autre, de rouvrir un univers récent et d'enregistrer une copie. L'application rouvre au lancement le dernier univers utilisé.
 
-Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes, exports et import** les liste et permet de revenir à l'une d'elles.
+Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé (sur un serveur, voir aussi « Limites d'un serveur partagé »). Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes, exports et import** les liste et permet de revenir à l'une d'elles.
 
 **Depuis une version précédente** : au premier lancement, l'ancienne base et ses images sont reprises dans `univers/Mon univers.cofdm`. Rien n'est effacé : `cof-dm.db` est renommé `cof-dm.db.ancien` et le dossier `medias/` reste en place ; vous pouvez les supprimer une fois l'univers vérifié.
 
@@ -441,7 +649,7 @@ Le script d'import relit cet export, avec ses limites : il ne connaît ni les ob
 
 ## Développement
 
-Go 1.26 (1.26.9 au moins) et un compilateur C (SQLite). La recherche utilise le module FTS5 de SQLite : **toujours compiler avec `-tags sqlite_fts5`** (sinon la compilation s'arrête avec un message).
+Go 1.26 (1.26.10 au moins) et un compilateur C (SQLite). La recherche utilise le module FTS5 de SQLite : **toujours compiler avec `-tags sqlite_fts5`** (sinon la compilation s'arrête avec un message).
 
 ```bash
 go test -tags "sqlite_fts5 nogui" ./...                 # tests

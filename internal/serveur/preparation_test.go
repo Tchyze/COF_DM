@@ -98,7 +98,7 @@ func TestPreparationJoueur(t *testing.T) {
 	_, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": "seance", "nom": "Séance 1", "data": map[string]any{"preparation": "SECRET-PREPA"}}, mj)
 	id := v["id"]
 	b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", id), map[string]any{"partage": true}, mj)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

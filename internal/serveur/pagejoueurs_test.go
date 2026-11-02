@@ -219,7 +219,7 @@ func TestPageJoueursCompte(t *testing.T) {
 	feuille(lea)
 	feuille(tom)
 	b.proxy("POST", fmt.Sprintf("/api/entites/%v/partage", lea), map[string]any{"partage": true}, mj)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

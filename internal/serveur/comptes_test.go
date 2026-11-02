@@ -28,7 +28,7 @@ func bancServeur(t *testing.T) (*banc, *comptes.Registre) {
 	b := nouveauAvec(t, Options{Comptes: reg})
 	b.s.acces.pause = 0
 	for nom, role := range map[string]string{"chef": "", "meneur": comptes.MJ, "audit": comptes.Auditeur, "passant": ""} {
-		if _, err := reg.Creer(nom, "mot-de-passe-"+nom, nom == "chef"); err != nil {
+		if _, err := reg.Creer(nom, mdpEssai(nom), nom == "chef"); err != nil {
 			t.Fatal(err)
 		}
 		if role != "" {
@@ -69,7 +69,7 @@ func (b *banc) proxy(methode, url string, corps any, prep func(*http.Request)) (
 
 func (b *banc) connecter(nom string) func(*http.Request) {
 	b.t.Helper()
-	c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": "mot-de-passe-" + nom}, nil)
+	c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}, nil)
 	if c != 200 || cookie == nil {
 		b.t.Fatalf("connexion de %s : %d", nom, c)
 	}
@@ -97,7 +97,7 @@ func TestServeurSansCompte(t *testing.T) {
 	if c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "meneur", "mdp": "faux"}, nil); c != 401 || cookie != nil {
 		t.Fatalf("mauvais mot de passe : %d", c)
 	}
-	if c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "inconnu", "mdp": "mot-de-passe-meneur"}, nil); c != 401 || cookie != nil {
+	if c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "inconnu", "mdp": "mot-de-passe-ruenem"}, nil); c != 401 || cookie != nil {
 		t.Fatalf("compte inconnu : %d", c)
 	}
 	// l'ancien jeton unique n'ouvre rien
@@ -113,7 +113,7 @@ func TestServeurRoles(t *testing.T) {
 	pnj := map[string]any{"type": "pnj", "nom": "Gautier"}
 
 	// le témoin n'est renvoyé qu'en HTTPS, et dit qui est là
-	_, v, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "Meneur ", "mdp": "mot-de-passe-meneur"}, nil)
+	_, v, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "Meneur ", "mdp": "mot-de-passe-ruenem"}, nil)
 	if !cookie.Secure || !cookie.HttpOnly || v["mj"] != true {
 		t.Fatalf("témoin : %+v %v", cookie, v)
 	}
@@ -167,7 +167,7 @@ func TestServeurRoles(t *testing.T) {
 	if c, _, _ := b.proxy("GET", "/api/entites", nil, mj); c != 401 {
 		t.Fatalf("session d'un compte désactivé : %d", c)
 	}
-	if c, _, _ := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "meneur", "mdp": "mot-de-passe-meneur"}, nil); c != 401 {
+	if c, _, _ := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": "meneur", "mdp": "mot-de-passe-ruenem"}, nil); c != 401 {
 		t.Fatalf("connexion d'un compte désactivé : %d", c)
 	}
 	// le journal porte le nom du compte
@@ -188,7 +188,7 @@ func TestServeurMotDePasseEtJetons(t *testing.T) {
 	if c, _, _ := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "faux", "nouveau": "un-nouveau-mot-de-passe"}, audit); c != 401 {
 		t.Fatalf("ancien mot de passe faux : %d", c)
 	}
-	c, _, cookie := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-audit", "nouveau": "un-nouveau-mot-de-passe"}, audit)
+	c, _, cookie := b.proxy("POST", "/api/compte/mdp", map[string]any{"ancien": "mot-de-passe-tidua", "nouveau": "un-nouveau-mot-de-passe"}, audit)
 	if c != 200 || cookie == nil {
 		t.Fatalf("changement de mot de passe : %d", c)
 	}
@@ -244,10 +244,10 @@ func TestServeurEssais(t *testing.T) {
 			t.Fatalf("essai %d : %d", i, c)
 		}
 	}
-	if c := essai("172.16.0.1, 203.0.113.9", "mot-de-passe-meneur"); c != 429 {
+	if c := essai("172.16.0.1, 203.0.113.9", "mot-de-passe-ruenem"); c != 429 {
 		t.Fatalf("adresse inventée en tête de X-Forwarded-For : %d", c)
 	}
-	if c := essai("203.0.113.77", "mot-de-passe-meneur"); c != 200 {
+	if c := essai("203.0.113.77", "mot-de-passe-ruenem"); c != 200 {
 		t.Fatalf("autre adresse : %d", c)
 	}
 }
@@ -298,6 +298,15 @@ func (n *navigateur) brut(methode, url string, corps any, enTetes ...string) *ht
 	return w
 }
 
+// mdpEssai : le mot de passe de test d'un compte, qui ne contient pas son nom.
+func mdpEssai(nom string) string {
+	r := []rune(nom)
+	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
+		r[i], r[j] = r[j], r[i]
+	}
+	return "mot-de-passe-" + string(r)
+}
+
 func serveurMulti(t *testing.T) (*Application, *comptes.Registre, func(nom string) *navigateur) {
 	dir := t.TempDir()
 	reg, _ := comptes.Ouvrir(filepath.Join(dir, "comptes.json"))
@@ -311,12 +320,12 @@ func serveurMulti(t *testing.T) (*Application, *comptes.Registre, func(nom strin
 	connecter := func(nom string) *navigateur {
 		t.Helper()
 		if _, ok := reg.Lire(nom); !ok {
-			if _, err := reg.Creer(nom, "mot-de-passe-"+nom, nom == "chef"); err != nil {
+			if _, err := reg.Creer(nom, mdpEssai(nom), nom == "chef"); err != nil {
 				t.Fatal(err)
 			}
 		}
 		n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
-		if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": "mot-de-passe-" + nom}); c != 200 {
+		if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}); c != 200 {
 			t.Fatalf("connexion de %s : %d", nom, c)
 		}
 		return n
@@ -536,7 +545,7 @@ func TestServeurMultiUnivers(t *testing.T) {
 // passer de ce qui est réservé au MJ.
 func TestServeurJoueur(t *testing.T) {
 	b, reg := bancServeur(t)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur
@@ -635,7 +644,7 @@ func TestServeurJoueur(t *testing.T) {
 func TestServeurEditionJoueur(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
-		reg.Creer(nom, "mot-de-passe-"+nom, false)
+		reg.Creer(nom, mdpEssai(nom), false)
 		reg.Modifier(nom, func(c *comptes.Compte) error {
 			c.Admis = append(c.Admis, b.s.store.ID())
 			c.Roles[b.s.store.ID()] = comptes.Joueur
@@ -863,4 +872,14 @@ func TestUniversParOnglet(t *testing.T) {
 	if c, _ := meneur.faire("GET", "/api/stats?univers="+premier, nil); c == 200 {
 		t.Fatal("lecture d'un univers sans rôle par ?univers=")
 	}
+}
+
+// connecter2 : la connexion d'un compte dont le mot de passe a changé.
+func (b *banc) connecter2(nom, mdp string) func(*http.Request) {
+	b.t.Helper()
+	c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdp}, nil)
+	if c != 200 || cookie == nil {
+		b.t.Fatalf("connexion de %s : %d", nom, c)
+	}
+	return func(r *http.Request) { r.AddCookie(cookie) }
 }

@@ -333,7 +333,7 @@ export async function parametres(el, voulu = "") {
     const box = $("#sauvegardes", el);
     if (!box) return;
     const u = await api("GET", "/api/univers");
-    box.innerHTML = `<p class="hint">Une copie complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture, s'il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez ne sont jamais effacées.${u.dossier_sauvegardes ? ` Dossier : <code>${esc(u.dossier_sauvegardes)}</code>.` : ""}</p>
+    box.innerHTML = `<p class="hint">Une copie complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture, s'il a changé. Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; ${u.serveur ? "celles que vous demandez sont plafonnées par le serveur, les plus anciennes partent d'abord" : "celles que vous demandez ne sont jamais effacées"}.${u.dossier_sauvegardes ? ` Dossier : <code>${esc(u.dossier_sauvegardes)}</code>.` : ""}</p>
       ${u.sauvegardes.length ? `<div style="overflow-x:auto"><table class="tab"><thead><tr><th>Quand</th><th>Sauvegarde</th><th>Taille</th><th></th></tr></thead><tbody>
         ${u.sauvegardes.map(s => `<tr><td class="num" style="white-space:nowrap">${dateHeure(s.quand)}</td><td>${esc(MOTIFS[s.motif] || s.motif)}</td><td class="num">${taille(s.taille)}</td>
           <td><button class="petit danger" data-restaurer="${esc(s.fichier)}">Restaurer</button></td></tr>`).join("")}

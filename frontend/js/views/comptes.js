@@ -28,7 +28,7 @@ export function aideEditionJoueurs(acces = window.cofAcces || {}) {
 
 /** Mon compte : changer son mot de passe, créer et retirer ses jetons d'API (pas sur la page des
  * joueurs : jetons: false). */
-export async function panneauCompte(box, { jetons = true } = {}) {
+export async function panneauCompte(box, { jetons = true, apres = null } = {}) {
   const c = await api("GET", "/api/compte");
   const qui = c.admin ? "Administrateur du serveur" : `${ROLES[c.role || ""]} de cet univers`;
   box.innerHTML = `<h3>Mon compte</h3>
@@ -36,15 +36,16 @@ export async function panneauCompte(box, { jetons = true } = {}) {
     <form id="cpt-mdp" class="colonne" style="gap:10px">
       <label class="champ"><span>Mot de passe actuel</span><input type="password" id="cpt-ancien" autocomplete="current-password" required></label>
       <div class="org-form">
-        <label class="champ"><span>Nouveau mot de passe</span><input type="password" id="cpt-nouveau" autocomplete="new-password" placeholder="${MDP_MIN} caractères au moins" required></label>
+        <label class="champ"><span>Nouveau mot de passe</span><input type="password" id="cpt-nouveau" autocomplete="new-password" placeholder="${c.admin ? MDP_MIN + 2 : MDP_MIN} caractères au moins" required></label>
         <label class="champ"><span>Confirmation</span><input type="password" id="cpt-nouveau2" autocomplete="new-password" required></label>
       </div>
+      ${c.jetons.length ? `<label class="t-coche"><input type="checkbox" id="cpt-retirer" checked><span>Retirer aussi mes jetons d'API (${c.jetons.length})<small>À laisser coché si vous craignez qu'on ait pris votre mot de passe. Vos postes de bureau reliés devront se reconnecter ; leurs copies et leurs changements restent sur l'ordinateur.</small></span></label>` : ""}
       <div><button class="primary" type="submit">Changer le mot de passe</button></div>
     </form>
     <p class="hint">Changer le mot de passe déconnecte vos autres appareils.</p>
     ${jetons ? `<h3 style="margin-top:14px">Jetons d'API</h3>
     <p class="hint">Pour un programme ou pour Claude (en-tête <code>Authorization: Bearer …</code>). Un jeton a les droits de ce compte, sauf changer le mot de passe et gérer les jetons.</p>
-    ${c.jetons.length ? `<table class="tab"><tbody>${c.jetons.map(j => `<tr><td>${esc(j.nom || "sans nom")}</td><td class="num" style="white-space:nowrap">${dateHeure(j.cree)}</td>
+    ${c.jetons.length ? `<table class="tab"><tbody>${c.jetons.map(j => `<tr><td>${esc(j.nom || "sans nom")}<br><small class="hint">${j.utilise ? "utilisé le " + dateHeure(j.utilise) : "jamais utilisé"}</small></td><td class="num" style="white-space:nowrap">${dateHeure(j.cree)}</td>
       <td style="text-align:right"><button class="ghost petit" data-jeton="${esc(j.id)}">Retirer</button></td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucun jeton.</p>`}
     <form id="cpt-jeton" class="ligne"><input id="cpt-jeton-nom" placeholder="À quoi sert-il ? (ex. import Obsidian)" maxlength="60" style="flex:1;min-width:0"><button type="submit">＋ Créer un jeton</button></form>
     <div id="cpt-clair" class="alerte" hidden></div>` : ""}`;
@@ -53,7 +54,12 @@ export async function panneauCompte(box, { jetons = true } = {}) {
     e.preventDefault();
     const nouveau = nouveauMdp($("#cpt-nouveau", box), $("#cpt-nouveau2", box));
     if (!nouveau) return;
-    try { await api("POST", "/api/compte/mdp", { ancien: $("#cpt-ancien", box).value, nouveau }); toast("Mot de passe changé."); maj(); }
+    const retirer = $("#cpt-retirer", box);
+    try {
+      const r = await api("POST", "/api/compte/mdp", { ancien: $("#cpt-ancien", box).value, nouveau, retirer_jetons: !!retirer?.checked });
+      toast(r.jetons_retires ? `Mot de passe changé, ${r.jetons_retires} jeton${r.jetons_retires > 1 ? "s" : ""} retiré${r.jetons_retires > 1 ? "s" : ""}.` : "Mot de passe changé.");
+      if (apres) apres(); else maj();
+    }
     catch (err) { toast(err.message, true); }
   };
   if (jetons) $("#cpt-jeton", box).onsubmit = async e => {

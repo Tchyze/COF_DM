@@ -14,11 +14,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -36,10 +38,12 @@ const (
 func RoleValide(role string) bool { return role == MJ || role == Auditeur || role == Joueur }
 
 const (
-	iterations = 210000
-	MdpMin     = 10
-	prefixe    = "cofdm_"
-	jetonsMax  = 20
+	MdpMin      = 10
+	MdpMinAdmin = 12
+	prefixe     = "cofdm_"
+	jetonsMax   = 20
+	// utiliseTous : le fichier des comptes ne s'écrit pas à chaque requête d'un poste relié
+	utiliseTous = 3600.0
 )
 
 var (
@@ -47,6 +51,8 @@ var (
 	ErrExiste       = errors.New("ce nom est déjà pris")
 	ErrNom          = errors.New("nom invalide : 3 à 32 caractères parmi a-z, 0-9, « - » et « _ »")
 	ErrMdp          = errors.New("le mot de passe doit faire au moins 10 caractères")
+	ErrMdpAdmin     = errors.New("le mot de passe d'un administrateur doit faire au moins 12 caractères")
+	ErrMdpFaible    = errors.New("ce mot de passe est trop facile à deviner : évitez le nom du compte, les répétitions et les mots de passe courants")
 	ErrRole         = errors.New("rôle inconnu : mj, auditeur ou joueur")
 	ErrDernierAdmin = errors.New("il doit rester un administrateur actif")
 	ErrTropDeJetons = errors.New("trop de jetons : retirez-en un d'abord")
@@ -62,6 +68,7 @@ type Jeton struct {
 	Nom       string  `json:"nom"`
 	Empreinte string  `json:"empreinte"`
 	Cree      float64 `json:"cree"`
+	Utilise   float64 `json:"utilise,omitempty"` // dernière utilisation, à une heure près : voir ParJeton
 }
 
 type Compte struct {
@@ -75,6 +82,10 @@ type Compte struct {
 	Jetons  []Jeton           `json:"jetons,omitempty"`
 	Version int               `json:"version"` // change avec le mot de passe : les sessions ouvertes tombent
 	Cree    float64           `json:"cree"`
+	Graine  string            `json:"graine"` // tirée à la création : une session n'ouvre que ce compte-là, pas un homonyme recréé
+	// DoitChanger : son mot de passe est passé par les journaux ; il n'a accès à rien d'autre qu'à son
+	// compte tant qu'il ne l'a pas changé.
+	DoitChanger bool `json:"doit_changer,omitempty"`
 }
 
 // Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
@@ -128,14 +139,18 @@ func Ouvrir(chemin string) (*Registre, error) {
 
 // reprendre met un compte d'avant la séparation des rôles dans la forme actuelle : un
 // administrateur perd ses rôles et ses jetons (il n'entre plus dans les univers), un compte joueur
-// est admis dans les univers où il joue déjà.
+// est admis dans les univers où il joue déjà. Un compte sans graine en reçoit une : ses sessions
+// d'avant tombent, une seule fois.
 func reprendre(c *Compte) bool {
+	change := false
+	if c.Graine == "" {
+		c.Graine, change = nouvelleGraine(), true
+	}
 	if c.Admin {
-		change := len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0
+		change = len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0 || change
 		c.Roles, c.Admis, c.Persos, c.Jetons = nil, nil, nil, nil
 		return change
 	}
-	change := false
 	for u, role := range c.Roles {
 		if role == Joueur && !slices.Contains(c.Admis, u) {
 			c.Admis, change = append(c.Admis, u), true
@@ -143,6 +158,12 @@ func reprendre(c *Compte) bool {
 	}
 	slices.Sort(c.Admis)
 	return change
+}
+
+func nouvelleGraine() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func (r *Registre) ecrire() error {
@@ -183,7 +204,20 @@ func copie(c *Compte) Compte {
 	return x
 }
 
-func hacher(mdp string, sel []byte) []byte {
+// Le coût d'une empreinte de mot de passe (recommandation OWASP pour PBKDF2-SHA256). Une empreinte
+// porte le sien : un compte passe au coût courant à sa prochaine connexion réussie.
+const (
+	formatEmpreinte     = "pbkdf2-sha256"
+	iterationsAnciennes = 210000 // « sel:empreinte », la forme d'avant
+	iterationsMax       = 100000000
+)
+
+var iterationsMdp = 600000
+
+// CoutReduitPourTests : les tests créent des centaines de comptes. Rien d'autre ne l'appelle.
+func CoutReduitPourTests() { iterationsMdp = 1000 }
+
+func deriver(mdp string, sel []byte, iterations int) []byte {
 	k, _ := pbkdf2.Key(sha256.New, mdp, sel, iterations, 32)
 	return k
 }
@@ -191,7 +225,40 @@ func hacher(mdp string, sel []byte) []byte {
 func empreinteMdp(mdp string) string {
 	sel := make([]byte, 16)
 	_, _ = rand.Read(sel)
-	return hex.EncodeToString(sel) + ":" + hex.EncodeToString(hacher(mdp, sel))
+	return fmt.Sprintf("%s$%d$%s$%s", formatEmpreinte, iterationsMdp, hex.EncodeToString(sel), hex.EncodeToString(deriver(mdp, sel, iterationsMdp)))
+}
+
+// empreinte : une empreinte de mot de passe relue. Illisible : aucun mot de passe n'y correspond.
+type empreinte struct {
+	iterations  int
+	sel, valeur []byte
+}
+
+func lireEmpreinte(texte string) empreinte {
+	var e empreinte
+	var sel, valeur string
+	if p := strings.Split(texte, "$"); len(p) == 4 && p[0] == formatEmpreinte {
+		n, err := strconv.Atoi(p[1])
+		if err != nil || n <= 0 || n > iterationsMax {
+			return empreinte{}
+		}
+		e.iterations, sel, valeur = n, p[2], p[3]
+	} else if s, h, ok := strings.Cut(texte, ":"); ok && !strings.Contains(texte, "$") {
+		e.iterations, sel, valeur = iterationsAnciennes, s, h
+	} else {
+		return empreinte{}
+	}
+	var err1, err2 error
+	e.sel, err1 = hex.DecodeString(sel)
+	e.valeur, err2 = hex.DecodeString(valeur)
+	if err1 != nil || err2 != nil || len(e.valeur) == 0 {
+		return empreinte{}
+	}
+	return e
+}
+
+func (e empreinte) correspond(mdp string) bool {
+	return e.iterations > 0 && subtle.ConstantTimeCompare(deriver(mdp, e.sel, e.iterations), e.valeur) == 1
 }
 
 func maintenant() float64 { return float64(time.Now().UnixNano()) / 1e9 }
@@ -225,20 +292,56 @@ func (r *Registre) Lire(nom string) (Compte, bool) {
 	return copie(c), true
 }
 
+// mdpCourants : les plus essayés de ceux qui passent la longueur minimale (en minuscules).
+var mdpCourants = map[string]bool{
+	"0123456789": true, "1234567890": true, "12345678910": true, "123456789a": true, "a123456789": true, "0987654321": true,
+	"1234512345": true, "1122334455": true, "1q2w3e4r5t": true, "1qaz2wsx3edc": true, "qwertyuiop": true, "azertyuiop": true,
+	"azerty1234": true, "azerty12345": true, "azerty123456": true, "qwerty1234": true, "qwerty12345": true, "qwerty123456": true,
+	"password12": true, "password123": true, "password1234": true, "passw0rd123": true, "motdepasse": true, "motdepasse1": true,
+	"motdepasse12": true, "motdepasse123": true, "motdepasse1234": true, "administrateur": true, "administrator": true,
+	"adminadmin": true, "admin12345": true, "admin123456": true, "changeme123": true, "letmein1234": true, "iloveyou12": true,
+	"iloveyou123": true, "jetaime1234": true, "bonjour1234": true, "soleil1234": true, "welcome123": true, "football123": true,
+	"dragon1234": true, "dragon12345": true, "chroniques": true, "chroniquesoubliees": true, "maitredujeu": true, "donjons1234": true,
+}
+
+// MdpAcceptable : la règle d'un nouveau mot de passe. Elle ne vaut qu'à la création et au changement :
+// un compte existant se connecte toujours avec le sien.
+func MdpAcceptable(nom, mdp string, admin bool) error {
+	n := len([]rune(mdp))
+	switch {
+	case n < MdpMin:
+		return ErrMdp
+	case admin && n < MdpMinAdmin:
+		return ErrMdpAdmin
+	}
+	bas := strings.ToLower(mdp)
+	repete := true
+	for _, x := range bas {
+		if x != []rune(bas)[0] {
+			repete = false
+			break
+		}
+	}
+	if repete || mdpCourants[bas] || (nom != "" && strings.Contains(bas, strings.ToLower(nom))) {
+		return ErrMdpFaible
+	}
+	return nil
+}
+
 func (r *Registre) Creer(nom, mdp string, admin bool) (Compte, error) {
 	nom = Normaliser(nom)
 	if !reNom.MatchString(nom) {
 		return Compte{}, ErrNom
 	}
-	if len([]rune(mdp)) < MdpMin {
-		return Compte{}, ErrMdp
+	if err := MdpAcceptable(nom, mdp, admin); err != nil {
+		return Compte{}, err
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, ok := r.m[nom]; ok {
 		return Compte{}, ErrExiste
 	}
-	c := &Compte{Nom: nom, Mdp: empreinteMdp(mdp), Admin: admin, Version: 1, Cree: maintenant()}
+	c := &Compte{Nom: nom, Mdp: empreinteMdp(mdp), Admin: admin, Version: 1, Cree: maintenant(), Graine: nouvelleGraine()}
 	r.m[nom] = c
 	if err := r.ecrire(); err != nil {
 		delete(r.m, nom)
@@ -257,17 +360,42 @@ func (r *Registre) Verifier(nom, mdp string) (Compte, bool) {
 		x = copie(c)
 	}
 	r.mu.Unlock()
-	sel, attendu := r.leurre, []byte(nil)
+	e := empreinte{}
 	if ok {
-		s, h, _ := strings.Cut(x.Mdp, ":")
-		sel, _ = hex.DecodeString(s)
-		attendu, _ = hex.DecodeString(h)
+		e = lireEmpreinte(x.Mdp)
 	}
-	bon := subtle.ConstantTimeCompare(hacher(mdp, sel), attendu) == 1
-	if !ok || !bon || x.Inactif || len(attendu) == 0 {
+	bon := e.correspond(mdp)
+	// un échec coûte le même calcul quel que soit le compte, inconnu ou d'avant la migration : le temps
+	// de réponse ne dit pas lequel existe
+	if reste := iterationsMdp - e.iterations; !bon && reste > 0 {
+		deriver(mdp, r.leurre, reste)
+	}
+	if !ok || !bon || x.Inactif {
 		return Compte{}, false
 	}
+	if e.iterations < iterationsMdp {
+		x.Mdp = r.migrer(x.Nom, x.Mdp, mdp)
+	}
 	return x, true
+}
+
+// migrer passe au coût courant l'empreinte d'un mot de passe qui vient d'être vérifié. Ni la version ni
+// la graine ne changent : les sessions ouvertes restent. Si l'écriture échoue, l'ancienne empreinte
+// reste, et la connexion réussit quand même.
+func (r *Registre) migrer(nom, avant, mdp string) string {
+	neuve := empreinteMdp(mdp)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	c, ok := r.m[nom]
+	if !ok || c.Mdp != avant { // changé entre-temps : pas d'une ancienne valeur sur une nouvelle
+		return avant
+	}
+	c.Mdp = neuve
+	if err := r.ecrire(); err != nil {
+		c.Mdp = avant
+		return avant
+	}
+	return neuve
 }
 
 // Modifier applique f au compte et l'enregistre. Le dernier administrateur actif ne peut ni perdre
@@ -337,12 +465,40 @@ func (r *Registre) resteUnAdmin() bool {
 
 // DefinirMdp change le mot de passe : les sessions ouvertes du compte tombent.
 func (r *Registre) DefinirMdp(nom, mdp string) error {
-	if len([]rune(mdp)) < MdpMin {
-		return ErrMdp
-	}
+	_, err := r.ChangerMdp(nom, mdp, false)
+	return err
+}
+
+// ReinitialiserMdp : le mot de passe est changé par un autre que le titulaire. Tous les jetons du
+// compte tombent : qui a volé un jeton ne garde pas l'accès.
+func (r *Registre) ReinitialiserMdp(nom, mdp string) error {
+	_, err := r.ChangerMdp(nom, mdp, true)
+	return err
+}
+
+// ChangerMdp change le mot de passe, et retire tous les jetons du compte si retirerJetons. Renvoie le
+// nombre de jetons retirés ; en cas d'erreur, rien n'a changé.
+func (r *Registre) ChangerMdp(nom, mdp string, retirerJetons bool) (int, error) {
+	retires := 0
 	_, err := r.Modifier(nom, func(c *Compte) error {
+		if err := MdpAcceptable(c.Nom, mdp, c.Admin); err != nil {
+			return err
+		}
 		c.Mdp = empreinteMdp(mdp)
 		c.Version++
+		c.DoitChanger = false
+		if retirerJetons {
+			retires, c.Jetons = len(c.Jetons), nil
+		}
+		return nil
+	})
+	return retires, err
+}
+
+// ExigerChangement : ce compte devra changer son mot de passe avant tout le reste.
+func (r *Registre) ExigerChangement(nom string) error {
+	_, err := r.Modifier(nom, func(c *Compte) error {
+		c.DoitChanger = true
 		return nil
 	})
 	return err
@@ -464,10 +620,15 @@ func (r *Registre) ParJeton(clair string) (Compte, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, c := range r.m {
-		for _, j := range c.Jetons {
+		for i := range c.Jetons {
+			j := &c.Jetons[i]
 			if subtle.ConstantTimeCompare(e, []byte(j.Empreinte)) == 1 {
 				if c.Inactif {
 					return Compte{}, false
+				}
+				if t := maintenant(); t-j.Utilise >= utiliseTous {
+					j.Utilise = t
+					_ = r.ecrire() // cette date n'est qu'une indication : le jeton reste valable sans elle
 				}
 				return copie(c), true
 			}

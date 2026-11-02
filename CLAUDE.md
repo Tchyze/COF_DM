@@ -7,7 +7,7 @@ Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Applica
 
 ## Stack et commandes
 
-- Go ≥ 1.26.9 (`go.mod`), **CGO obligatoire** (`mattn/go-sqlite3`).
+- Go ≥ 1.26.10 (`go.mod`), **CGO obligatoire** (`mattn/go-sqlite3`).
 - Tag **`sqlite_fts5` toujours** (sans lui, `internal/store/fts5_requis.go` fait échouer la compilation). Tag `nogui` : sans fenêtre (tests, CI, headless). Tag `serveur` : édition serveur.
 - Fenêtre : `webview/webview_go` (WebView2 / GTK 3 + WebKitGTK 4.1).
 - Frontend : HTML / CSS / JS **sans framework, sans dépendance, sans build**, embarqué par `//go:embed frontend`. Jamais de npm ni de bundler.
@@ -22,7 +22,7 @@ go build -tags sqlite_fts5 -o cof-dm .                          # bureau
 go build -tags "sqlite_fts5 nogui serveur" -o cof-dm-serveur .  # édition serveur (Docker)
 ```
 
-Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-reseau`, `-serveur` (édition serveur seulement), `-mcp` (serveur MCP sur stdio).
+Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-reseau`, `-serveur` et `-proxies` (édition serveur seulement), `-mcp` (serveur MCP sur stdio).
 
 ## Où se trouve quoi
 
@@ -62,8 +62,9 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 - **`/api/univers` et `/api/claude`** ne répondent qu'à l'ordinateur du MJ. `/api/claude` (bureau seulement) n'écrit que l'entrée `cof-dm` de la config Claude, le reste du fichier gardé.
 - **Secrets MJ** : champs `Secret` et relations réservées ne fuitent jamais vers les joueurs (page, comptes joueurs, export Obsidian « joueurs »).
 - **Bureau / serveur** : le bureau n'est qu'un éditeur, le mode serveur n'existe que dans l'édition serveur (`edition_serveur.go`). Relié à un serveur, le bureau ne répond plus au réseau local (`Options.Relie`, `msgReseauRelie`, `BureauRelie`). Connexion par nom et mot de passe échangés contre un jeton propre au poste, rendu au départ (`DELETE /api/compte/jeton`) ; jamais de mot de passe gardé.
-- **Mode serveur** : derrière un reverse proxy tout vient de `127.0.0.1` → **ne jamais se fier à `local()`**. Accès par `acces.entrer`, droits par `servirComptes` (`mj` : écrire ; `auditeur` : lire, toute route non-`GET` lui est refusée).
+- **Mode serveur** : derrière un reverse proxy tout vient de `127.0.0.1` → **ne jamais se fier à `local()`**. `X-Forwarded-*` ne se croit que d'un proxy déclaré (`-proxies`, `proxies.go`) : passer par `acces.adresse` et `acces.https`. Accès par `acces.entrer`, droits par `servirComptes` (`mj` : écrire ; `auditeur` : lire, toute route non-`GET` lui est refusée).
 - **Administrateur** (`admin.go`, `/api/admin/…`, serveur seulement : le bureau ne sert ni ces routes ni `admin.html`, et n'accepte pas de compte administrateur) : gère le serveur (univers, comptes, rôles) **sans jamais lire le contenu d'un univers**. `Compte.Role` lui renvoie toujours `""` (toute route d'un univers : `403`, sauf `/api/sante`) ; ni rôle, ni jeton d'API ; ses routes ne lisent du store que l'identifiant et le fichier, jamais une fiche ; son passage n'entre pas au journal d'un univers. Test de non-fuite : `TestAdminNeLitAucuneFiche` (toute nouvelle route de lecture s'y ajoute). Il donne `mj` et `auditeur` ; un joueur, il l'**admet** dans un univers (`Compte.Admis`), et c'est le MJ qui l'y joint et lui donne son PJ (`/api/joueurs/comptes`).
+- **Limites d'un serveur** (`limites.go`, nil sur le bureau) : traitement lourd = `placeLourde`, prise **après** la réception du corps (`recevoirFichier`) ; aucun JSON reçu n'est décodé sans plafond sur le texte (`store.LireExport`). Une sauvegarde d'avant une opération passe par `ranger` sans jamais être effacée ni refusée pour le quota.
 - **Multi-univers** : univers visé = en-tête `X-COF-Univers`, sinon cookie, sinon premier univers du compte (un jeton multi-univers doit envoyer l'en-tête, sauf `proprePerso`). Dans `/api/univers`, jamais `a.st` : `a.vise(r)`. Rôle lu dans l'univers visé : `c.Role(s.store.ID())`.
 - **MCP** (`internal/mcp`) : chaque outil passe par l'API REST avec un jeton (jamais le store) ; description en français, annotations lecture / destructif, un test ; aucun effacement définitif ; stdout réservé au protocole, traces sur stderr.
 
@@ -77,8 +78,9 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 ### Combat
 
 - Combats dans `documents` (collection `combats`). Toute action passe par `POST /api/combats/{id}/actions` ; le WebSocket `…/direct` ne fait que recevoir (vérifie `Origin`), jamais appliquer.
-- **Combat et dés en direct** (`direct.go`) : copie reliée et connectée, le combat tourne sur le serveur et le bureau y relaie routes et suivi, avec le jeton du poste. Connexion perdue : `503`, rien ne continue en local, reprise seule. Lancé hors connexion : reste local, part une fois terminé. Sous verrou de l'application, n'y jamais reprendre `a.mu` (`relieDe`, `echangerDe`).
-- Un WebSocket ne garde pas `a.mu` (`servirSuivi`) : il bloquerait tout le serveur à la première écriture. Fermer un univers coupe ses écrans (`Serveur.Fermer`).
+- **Combat et dés en direct** (`direct.go`) : copie reliée et connectée, le combat tourne sur le serveur et le bureau y relaie routes et suivi, avec le jeton du poste. Connexion perdue : `503`, rien ne continue en local, reprise seule. Lancé hors connexion : reste local, part une fois terminé.
+- **Verrous de l'application** (`fermeture.go`) : `a.mu` quelques instructions seulement, jamais pendant une requête, une lecture du réseau, une sauvegarde ou une ouverture de base. `a.gestion` sérialise les opérations sur les univers et se prend avant `a.mu`. Une requête est comptée dans son univers (`requetes`), et une fermeture l'attend sans verrou (`suspendre`) ; ce qui lit une base hors d'une requête servie se compte aussi. Une route servie par un `Serveur` ne prend jamais `a.gestion`.
+- Un WebSocket n'est pas compté (`servirSuivi`) : une fermeture l'attendrait sans fin. Fermer un univers coupe ses écrans (`Serveur.Fermer`). Tout WebSocket revoit ses droits par `surveiller` (`suivi.go`), PJ d'un joueur compris : un nouveau WebSocket s'y branche aussi, avec un test.
 - La fiche d'un combattant est lue par le serveur (`ficheCombat`), jamais fournie par l'écran. PV et chance des PJ reportés sur la feuille hors journal (qui note début et fin).
 - Écran (`views/combat.js`, `combat.css`) : styles sous `.combat`, adaptation par requêtes de conteneur sur `.combat-hote` (jamais la taille de la fenêtre), aucune valeur du jeu écrite : tout vient de `GET /api/regles`, et il reste utilisable sans.
 

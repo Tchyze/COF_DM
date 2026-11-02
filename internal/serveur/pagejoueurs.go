@@ -267,10 +267,12 @@ func (s *Serveur) joueurDirect(w http.ResponseWriter, r *http.Request) {
 	if restreint {
 		filtre = pj
 	}
+	droits := s.droitsDuSuivi(r)
 	conn, err := versWebSocket.Upgrade(w, r, nil)
 	if err != nil {
 		return
 	}
+	defer s.surveiller(conn, r, droits)()
 	e := &ecran{conn: conn, envoi: make(chan []byte, 32)}
 	go e.ecrire()
 	debut, _ := json.Marshal(map[string]any{"type": "etat", "edition": s.editionJoueurs(), "combat": s.combatJoueurs(pj, restreint)})

@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/Tchyze/cof_dm/internal/comptes"
 	"github.com/Tchyze/cof_dm/internal/modele"
 )
 
@@ -14,5 +15,6 @@ func TestMain(m *testing.M) {
 	for i := range modele.Fonctionnalites {
 		modele.Fonctionnalites[i].Defaut = true
 	}
+	comptes.CoutReduitPourTests()
 	os.Exit(m.Run())
 }

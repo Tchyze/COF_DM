@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
@@ -20,15 +21,26 @@ var ici = []string{"X-COF-Version", "1.2.3", "X-COF-Protocole", strconv.Itoa(sto
 // numéros, qui ne les publie pas non plus dans GET /api/mes-univers). Le reste passe au vrai serveur.
 type deguise struct {
 	vrai  http.Handler
+	mu    sync.Mutex // le bureau et ses tâches de fond interrogent le faux serveur pendant que le test le change
 	sante map[string]any
 }
 
+// poser change la réponse de GET /api/sante.
+func (d *deguise) poser(sante map[string]any) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.sante = sante
+}
+
 func (d *deguise) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "GET" || d.sante == nil || (r.URL.Path != "/api/sante" && r.URL.Path != "/api/mes-univers") {
+	d.mu.Lock()
+	sante := d.sante
+	d.mu.Unlock()
+	if r.Method != "GET" || sante == nil || (r.URL.Path != "/api/sante" && r.URL.Path != "/api/mes-univers") {
 		d.vrai.ServeHTTP(w, r)
 		return
 	}
-	out := d.sante
+	out := sante
 	if r.URL.Path == "/api/mes-univers" {
 		rec := httptest.NewRecorder()
 		d.vrai.ServeHTTP(rec, r)
@@ -42,9 +54,9 @@ func (d *deguise) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		delete(out, "version")
 		delete(out, "protocole")
 		delete(out, "modele")
-		if _, ok := d.sante["protocole"]; ok {
+		if _, ok := sante["protocole"]; ok {
 			for _, k := range []string{"version", "protocole", "modele"} {
-				out[k] = d.sante[k]
+				out[k] = sante[k]
 			}
 		}
 	}
@@ -78,10 +90,10 @@ func TestBureauVersionsServeur(t *testing.T) {
 	donner(reg, "meneur", univers, comptes.MJ)
 	donner(reg, "meneur", vide, comptes.MJ)
 	b := nouvelleAppli(t, t.TempDir())
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 
 	// serveur plus récent : pas de copie, rien d'écrit ici
-	d.sante = map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole, "modele": store.VersionModele + 1}
+	d.poser(map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole, "modele": store.VersionModele + 1})
 	c, v := b.local("POST", "/api/univers/serveur/relier", map[string]any{"univers": univers, "copie": "Portable"})
 	if c != 409 || !strings.Contains(v["detail"].(string), "9.0.0, plus récent") {
 		t.Fatalf("copie d'un serveur plus récent : %d %v", c, v)
@@ -90,13 +102,13 @@ func TestBureauVersionsServeur(t *testing.T) {
 		t.Fatal("rien ne doit être copié")
 	}
 	// protocole plus récent : de même
-	d.sante = map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole + 1, "modele": store.VersionModele}
+	d.poser(map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole + 1, "modele": store.VersionModele})
 	if c, _ := b.local("POST", "/api/univers/serveur/relier", map[string]any{"univers": univers}); c != 409 {
 		t.Fatalf("protocole plus récent : %d", c)
 	}
 
 	// serveur plus ancien (une version d'avant les numéros) : la copie se tire, l'envoi est refusé
-	d.sante = map[string]any{"ok": true, "version": "1.2.1"}
+	d.poser(map[string]any{"ok": true, "version": "1.2.1"})
 	c, v = b.local("POST", "/api/univers/serveur/relier", map[string]any{"univers": univers, "copie": "Portable"})
 	if c != 200 || v["courant"].(map[string]any)["id"] != univers {
 		t.Fatalf("copie d'un serveur plus ancien : %d %v", c, v)
@@ -113,7 +125,7 @@ func TestBureauVersionsServeur(t *testing.T) {
 		t.Fatalf("envoi à un serveur plus ancien : %d %v", c, v)
 	}
 	// au même modèle : l'envoi passe
-	d.sante = nil
+	d.poser(nil)
 	if c, v := b.local("POST", "/api/univers/serveur/envoyer", map[string]any{"univers": vide}); c != 200 || recus() != 1 {
 		t.Fatalf("envoi : %d %v", c, v)
 	}
@@ -130,7 +142,7 @@ func TestBureauVersionsEchange(t *testing.T) {
 	meneur := connecter("meneur")
 	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Roles[univers] = comptes.MJ; return nil })
 	b := nouvelleAppli(t, t.TempDir())
-	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-meneur"})
+	b.local("POST", "/api/univers/serveur/connexion", map[string]any{"url": ts.URL, "nom": "meneur", "mdp": "mot-de-passe-ruenem"})
 	if c, v := b.local("POST", "/api/univers/serveur/relier", map[string]any{"univers": univers, "copie": "Portable"}); c != 200 {
 		t.Fatalf("relier : %d %v", c, v)
 	}
@@ -141,7 +153,7 @@ func TestBureauVersionsEchange(t *testing.T) {
 	}
 
 	// serveur plus récent : l'échange attend la mise à jour du bureau
-	d.sante = map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole, "modele": store.VersionModele + 1}
+	d.poser(map[string]any{"ok": true, "version": "9.0.0", "protocole": store.VersionProtocole, "modele": store.VersionModele + 1})
 	b.local("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "La Tour"})
 	meneur.faire("POST", "/api/entites", map[string]any{"type": "lieu", "nom": "Le Gué"})
 	c, v := b.local("POST", "/api/univers/serveur/synchroniser", nil)
@@ -157,7 +169,7 @@ func TestBureauVersionsEchange(t *testing.T) {
 	}
 
 	// serveur plus ancien : réception seule
-	d.sante = map[string]any{"ok": true, "version": "1.2.1"}
+	d.poser(map[string]any{"ok": true, "version": "1.2.1"})
 	c, v = b.local("POST", "/api/univers/serveur/synchroniser", nil)
 	bilan := v["bilan"].(map[string]any)
 	if c != 200 || v["etat"] != etatAJour || v["ecart"] != ecartBureauRecent || bilan["en_attente"] != float64(1) ||
@@ -169,7 +181,7 @@ func TestBureauVersionsEchange(t *testing.T) {
 	}
 
 	// de nouveau au même modèle : ce qui attendait part
-	d.sante = nil
+	d.poser(nil)
 	c, v = b.local("POST", "/api/univers/serveur/synchroniser", nil)
 	if c != 200 || v["etat"] != etatAJour || v["ecart"] != nil || v["bilan"].(map[string]any)["envoyes"] == float64(0) {
 		t.Fatalf("même modèle : %d %v", c, v)

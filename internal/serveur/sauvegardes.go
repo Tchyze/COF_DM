@@ -16,7 +16,7 @@ import (
 // Les sauvegardes automatiques se font à l'ouverture de l'univers, toutes les demi-heures et à la
 // fermeture, seulement si l'univers a changé depuis la dernière. Les plus récentes sont gardées,
 // puis une par jour ; les sauvegardes demandées par le MJ et celles d'avant une restauration ne
-// sont jamais effacées.
+// sont jamais effacées, sauf sur un serveur, où elles sont plafonnées (limites.go).
 const (
 	motifAuto           = "auto"
 	sauvegardesRecentes = 5

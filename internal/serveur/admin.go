@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
@@ -98,7 +99,7 @@ type compteLie struct {
 	Role string `json:"role,omitempty"` // mj, auditeur, joueur ; vide : admis comme joueur, pas encore joint
 }
 
-// fichesAdmin : les univers servis puis archivés, par nom (verrou tenu).
+// fichesAdmin : les univers servis puis archivés, par nom (a.mu ou a.gestion tenu).
 func (a *Application) fichesAdmin() []ficheAdmin {
 	var l []ficheAdmin
 	for _, o := range a.ordre() {
@@ -138,8 +139,9 @@ func (a *Application) ficheAdmin(id string) (ficheAdmin, bool) {
 
 func (a *Application) adminUnivers(w http.ResponseWriter, r *http.Request) {
 	a.mu.RLock()
-	defer a.mu.RUnlock()
-	repondre(w, 200, a.fichesAdmin())
+	l := a.fichesAdmin()
+	a.mu.RUnlock()
+	repondre(w, 200, l)
 }
 
 // adminCreerUnivers : {"nom": "…"} crée un univers vide dans le dossier du serveur. Son contenu
@@ -199,8 +201,8 @@ func (a *Application) adminModifierUnivers(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	id := r.PathValue("id")
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
 	f, ok := a.ficheAdmin(id)
 	if !ok {
 		erreur(w, 404, "Univers inconnu.")
@@ -231,26 +233,6 @@ func (a *Application) adminModifierUnivers(w http.ResponseWriter, r *http.Reques
 	repondre(w, 200, f)
 }
 
-// retirer ferme un univers servi, après sa sauvegarde automatique (verrou d'écriture tenu). Si
-// c'était l'univers par défaut, un autre le devient.
-func (a *Application) retirer(o *universOuvert) {
-	if _, err := sauvegardeAuto(o.st, a.dossierSauvegardes(o.st)); err != nil {
-		log.Printf("sauvegarde automatique : %v", err)
-	}
-	if o.srv != nil {
-		o.srv.Fermer()
-	}
-	_ = o.st.Fermer()
-	delete(a.tous, o.st.ID())
-	if a.st == o.st {
-		a.st, a.srv = nil, nil
-		if l := a.ordre(); len(l) > 0 {
-			a.st, a.srv = l[0].st, l[0].srv
-			_ = a.reg.SetMeta(regUnivers, a.st.Chemin())
-		}
-	}
-}
-
 // dernier : c'est le seul univers servi ; il reste, pour que le serveur ait toujours où répondre.
 func (a *Application) dernier(f ficheAdmin) bool {
 	return f.ouvert != nil && len(a.tous) == 1
@@ -263,16 +245,19 @@ func (a *Application) archiver(f ficheAdmin) (int, string) {
 		return 409, msgDernierUnivers
 	}
 	if err := os.MkdirAll(a.DossierArchives(), 0o700); err != nil {
-		return 500, "Archivage impossible : " + err.Error()
+		return 500, auJournal("Archivage impossible", err)
 	}
 	cible := filepath.Join(a.DossierArchives(), filepath.Base(f.chemin))
 	if _, err := os.Stat(cible); err == nil {
 		return 409, "Un univers archivé porte déjà ce nom : renommez celui-ci d'abord."
 	}
-	a.retirer(f.ouvert)
+	if !a.retirer(f.ouvert) {
+		return 409, msgOccupe
+	}
+	defer a.fermetureFinie(f.ID)
 	if err := os.Rename(f.chemin, cible); err != nil {
 		a.rouvrir(f.chemin)
-		return 500, "Archivage impossible : " + err.Error()
+		return 500, auJournal("Archivage impossible", err)
 	}
 	m := a.archives()
 	m[f.ID] = filepath.Base(cible)
@@ -289,7 +274,7 @@ func (a *Application) desarchiver(f ficheAdmin) (int, string) {
 		return 409, "Un univers servi porte déjà ce nom : renommez-le d'abord."
 	}
 	if err := os.Rename(f.chemin, cible); err != nil {
-		return 500, "Désarchivage impossible : " + err.Error()
+		return 500, auJournal("Désarchivage impossible", err)
 	}
 	m := a.archives()
 	delete(m, f.ID)
@@ -302,7 +287,7 @@ func (a *Application) desarchiver(f ficheAdmin) (int, string) {
 	return 0, ""
 }
 
-// rouvrir ouvre un fichier d'univers du dossier du serveur (verrou d'écriture tenu).
+// rouvrir ouvre un fichier d'univers du dossier du serveur (a.gestion tenu).
 func (a *Application) rouvrir(chemin string) *universOuvert {
 	st, err := store.Ouvrir(chemin)
 	if err != nil {
@@ -325,27 +310,28 @@ func (a *Application) renommer(f ficheAdmin, nom, auteur string) (int, string) {
 	if f.Archive {
 		chemin = filepath.Join(a.DossierArchives(), filepath.Base(chemin))
 		if err := os.Rename(f.chemin, chemin); err != nil {
-			return 500, "Renommage impossible : " + err.Error()
+			return 500, auJournal("Renommage impossible", err)
 		}
 		m := a.archives()
 		m[f.ID] = filepath.Base(chemin)
 		_ = a.noterArchives(m)
 		return 0, ""
 	}
-	defaut := a.st == f.ouvert.st
-	a.retirer(f.ouvert)
+	if !a.retirer(f.ouvert) {
+		return 409, msgOccupe
+	}
+	defer a.fermetureFinie(f.ID)
 	echec := os.Rename(f.chemin, chemin)
 	if echec != nil {
 		chemin = f.chemin // rouvert tel quel
 	}
 	o := a.rouvrir(chemin)
-	if o != nil && defaut {
-		a.st, a.srv = o.st, o.srv
-		_ = a.reg.SetMeta(regUnivers, chemin)
+	if o != nil && f.ouvert.defaut {
+		a.redevenirDefaut(o)
 	}
 	a.noterServis()
 	if echec != nil {
-		return 500, "Renommage impossible : " + echec.Error()
+		return 500, auJournal("Renommage impossible", echec)
 	}
 	if o == nil {
 		return 500, "L'univers est renommé, mais ne s'ouvre plus (voir le journal du serveur)."
@@ -366,8 +352,8 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	id := r.PathValue("id")
-	a.mu.Lock()
-	defer a.mu.Unlock()
+	a.gestion.Lock()
+	defer a.gestion.Unlock()
 	f, ok := a.ficheAdmin(id)
 	if !ok {
 		erreur(w, 404, "Univers inconnu.")
@@ -383,23 +369,30 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 	}
 	dossier := filepath.Join(a.opt.DossierDon, "sauvegardes", id)
 	if err := os.MkdirAll(dossier, 0o700); err != nil {
-		erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
+		erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été supprimé", err))
 		return
 	}
 	sauvegarde := ""
 	if f.ouvert != nil {
-		s, err := sauvegarder(f.ouvert.st, dossier, "avant-suppression")
+		if !a.suspendre(f.ouvert) {
+			erreur(w, 409, msgOccupe)
+			return
+		}
+		defer a.fermetureFinie(id)
+		// quand plus rien n'écrit : la sauvegarde a tout ce que l'univers contenait
+		s, err := sauvegarder(f.ouvert.st, dossier, motifAvantSuppression)
 		if err != nil {
-			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
+			a.remettre(f.ouvert)
+			erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été supprimé", err))
 			return
 		}
 		sauvegarde = s
-		a.retirer(f.ouvert)
+		a.clore(f.ouvert)
 	} else {
-		sauvegarde = filepath.Join(dossier, nomSauvegarde("avant-suppression"))
+		sauvegarde = filepath.Join(dossier, nomSauvegarde(motifAvantSuppression))
 		if err := copierFichier(f.chemin, sauvegarde); err != nil {
 			_ = os.Remove(sauvegarde)
-			erreur(w, 500, "Sauvegarde impossible, rien n'a été supprimé : "+err.Error())
+			erreur(w, 500, auJournal("Sauvegarde impossible, rien n'a été supprimé", err))
 			return
 		}
 	}
@@ -407,7 +400,7 @@ func (a *Application) adminSupprimerUnivers(w http.ResponseWriter, r *http.Reque
 		if f.ouvert != nil {
 			a.rouvrir(f.chemin)
 		}
-		erreur(w, 500, "Suppression impossible : "+err.Error())
+		erreur(w, 500, auJournal("Suppression impossible", err))
 		return
 	}
 	if f.Archive {
@@ -502,6 +495,21 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		}
 	}
 	nom := r.PathValue("nom")
+	if in.Mdp != nil && comptes.Normaliser(nom) == auteurDe(r) { // une session volée ne verrouille pas son titulaire
+		erreur(w, 403, "Changez votre propre mot de passe dans « Mon compte » : il y demande l'actuel.")
+		return
+	}
+	if in.Mdp != nil { // refusé avant tout le reste : rien ne change à moitié, et un futur administrateur y passe
+		cible, _ := a.opt.Comptes.Lire(nom)
+		admin := cible.Admin
+		if in.Admin != nil {
+			admin = *in.Admin
+		}
+		if err := comptes.MdpAcceptable(comptes.Normaliser(nom), *in.Mdp, admin); err != nil {
+			erreurCompte(w, err)
+			return
+		}
+	}
 	c, err := a.opt.Comptes.Modifier(nom, func(x *comptes.Compte) error {
 		if in.Admin != nil {
 			x.Admin = *in.Admin
@@ -524,8 +532,10 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		return nil
 	})
 	if err == nil && in.Mdp != nil {
-		if err = a.opt.Comptes.DefinirMdp(nom, *in.Mdp); err == nil {
+		var retires int
+		if retires, err = a.opt.Comptes.ChangerMdp(nom, *in.Mdp, true); err == nil {
 			c, _ = a.opt.Comptes.Lire(nom)
+			a.opt.acces.noter(r, "mdp_reinitialise", c.Nom, "par="+strconv.Quote(auteurDe(r)), "jetons_retires="+strconv.Itoa(retires))
 		}
 	}
 	if err != nil {

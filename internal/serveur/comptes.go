@@ -27,7 +27,11 @@ import (
 // rien modifier, le joueur n'a que sa page. Un compte sans rôle dans l'univers ouvert n'y entre pas.
 
 const (
-	essaisMaxNom = 20 // essais ratés sur un même nom, d'où qu'ils viennent
+	essaisMaxMdp     = 20              // essais ratés de l'ancien mot de passe, par compte
+	essaisMaxAdresse = 30              // essais ratés d'une adresse, tous noms confondus
+	essaisSeuilNom   = 20              // essais ratés sur un même nom, d'où qu'ils viennent, avant d'y ralentir
+	essaisPlafondNom = 1000            // au-delà, ils ne sont plus retenus : l'attente est déjà au plus haut
+	attenteNomMax    = 5 * time.Second // ralentissement maximal d'un essai
 )
 
 type cleCompte struct{}
@@ -60,42 +64,38 @@ func boucleLocale(r *http.Request) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-// adresse : l'adresse du client. En mode serveur, celle que le reverse proxy de cette machine a vue
-// (dernière de X-Forwarded-For) ; un client qui se connecte directement ne peut pas la dicter.
-func (a *acces) adresse(r *http.Request) string {
-	if a.comptes != nil && boucleLocale(r) {
-		l := strings.Split(r.Header.Get("X-Forwarded-For"), ",")
-		if ip := net.ParseIP(strings.TrimSpace(l[len(l)-1])); ip != nil {
-			return ip.String()
-		}
-	}
-	return adresseDe(r)
-}
-
-// https : la page est servie en HTTPS, directement ou par le reverse proxy de cette machine.
-func (a *acces) https(r *http.Request) bool {
-	return r.TLS != nil || (a.comptes != nil && boucleLocale(r) && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https"))
-}
-
-// sessionCompte : jeton de session d'un compte, « échéance.identifiant.nom.version.signature ».
+// sessionCompte : jeton de session d'un compte, « échéance.identifiant.nom.version.graine.signature ».
 func (a *acces) sessionCompte(c comptes.Compte, exp time.Time) string {
 	id := make([]byte, 9)
 	_, _ = rand.Read(id)
-	return a.signer(strings.Join([]string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version)}, "."))
+	return a.signer(strings.Join([]string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version), c.Graine}, "."))
 }
 
-// compteDeSession : le compte actif dont c'est la session, tant que son mot de passe n'a pas changé.
+// dureeDe : la durée d'une session de ce compte.
+func dureeDe(c comptes.Compte) time.Duration {
+	if c.Admin {
+		return dureeSessionAdmin
+	}
+	return dureeSession
+}
+
+// compteDeSession : le compte actif dont c'est la session, tant que son mot de passe n'a pas changé
+// et que c'est bien ce compte, pas un autre recréé sous le même nom.
 func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, bool) {
 	t, err := r.Cookie(cookieMJ)
 	if err != nil {
 		return comptes.Compte{}, false
 	}
-	id, _, plus, ok := a.lireSession(t.Value)
-	if !ok || len(plus) != 2 || !a.ouverte(id) {
+	id, fin, plus, ok := a.lireSession(t.Value)
+	if !ok || len(plus) != 3 || !a.ouverte(id) {
 		return comptes.Compte{}, false
 	}
 	c, ok := a.comptes.Lire(plus[0])
-	if !ok || c.Inactif || strconv.Itoa(c.Version) != plus[1] {
+	if !ok || c.Inactif || strconv.Itoa(c.Version) != plus[1] || c.Graine == "" || c.Graine != plus[2] {
+		return comptes.Compte{}, false
+	}
+	// une session plus longue que permis : ouverte avant que le compte devienne administrateur
+	if time.Until(time.Unix(fin, 0)) > dureeDe(c)+time.Minute {
 		return comptes.Compte{}, false
 	}
 	return c, true
@@ -130,8 +130,21 @@ func (a *acces) entrer(w http.ResponseWriter, r *http.Request) (*http.Request, b
 		}
 		return r.WithContext(context.WithValue(ctx, cleAnonyme{}, true)), true
 	}
+	if c.DoitChanger && mdpAChanger(r.URL.Path) {
+		repondre(w, 403, map[string]any{"detail": "Changez d'abord le mot de passe initial de ce compte (Mon compte).", "changer_mdp": true})
+		return nil, false
+	}
 	ctx = context.WithValue(ctx, cleCompte{}, c)
 	return r.WithContext(context.WithValue(ctx, cleContexte{}, c.Nom)), true
+}
+
+// mdpAChanger : la route est fermée à un compte qui doit changer son mot de passe. Il garde son compte
+// (pour en sortir), la santé du serveur et les pages, qui ne portent aucune donnée.
+func mdpAChanger(chemin string) bool {
+	if !strings.HasPrefix(chemin, "/api/") && !strings.HasPrefix(chemin, "/medias/") {
+		return false
+	}
+	return !proprePerso(chemin) && chemin != "/api/sante"
 }
 
 // proprePerso : ce qui touche au compte lui-même, ouvert à tout compte quel que soit son rôle.
@@ -190,9 +203,16 @@ func (s *Serveur) routesComptes() {
 func (s *Serveur) vueCompte(c comptes.Compte) map[string]any {
 	jetons := []map[string]any{}
 	for _, j := range c.Jetons {
-		jetons = append(jetons, map[string]any{"id": j.ID, "nom": j.Nom, "cree": j.Cree})
+		v := map[string]any{"id": j.ID, "nom": j.Nom, "cree": j.Cree}
+		if j.Utilise != 0 {
+			v["utilise"] = j.Utilise
+		}
+		jetons = append(jetons, v)
 	}
 	out := map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "jetons": jetons, "cree": c.Cree}
+	if c.DoitChanger {
+		out["doit_changer"] = true
+	}
 	if !c.Admin {
 		out["role"], out["roles"], out["pj"] = c.Role(s.store.ID()), c.Roles, c.Persos[s.store.ID()]
 	}
@@ -205,7 +225,7 @@ func erreurCompte(w http.ResponseWriter, err error) {
 		erreur(w, 404, "Compte ou jeton introuvable.")
 	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis):
 		erreur(w, 409, majuscule(err.Error())+".")
-	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
+	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrMdpAdmin), errors.Is(err, comptes.ErrMdpFaible), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
 		erreur(w, 422, majuscule(err.Error())+".")
 	default:
 		erreurStore(w, err)
@@ -245,26 +265,39 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 	if rs := []rune(nom); len(rs) > 32 {
 		nom = string(rs[:32])
 	}
-	parIP, parNom := "ip:"+s.acces.adresse(r), "nom:"+nom
-	if !s.acces.reserverEssai(parIP, essaisMax) {
+	adresse := cleAdresse(s.acces.adresse(r))
+	parIP, parCouple, parNom := "ip:"+adresse, "couple:"+nom+"|"+adresse, "nom:"+nom
+	if !s.acces.reserverEssai(parIP, essaisMaxAdresse) {
+		s.acces.noter(r, "limite_atteinte", nom, "portee=adresse")
 		erreur(w, 429, "Trop d'essais : patientez quelques minutes.")
 		return
 	}
-	if !s.acces.reserverEssai(parNom, essaisMaxNom) {
+	if !s.acces.reserverEssai(parCouple, essaisMax) {
+		s.acces.rendreEssai(parIP)
+		s.acces.noter(r, "limite_atteinte", nom, "portee=couple")
 		erreur(w, 429, "Trop d'essais sur ce compte : patientez quelques minutes.")
 		return
 	}
+	attente := s.acces.attenteNom(parNom)
+	if s.acces.ralenti(parNom) {
+		s.acces.noter(r, "limite_atteinte", nom, "portee=nom")
+	}
+	s.acces.reserverEssai(parNom, essaisPlafondNom)
+	time.Sleep(attente)
 	s.acces.hachage.Lock()
 	c, ok := s.acces.comptes.Verifier(nom, req.Mdp)
 	s.acces.hachage.Unlock()
 	if !ok {
+		s.acces.noter(r, "connexion_echec", nom)
 		time.Sleep(s.acces.pause)
 		erreur(w, 401, "Nom d'utilisateur ou mot de passe incorrect.")
 		return
 	}
 	s.acces.rendreEssai(parIP)
+	s.acces.rendreEssai(parCouple)
 	s.acces.rendreEssai(parNom)
-	exp := time.Now().Add(dureeSession)
+	s.acces.noter(r, "connexion_ok", c.Nom)
+	exp := time.Now().Add(dureeDe(c))
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	repondre(w, 200, map[string]any{"mj": c.Role(s.store.ID()) != "", "compte": s.vueCompte(c)})
 }
@@ -299,14 +332,16 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Ancien  string `json:"ancien"`
 		Nouveau string `json:"nouveau"`
+		Retirer bool   `json:"retirer_jetons"`
 	}
 	if err := lireJSON(r, &req); err != nil {
 		erreurStore(w, err)
 		return
 	}
 	c, _ := compteDe(r)
-	cle := "nom:" + c.Nom
-	if !s.acces.reserverEssai(cle, essaisMaxNom) {
+	cle := "mdp:" + c.Nom // pas le compteur de la connexion : un anonyme n'empêche pas ce changement
+	if !s.acces.reserverEssai(cle, essaisMaxMdp) {
+		s.acces.noter(r, "limite_atteinte", c.Nom, "portee=mdp")
 		erreur(w, 429, "Trop d'essais : patientez quelques minutes.")
 		return
 	}
@@ -314,19 +349,26 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 	_, ok := s.acces.comptes.Verifier(c.Nom, req.Ancien)
 	s.acces.hachage.Unlock()
 	if !ok {
+		s.acces.noter(r, "mdp_echec", c.Nom)
 		erreur(w, 401, "Mot de passe actuel incorrect.")
 		return
 	}
 	s.acces.rendreEssai(cle)
-	if err := s.acces.comptes.DefinirMdp(c.Nom, req.Nouveau); err != nil {
+	if c.DoitChanger && req.Nouveau == req.Ancien {
+		erreur(w, 422, "Choisissez un autre mot de passe : celui-ci a été écrit dans les journaux du serveur.")
+		return
+	}
+	retires, err := s.acces.comptes.ChangerMdp(c.Nom, req.Nouveau, req.Retirer)
+	if err != nil {
 		erreurCompte(w, err)
 		return
 	}
 	c, _ = s.acces.comptes.Lire(c.Nom)
-	exp := time.Now().Add(dureeSession)
+	exp := time.Now().Add(dureeDe(c))
 	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
 	s.noterCompte(c, "mot de passe changé")
-	repondre(w, 200, map[string]any{"ok": true})
+	s.acces.noter(r, "mdp_change", c.Nom, "jetons_retires="+strconv.Itoa(retires))
+	repondre(w, 200, map[string]any{"ok": true, "jetons_retires": retires})
 }
 
 // monJeton : {"nom": "…"} crée un jeton d'API, montré cette seule fois.
@@ -348,6 +390,7 @@ func (s *Serveur) monJeton(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.noterCompte(c, "jeton d'API créé")
+	s.acces.noter(r, "jeton_cree", c.Nom, "jeton="+j.ID)
 	repondre(w, 201, map[string]any{"jeton": clair, "id": j.ID, "nom": j.Nom, "cree": j.Cree})
 }
 
@@ -361,6 +404,7 @@ func (s *Serveur) retirerMonJeton(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.noterCompte(c, "jeton d'API retiré")
+	s.acces.noter(r, "jeton_retire", c.Nom, "jeton="+strconv.Quote(r.PathValue("id")))
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 
@@ -377,6 +421,7 @@ func (s *Serveur) rendreJeton(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.noterCompte(c, "jeton d'API rendu par son poste")
+	s.acces.noter(r, "jeton_rendu", c.Nom)
 	repondre(w, 200, map[string]any{"supprime": true})
 }
 

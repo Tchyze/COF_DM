@@ -1,0 +1,48 @@
+# COF DM derrière Nginx Proxy Manager (NPM), sur le même hôte Docker : voir le README, « Derrière
+# Nginx Proxy Manager et Portainer ». À coller dans une stack Portainer, ou :
+#
+#   docker network create --subnet 172.30.0.0/24 cof-dm-proxy
+#   docker compose -f docker-compose.npm.yml up -d
+#
+# Remplacer X.Y.Z par une version publiée précise. NPM rejoint aussi le réseau cof-dm-proxy et vise
+# l'hôte « cof-dm », port 8100. Aucun port n'est publié sur l'hôte.
+services:
+  cof-dm:
+    image: tchyze/cof-dm:X.Y.Z
+    # utilisateur de l'image, propriétaire du volume
+    user: "1000:1000"
+    # -proxies : le sous-réseau de cof-dm-proxy. Tout conteneur qui s'y trouve peut dicter son adresse
+    # et le HTTPS à l'application : COF DM et NPM seuls sur ce réseau.
+    command: ["-serveur", "-reseau", "-proxies", "172.30.0.0/24", "-port", "8100", "-data", "/data"]
+    environment:
+      # pour que le mot de passe initial ne passe pas par les journaux : un secret Docker (ci-dessous)
+      # COF_DM_ADMIN_MDP_FICHIER: /run/secrets/cof_dm_admin
+      # les imports passent par des fichiers temporaires, trop gros pour le /tmp en mémoire
+      TMPDIR: /data/tmp
+    volumes:
+      # comptes, univers, sauvegardes, réglages : un volume nommé (un chemin relatif est fragile dans
+      # une stack Portainer ; un chemin absolu convient aussi, avec le propriétaire 1000:1000)
+      - cof-dm-donnees:/data
+    networks:
+      - cof-dm-proxy
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 1g
+    pids_limit: 256
+    restart: unless-stopped
+
+    # secrets: [cof_dm_admin]
+
+volumes:
+  cof-dm-donnees:
+
+networks:
+  cof-dm-proxy:
+    external: true
+
+# secrets:
+#   cof_dm_admin:
+#     file: ./admin.mdp

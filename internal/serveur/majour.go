@@ -66,9 +66,14 @@ func (a *Application) routeVersionServeur(w http.ResponseWriter, r *http.Request
 	out["protocole"], out["modele"], out["commande"] = store.VersionProtocole, store.VersionModele, commandeMajServeur
 	copies := []map[string]any{}
 	a.mu.RLock()
-	defer a.mu.RUnlock()
+	ouverts := a.ordre()
+	for _, o := range ouverts {
+		o.requetes.entrer()
+		defer o.requetes.sortir()
+	}
+	a.mu.RUnlock()
 	ici := synchro.Ici()
-	for _, o := range a.ordre() {
+	for _, o := range ouverts {
 		for _, c := range o.st.Copies() {
 			ecart := ""
 			switch synchro.Comparer(synchro.Versions{Version: c.Version, Protocole: c.Protocole, Modele: c.Modele}, ici) {

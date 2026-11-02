@@ -61,6 +61,10 @@ type Options struct {
 	// Comptes : mode serveur. L'accès passe par un compte (nom, mot de passe) ou son jeton d'API, et
 	// plus rien n'est accordé d'office aux requêtes de cet ordinateur (un reverse proxy en vient).
 	Comptes *comptes.Registre
+	// Limites : mode serveur, ce qu'un MJ peut demander au serveur qu'il partage (limites.go). nil : aucune.
+	Limites *Limites
+	// Proxies : mode serveur, les adresses dont on croit les en-têtes X-Forwarded-* ; nil : ProxiesParDefaut.
+	Proxies []*net.IPNet
 	acces   *acces       // partagé par l'Application et les Serveurs des univers ouverts
 	app     *Application // application de bureau : le combat et les dés en direct passent par elle (direct.go)
 	// Dialogue ouvre la boîte « Ouvrir » ou « Enregistrer » du système et renvoie le fichier choisi
@@ -86,7 +90,11 @@ type Serveur struct {
 	joueurs *diffusion     // appareils qui suivent la page des joueurs
 	libre   *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
 	jets    *tableJets     // lanceur de dés : les derniers jets de la partie
+	debit   debitJets      // … et ce qu'il reste à chaque lanceur
 	potMu   sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
+	envoi   sync.Mutex     // un seul fichier reçu à la fois dans cet univers (limites sur un serveur)
+
+	intervalleDroits atomic.Int64 // écrans en direct : tous les combien leurs droits sont revus (suivi.go)
 }
 
 func Nouveau(st *store.Store, opt Options) *Serveur {
@@ -97,11 +105,12 @@ func Nouveau(st *store.Store, opt Options) *Serveur {
 		opt.Sauvegardes = filepath.Join(opt.DossierDon, "sauvegardes", st.ID())
 	}
 	s := &Serveur{opt: opt, store: st, reg: opt.Reglages, mux: http.NewServeMux()}
+	s.intervalleDroits.Store(int64(intervalleDroits))
 	if _, ok := s.reg.Meta("api_jeton"); !ok && opt.Comptes == nil {
 		_ = s.reg.SetMeta("api_jeton", nouveauJeton())
 	}
 	if s.acces = opt.acces; s.acces == nil {
-		s.acces = nouvelAcces(s.reg, opt.Comptes)
+		s.acces = nouvelAcces(s.reg, opt.Comptes, opt.Proxies)
 	}
 	s.opt.partagerVoulu()
 	s.routes()
@@ -214,6 +223,7 @@ func enTetes(w http.ResponseWriter) {
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
 }
 
 func contexte(r *http.Request, auteur string) context.Context {
@@ -301,6 +311,10 @@ func (s *Serveur) routes() {
 			http.NotFound(w, r)
 			return
 		}
+		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") { // les dossiers de l'interface ne se listent pas
+			http.NotFound(w, r)
+			return
+		}
 		w.Header().Set("Cache-Control", "no-cache")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"+socketsDeLaPage(r))
 		statique.ServeHTTP(w, r)
@@ -309,7 +323,15 @@ func (s *Serveur) routes() {
 
 // ---------------------------------------------------------------- utilitaires HTTP
 
+// sansCache : une réponse JSON ne reste pas sur un appareil partagé, sauf si la route a dit autre chose.
+func sansCache(w http.ResponseWriter) {
+	if w.Header().Get("Cache-Control") == "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+}
+
 func repondre(w http.ResponseWriter, code int, v any) {
+	sansCache(w)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
@@ -322,6 +344,12 @@ func erreur(w http.ResponseWriter, code int, msg string) {
 // msgInterne : la réponse à une erreur imprévue, dont le détail ne sort pas du journal.
 const msgInterne = "Erreur interne (détails dans le journal de l'application)."
 
+// auJournal : le détail d'une erreur (chemins de fichiers) va au journal, et la réponse n'en dit que quoi.
+func auJournal(quoi string, err error) string {
+	log.Printf("%s : %v", quoi, err)
+	return quoi + ". " + msgInterne
+}
+
 func erreurStore(w http.ResponseWriter, err error) {
 	var ev store.ErrValidation
 	switch {
@@ -331,6 +359,8 @@ func erreurStore(w http.ResponseWriter, err error) {
 		erreur(w, 404, "Fiche introuvable.")
 	case errors.Is(err, store.ErrConflit):
 		erreur(w, 409, "Cette fiche a été modifiée ailleurs depuis que vous l'avez ouverte. Rechargez-la avant d'enregistrer.")
+	case errors.Is(err, errOccupe):
+		erreur(w, 409, msgOccupe)
 	default:
 		// le détail (chemins de fichiers, requêtes) reste dans le journal : la réponse peut partir
 		// sur le réseau, vers un joueur
@@ -798,6 +828,9 @@ func (s *Serveur) ajouterMedia(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 415, "Format non pris en charge : PNG, JPEG, WebP ou GIF.")
 		return
 	}
+	if s.quotaAtteint(w, int64(len(data))) {
+		return
+	}
 	m, err := s.store.AjouterMedia(id, nouveauJeton()[:20]+ext, filepath.Base(nom), data, auteurDe(r))
 	if err != nil {
 		erreurStore(w, err)
@@ -851,7 +884,7 @@ func (s *Serveur) servirMedia(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	w.Header().Set("Cache-Control", "max-age=31536000, immutable")
+	w.Header().Set("Cache-Control", "private, max-age=86400")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, f, time.Unix(int64(cree), 0), bytes.NewReader(contenu))
 }
@@ -952,6 +985,11 @@ func (s *Serveur) journal(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------- données
 
 func (s *Serveur) exporter(w http.ResponseWriter, r *http.Request) {
+	libere, ok := s.exportPossible(w)
+	if !ok {
+		return
+	}
+	defer libere()
 	x, err := s.store.Exporter()
 	if err != nil {
 		erreurStore(w, err)
@@ -962,43 +1000,152 @@ func (s *Serveur) exporter(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Serveur) sauvegarder(w http.ResponseWriter, r *http.Request) {
+	libere, ok := s.placeLourde(w)
+	if !ok {
+		return
+	}
+	defer libere()
 	f, err := sauvegarder(s.store, s.opt.Sauvegardes, "manuelle")
 	if err != nil {
 		erreurStore(w, err)
+		return
+	}
+	if !s.opt.Limites.ranger(s.opt.Sauvegardes, filepath.Base(f), true) {
+		_ = os.Remove(f)
+		erreur(w, 507, "Le quota de sauvegardes de cet univers est atteint : rien n'a été écrit. Voyez avec l'administrateur du serveur.")
 		return
 	}
 	s.store.Noter("sauvegarde", f, auteurDe(r))
 	repondre(w, 200, map[string]any{"fichier": f})
 }
 
-func (s *Serveur) restaurer(w http.ResponseWriter, r *http.Request) {
-	var x store.Export
-	b, err := io.ReadAll(io.LimitReader(r.Body, 256<<20))
+// placeLourde : une place pour un traitement lourd ; sinon, 429 est déjà répondu.
+func (s *Serveur) placeLourde(w http.ResponseWriter) (libere func(), ok bool) {
+	if libere, ok = s.opt.Limites.prendre(); !ok {
+		w.Header().Set("Retry-After", "30")
+		erreur(w, 429, msgOccupeImport)
+	}
+	return libere, ok
+}
+
+// exportPossible : un export JSON tient tout l'univers en mémoire. Une place lourde, et sur un
+// serveur, pas au-delà d'une taille raisonnable.
+func (s *Serveur) exportPossible(w http.ResponseWriter) (libere func(), ok bool) {
+	if s.opt.Limites != nil {
+		if info, err := os.Stat(s.store.Chemin()); err == nil && info.Size() > tailleMaxExport {
+			erreur(w, 413, "Cet univers est trop lourd pour un export : utilisez une sauvegarde, ou une copie depuis l'application de bureau.")
+			return nil, false
+		}
+	}
+	return s.placeLourde(w)
+}
+
+// quotaAtteint : le fichier de l'univers dépasserait son quota avec ces octets de plus (507 répondu).
+func (s *Serveur) quotaAtteint(w http.ResponseWriter, plus int64) bool {
+	if s.opt.Limites == nil || s.opt.Limites.QuotaUnivers <= 0 {
+		return false
+	}
+	info, err := os.Stat(s.store.Chemin())
+	if err != nil || info.Size()+plus <= s.opt.Limites.QuotaUnivers {
+		return false
+	}
+	erreur(w, 507, msgQuotaUnivers)
+	return true
+}
+
+// recevoirFichier range le corps de la requête dans un fichier temporaire, sans le garder en mémoire
+// et avant toute place lourde : un envoi lent n'empêche pas les autres de travailler. Sur un serveur,
+// un seul envoi à la fois par univers. fin retire le fichier. Sinon, la réponse est déjà écrite.
+func (s *Serveur) recevoirFichier(w http.ResponseWriter, r *http.Request, nom string, max int64, msgTropGros string) (chemin string, fin func(), ok bool) {
+	if s.opt.Limites != nil {
+		if !s.envoi.TryLock() {
+			w.Header().Set("Retry-After", "30")
+			erreur(w, 429, "Un fichier est déjà en cours d'envoi dans cet univers : réessayez une fois celui-ci reçu.")
+			return "", nil, false
+		}
+		defer s.envoi.Unlock()
+	}
+	dir, err := os.MkdirTemp("", "cofdm-import-")
+	if err != nil {
+		erreurStore(w, err)
+		return "", nil, false
+	}
+	fin = func() { _ = os.RemoveAll(dir) }
+	chemin = filepath.Join(dir, nom)
+	f, err := os.OpenFile(chemin, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
 	if err == nil {
-		err = json.Unmarshal(b, &x)
+		_, err = io.Copy(f, http.MaxBytesReader(w, r.Body, max))
+		if errFermer := f.Close(); err == nil {
+			err = errFermer
+		}
 	}
 	if err != nil {
+		fin()
+		var tropGros *http.MaxBytesError
+		if errors.As(err, &tropGros) {
+			erreur(w, 413, msgTropGros)
+		} else {
+			erreurStore(w, err)
+		}
+		return "", nil, false
+	}
+	return chemin, fin, true
+}
+
+// tailleMaxRestauration : un export JSON, images comprises en base64.
+const tailleMaxRestauration = 256 << 20
+
+func (s *Serveur) restaurer(w http.ResponseWriter, r *http.Request) {
+	fichier, fin, ok := s.recevoirFichier(w, r, "export.json", tailleMaxRestauration, "Fichier d'export trop lourd (256 Mo au plus).")
+	if !ok {
+		return
+	}
+	defer fin()
+	libere, ok := s.placeLourde(w)
+	if !ok {
+		return
+	}
+	defer libere()
+	f, err := os.Open(fichier)
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	defer f.Close()
+	x, err := store.LireExport(f)
+	var trop store.ErrValidation
+	switch {
+	case errors.As(err, &trop):
+		erreurStore(w, err)
+		return
+	case err != nil:
 		erreur(w, 422, "Fichier d'export illisible.")
 		return
 	}
-	s.remplacerPar(w, r, x, "avant-restauration")
+	s.remplacerPar(w, r, "avant-restauration", func(auteur string) (int, int, error) {
+		return len(x.Entites), len(x.Relations), s.store.Restaurer(x, auteur)
+	})
 }
 
-// remplacerPar remplace tout le contenu de l'univers par celui d'un export, après une sauvegarde
-// (motif). L'univers garde son identifiant, son nom, ses comptes et leurs rôles.
-func (s *Serveur) remplacerPar(w http.ResponseWriter, r *http.Request, x store.Export, motif string) {
+// remplacerPar remplace tout le contenu de l'univers, après une sauvegarde (motif). L'univers garde
+// son identifiant, son nom, ses comptes et leurs rôles. appliquer rend les fiches et relations reçues.
+func (s *Serveur) remplacerPar(w http.ResponseWriter, r *http.Request, motif string, appliquer func(auteur string) (int, int, error)) {
 	d, err := sauvegarder(s.store, s.opt.Sauvegardes, motif)
 	if err != nil {
 		log.Printf("sauvegarde (%s) : %v", motif, err)
 		erreur(w, 500, "Sauvegarde impossible, rien n'a été modifié. "+msgInterne)
 		return
 	}
-	if err := s.store.Restaurer(x, auteurDe(r)); err != nil {
+	if !s.opt.Limites.ranger(s.opt.Sauvegardes, filepath.Base(d), false) {
+		log.Printf("sauvegardes de l'univers « %s » : quota dépassé", nomUnivers(s.store.Chemin()))
+	}
+	fiches, relations, err := appliquer(auteurDe(r))
+	if err != nil {
 		erreurStore(w, err)
 		return
 	}
 	s.Fermer() // les combats suivis viennent d'être remplacés
-	repondre(w, 200, map[string]any{"fiches": len(x.Entites), "relations": len(x.Relations), "sauvegarde": d})
+	repondre(w, 200, map[string]any{"fiches": fiches, "relations": relations, "sauvegarde": d})
 }
 
 // importerUnivers : sur un serveur, le MJ verse dans cet univers (créé vide par l'administrateur)
@@ -1014,46 +1161,33 @@ func (s *Serveur) importerUnivers(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 409, "Cet univers a déjà des fiches : confirmez le remplacement de tout son contenu (une sauvegarde est faite avant).")
 		return
 	}
-	dir, err := os.MkdirTemp("", "cofdm-import-")
-	if err != nil {
-		erreurStore(w, err)
+	max := int64(tailleMaxUnivers)
+	if l := s.opt.Limites; l != nil && l.QuotaUnivers > 0 && l.QuotaUnivers < max {
+		max = l.QuotaUnivers
+	}
+	fichier, fin, ok := s.recevoirFichier(w, r, "import"+store.Extension, max, fmt.Sprintf("Fichier trop lourd (%d Mo au plus).", max>>20))
+	if !ok {
 		return
 	}
-	defer os.RemoveAll(dir)
-	fichier := filepath.Join(dir, "import"+store.Extension)
-	f, err := os.OpenFile(fichier, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o600)
-	if err != nil {
-		erreurStore(w, err)
-		return
-	}
-	_, err = io.Copy(f, http.MaxBytesReader(w, r.Body, tailleMaxUnivers))
-	if errFermer := f.Close(); err == nil {
-		err = errFermer
-	}
-	var tropGros *http.MaxBytesError
-	switch {
-	case errors.As(err, &tropGros):
-		erreur(w, 413, "Fichier trop lourd (1 Go au plus).")
-		return
-	case err != nil:
-		erreurStore(w, err)
-		return
-	case !enTeteSQLite(fichier):
+	defer fin()
+	if !enTeteSQLite(fichier) {
 		erreur(w, 422, "Ce fichier n'est pas un univers COF DM.")
 		return
 	}
+	libere, ok := s.placeLourde(w)
+	if !ok {
+		return
+	}
+	defer libere()
 	st, err := store.Ouvrir(fichier)
 	if err != nil {
 		erreur(w, 422, "Ce fichier n'est pas un univers COF DM, ou il est abîmé.")
 		return
 	}
-	x, err := st.Exporter()
-	_ = st.Fermer()
-	if err != nil {
-		erreurStore(w, err)
-		return
-	}
-	s.remplacerPar(w, r, x, "avant-import")
+	defer st.Fermer()
+	s.remplacerPar(w, r, "avant-import", func(auteur string) (int, int, error) {
+		return s.store.RestaurerDepuis(st, auteur)
+	})
 }
 
 func (s *Serveur) parametres(w http.ResponseWriter, r *http.Request) {

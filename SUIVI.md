@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installation, rôles, menu, Docker Hub » commencé).
+Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 3).
 
 ## Où on en est
 
 - **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : aucune en attente. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
-- **Chantier en cours** : aucun ; lot E fini et publié dans la 1.3.0.
+- **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, en PR, à essayer par le MJ avant de fusionner. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
+- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lots 1 à 3 finis, à essayer par le MJ avant la PR ; réglages GitHub (F-12) encore à faire. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -34,7 +34,7 @@ Dernière mise à jour : 31 octobre 2026 (version 1.2.5 ; chantier « installati
 ## Pour reprendre sur un autre poste
 
 1. **Cloner le dépôt** `COF_DM`.
-2. **Outils** : Go 1.26.9 au moins (fixé par `go.mod`) et un compilateur C pour SQLite (CGO). Commandes dans `CLAUDE.md`.
+2. **Outils** : Go 1.26.10 au moins (fixé par `go.mod`) et un compilateur C pour SQLite (CGO). Commandes dans `CLAUDE.md`.
 3. **Copier à la main les fichiers hors dépôt** et `LOCAL.md`, qui les liste : ils ne sont dans aucun dépôt, volontairement.
 4. Vérifier que tout passe : `gofmt -l .`, `go vet -tags "sqlite_fts5 nogui" ./...`, `go test -tags "sqlite_fts5 nogui" ./...`.
 
@@ -215,6 +215,37 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 35 | **Mise à jour fiable** (lot C1, en PR) : le programme d'avant (`.ancien`) est retiré en fond avec réessais pendant une minute (il tournait encore quand le nouveau le retirait) ; un `.ancien` encore tenu ne bloque plus la mise à jour suivante (`.ancien-2`) ; renommages réessayés (antivirus) ; dossier non modifiable vérifié avant de télécharger (`modifiable` dans l'état, message à l'écran). |
 | 36 | **Installation Windows** (lot C2, en PR, empilée sur la 35) : l'exe s'installe seul pour l'utilisateur (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis Bureau et menu Démarrer, « Applications installées », `-desinstaller`) ; copie du Bureau retirée ; Claude suit ; mode portable supprimé, ses données reprises au lancement. Paquet `internal/installation`, testé sur le vrai Windows. |
 
+### Durcissement de sécurité (novembre 2026, branche `security/audit-fixes`)
+
+Lot 1, avant la mise en ligne :
+
+- Go 1.26.10.
+- **Proxys de confiance** (`-proxies`, `COF_DM_PROXIES`) : `X-Forwarded-*` ne se croit que d'une adresse déclarée, par défaut la machine elle-même.
+- **Inventaire** : contrôle du joueur indépendant de l'écriture de la clé ; plus aucun corps renvoyé tel quel.
+- **Limite d'essais** : par nom et adresse, quota par adresse (IPv6 par `/64`), simple ralentissement par nom : plus aucun blocage d'un compte par un tiers.
+- **Sessions** liées à une graine propre au compte. **Tout le monde se reconnecte une fois** à la mise à jour.
+- **Jetons** : retirés par une réinitialisation de l'administrateur, au choix du titulaire quand il change son mot de passe (case cochée par défaut) ; date de dernière utilisation. Un poste de bureau au jeton retiré demande de se reconnecter.
+- **Journal de sécurité** au format stable (`securite evenement=…`), filtre fail2ban d'exemple.
+- **Déploiement** : `docker-compose.npm.yml`, section « Derrière Nginx Proxy Manager et Portainer » du README, configuration nginx revue. Essayés sur un NPM et un nginx réels, en local ; pas de stack Portainer réelle ni de vrai certificat.
+
+**Lot 2, avant d'accueillir d'autres groupes.**
+
+- **Verrous (F-05)** : le verrou de l'application ne couvre plus les requêtes, seulement le choix de l'univers ; un second verrou sérialise les opérations sur les univers. Chaque univers compte son travail en cours, et une fermeture l'attend 30 secondes au plus, sinon `409` et rien ne change. Pendant ce temps, l'univers répond `503`, et aucun autre ne prend sa place. Conception et tests dans `fermeture.go`.
+- **Écrans en direct (F-07)** : les trois WebSockets revoient leurs droits toutes les 30 secondes (`suivi.go`), PJ d'un joueur compris.
+- **Imports et sauvegardes (F-09)** : limite de traitements lourds, corps reçus sur disque, texte plafonné avant décodage, images lues une à une ; quotas et purge sur un serveur (`limites.go`), rien sur le bureau.
+- **Débit (F-10)** : propositions de partage plafonnées par PJ, débit des jets de dés.
+- **Mots de passe (F-11, F-15)** : règle des nouveaux mots de passe, comptes existants non bloqués ; mot de passe initial à changer d'abord, ou donné par un secret Docker.
+
+**Lot 3, durcissement.**
+
+- **Comptes (F-13, F-14)** : empreinte versionnée à 600 000 itérations, migrée à la connexion réussie ; session d'administrateur de 12 heures ; son propre mot de passe passe par « Mon compte ». Le TOTP reste une proposition, non codée.
+- **En-têtes (F-17, F-20)** : images en cache privé, JSON en `no-store`, `Permissions-Policy`.
+- **Dépôt (F-21, F-22)** : Dependabot, govulncheck, gitleaks et analyse de l'image en CI ; secrets exclus de Git et de l'image.
+- **Serveur (F-23, F-24, F-26)** : pot et documents suivent le partage du PJ ; erreurs de fichiers au journal ; dossiers non listés.
+- **Documentation (F-27)** : ce que voient l'administrateur et l'hébergeur, conservation des sauvegardes.
+- **Vérifications** : V-01, charges dans les champs des joueurs, sans injection dans les écrans parcourus ; V-02, aucune faille prouvée, fichiers reçus durcis et cible de fuzzing `FuzzFichierRecu`.
+- **F-25** : historique non réécrit, conformément à la consigne. **F-12** : changement du workflow préparé, pas appliqué, en attente des réglages GitHub.
+
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
 | PR | Contenu |
@@ -249,7 +280,7 @@ Aucun. Les trois notés jusqu'au 22 octobre 2026 sont corrigés (PR des correcti
 ### À vérifier à la main (projet 6)
 
 - **Exe Windows et AppImage** dans leur vraie fenêtre (WebView2, WebKitGTK) : seul Chrome a servi aux vérifications.
-- **Serveur derrière un vrai nginx** (HTTPS) : l'exemple du README n'a pas été essayé ; synchronisation sur une vraie coupure, et avec deux copies hors ligne en même temps.
+- **Serveur derrière un vrai nginx** (HTTPS) : l'exemple du README et NPM sont essayés en local avec un certificat de test, pas encore sur Internet ; synchronisation sur une vraie coupure, et avec deux copies hors ligne en même temps.
 - **Export vers Obsidian** ouvert dans le vrai vault (propriétés, tableaux, liens).
 - **Serveur MCP** : essayé dans Claude Desktop sous Windows (19 octobre 2026) ; reste Claude Code.
 - La reprise des anciens liens de tracker_COF sur un vrai univers ancien.

@@ -62,7 +62,12 @@ func (s *Serveur) syncCopie(w http.ResponseWriter, r *http.Request) {
 	defer os.RemoveAll(dir)
 	fichier := filepath.Join(dir, "copie"+store.Extension)
 	c, _ := compteDe(r)
+	libere, ok := s.placeLourde(w) // le temps d'écrire la copie, pas de l'envoyer
+	if !ok {
+		return
+	}
 	n, err := s.store.Inscrire(in.Nom, c.Nom, fichier)
+	libere()
 	if err != nil {
 		erreurStore(w, err)
 		return
@@ -157,6 +162,9 @@ func (s *Serveur) syncImage(w http.ResponseWriter, r *http.Request) {
 	}
 	if ext, ok := extensions[http.DetectContentType(data)]; !ok || filepath.Ext(f) != ext {
 		erreur(w, 415, "Le contenu ne correspond pas au format de l'image.")
+		return
+	}
+	if s.quotaAtteint(w, int64(len(data))) {
 		return
 	}
 	if err := s.store.ContenuAttendu(f, data); err != nil {

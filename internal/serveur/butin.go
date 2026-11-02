@@ -573,11 +573,12 @@ func (s *Serveur) routesPotJoueurs(m *http.ServeMux) {
 
 // pjDuPot : le PJ du joueur (celui du compte sur un serveur, sinon ?pj=) et sa campagne.
 func (s *Serveur) pjDuPot(w http.ResponseWriter, r *http.Request, pj int64) (store.Entite, store.Entite, bool) {
-	if p, restreint := s.pjDuCompte(r); restreint {
+	p, restreint := s.pjDuCompte(r)
+	if restreint {
 		pj = p
 	}
 	e, err := s.store.Lire(pj)
-	if pj == 0 || err != nil || e.Type != "pj" || e.Archive {
+	if pj == 0 || err != nil || e.Type != "pj" || e.Archive || (restreint && !partagee(e)) {
 		erreurStore(w, store.ErrIntrouvable)
 		return e, store.Entite{}, false
 	}

@@ -185,12 +185,38 @@ func sansAttaquesObjets(l []Attaque) []Attaque {
 // GarderChiffres : ce qu'un joueur ne change pas dans l'inventaire de son PJ, appliqué à la feuille
 // qu'il envoie (raw), avant qu'elle soit validée. Une ligne qui existait (même id) garde sa fiche, ses
 // bonus, son arme et son emplacement (et le nom d'un objet du monde) ; une ligne qu'il ajoute n'a ni
-// fiche, ni bonus, ni arme, et recevra un nouvel identifiant.
-func GarderChiffres(raw []byte, ancienne *Feuille) []byte {
+// fiche, ni bonus, ni arme, et recevra un nouvel identifiant. Une feuille sans inventaire garde les
+// lignes d'avant, sans rien reprendre de son ancien texte d'équipement.
+//
+// La clé se cherche sans tenir compte de la casse et se lit par une structure, comme la feuille le
+// sera ensuite : aucune écriture de la clé ne passe à côté de ce contrôle. Le résultat ne porte plus
+// que la clé « inventaire », contrôlée ; un corps illisible est une erreur, jamais renvoyé tel quel.
+func GarderChiffres(raw []byte, ancienne *Feuille) ([]byte, error) {
 	var champs map[string]json.RawMessage
-	var objets []Objet
-	if json.Unmarshal(raw, &champs) != nil || json.Unmarshal(champs["inventaire"], &objets) != nil {
-		return raw
+	if err := decoder(raw, &champs); err != nil {
+		return nil, err
+	}
+	if champs == nil {
+		return nil, invalide("JSON illisible.")
+	}
+	var recue struct {
+		Inventaire []Objet `json:"inventaire"`
+	}
+	if err := decoder(raw, &recue); err != nil {
+		return nil, err
+	}
+	objets, present := recue.Inventaire, false
+	for cle := range champs {
+		if strings.EqualFold(cle, "inventaire") {
+			present = true
+			delete(champs, cle)
+		}
+	}
+	if !present {
+		objets = []Objet{}
+		if ancienne != nil {
+			objets = append(objets, ancienne.Inventaire...)
+		}
 	}
 	avant := map[int]Objet{}
 	if ancienne != nil {
@@ -211,9 +237,27 @@ func GarderChiffres(raw []byte, ancienne *Feuille) []byte {
 			o.ID, o.Fiche, o.Bonus, o.Arme = 0, 0, nil, nil
 		}
 	}
-	champs["inventaire"], _ = json.Marshal(objets)
-	out, _ := json.Marshal(champs)
-	return out
+	var err error
+	if champs["inventaire"], err = json.Marshal(objets); err != nil {
+		return nil, err
+	}
+	return json.Marshal(champs)
+}
+
+// LiesAjoutes : f porte un objet du monde que l'ancienne feuille n'avait pas. Un joueur n'en lie pas.
+func (f *Feuille) LiesAjoutes(ancienne *Feuille) bool {
+	avant := map[int64]bool{}
+	if ancienne != nil {
+		for _, o := range ancienne.Inventaire {
+			avant[o.Fiche] = true
+		}
+	}
+	for _, o := range f.Inventaire {
+		if o.Fiche != 0 && !avant[o.Fiche] {
+			return true
+		}
+	}
+	return false
 }
 
 // LiesRetires : les objets du monde (lignes liées à une fiche) de l'ancienne feuille qui ne sont plus

@@ -18,6 +18,75 @@ import (
 
 const jetsGardes = 100 // les derniers jets de la partie
 
+// Le débit des jets, par lanceur : une rafale pour le coup de poing sur la table, puis quelques jets
+// par seconde. Chaque jet part vers toute la table.
+const (
+	jetsRafale     = 20
+	jetsParSeconde = 2
+	seauxMax       = 2000
+)
+
+// debitJets : ce qu'il reste à chaque lanceur (seau percé).
+type debitJets struct {
+	mu    sync.Mutex
+	seaux map[string]*seauJets
+}
+
+type seauJets struct {
+	reste float64
+	vu    time.Time
+}
+
+// permis : ce lanceur peut-il lancer maintenant ? La mémoire reste bornée : ceux qui sont repartis à
+// plein s'oublient, et au pire tout le monde repart à plein.
+func (d *debitJets) permis(cle string, t time.Time) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.seaux == nil {
+		d.seaux = map[string]*seauJets{}
+	}
+	if _, connu := d.seaux[cle]; !connu && len(d.seaux) >= seauxMax {
+		for k, x := range d.seaux {
+			if x.reste+t.Sub(x.vu).Seconds()*jetsParSeconde >= jetsRafale {
+				delete(d.seaux, k)
+			}
+		}
+		if len(d.seaux) >= seauxMax {
+			d.seaux = map[string]*seauJets{}
+		}
+	}
+	x := d.seaux[cle]
+	if x == nil {
+		x = &seauJets{reste: jetsRafale, vu: t}
+		d.seaux[cle] = x
+	}
+	x.reste = min(jetsRafale, x.reste+t.Sub(x.vu).Seconds()*jetsParSeconde)
+	x.vu = t
+	if x.reste < 1 {
+		return false
+	}
+	x.reste--
+	return true
+}
+
+// jetPermis : le débit de ce lanceur (son compte, sinon son adresse) ; sinon, 429 est répondu. Le MJ
+// sur son propre ordinateur n'a pas de limite.
+func (s *Serveur) jetPermis(w http.ResponseWriter, r *http.Request) bool {
+	if !modeServeur(r) && local(r) {
+		return true
+	}
+	cle := "ip:" + s.acces.adresse(r)
+	if c, ok := compteDe(r); ok {
+		cle = "compte:" + c.Nom
+	}
+	if s.debit.permis(cle, time.Now()) {
+		return true
+	}
+	w.Header().Set("Retry-After", "2")
+	erreur(w, 429, "Trop de jets d'un coup : patientez un instant.")
+	return false
+}
+
 // jet : un jet de dés à la table.
 type jet struct {
 	ID      int64   `json:"id"`
@@ -106,6 +175,9 @@ func (s *Serveur) desLireJoueur(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Serveur) desLancerMJ(w http.ResponseWriter, r *http.Request) {
+	if !s.jetPermis(w, r) {
+		return
+	}
 	var in demandeJet
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
@@ -122,6 +194,9 @@ func (s *Serveur) desLancerMJ(w http.ResponseWriter, r *http.Request) {
 // desLancerJoueur : un joueur lance pour son PJ. Sur un serveur, c'est le PJ de son compte ; à la
 // maison, celui qu'il a choisi sur la page. Un joueur ne fait jamais de jet caché.
 func (s *Serveur) desLancerJoueur(w http.ResponseWriter, r *http.Request) {
+	if !s.jetPermis(w, r) {
+		return
+	}
 	var in demandeJet
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)

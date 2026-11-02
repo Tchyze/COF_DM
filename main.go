@@ -367,6 +367,11 @@ func main() {
 	universFlag := flag.String("univers", "", "fichier d'univers (.cofdm) à ouvrir ; créé s'il n'existe pas")
 	reseau := flag.Bool("reseau", false, "écouter sur le réseau local (API avec jeton, interface avec le mot de passe MJ)")
 	modeServeur := flag.Bool("serveur", editionServeur, "mode serveur, derrière un reverse proxy : sans fenêtre, accès par comptes (édition serveur, image Docker)")
+	importsFlag := flag.Int("imports-simultanes", serveur.ImportsSimultanesParDefaut, "mode serveur : traitements lourds simultanés sur tout le serveur (imports, exports, sauvegardes demandées)")
+	quotaUniversFlag := flag.Int64("quota-univers", serveur.QuotaUniversParDefaut>>20, "mode serveur : taille d'un univers au-delà de laquelle il ne reçoit plus d'image ni d'import, en Mo (0 : aucune)")
+	quotaSauvegardesFlag := flag.Int64("quota-sauvegardes", serveur.QuotaSauvegardesParDefaut>>20, "mode serveur : volume des sauvegardes de chaque univers, en Mo (0 : aucun)")
+	sauvegardesMaxFlag := flag.Int("sauvegardes-max", serveur.SauvegardesMaxParDefaut, "mode serveur : sauvegardes gardées par univers, demandées d'une part, d'avant une opération de l'autre (0 : pas de plafond)")
+	proxiesFlag := flag.String("proxies", "", "mode serveur : réseaux des proxys de confiance, en CIDR séparés par des virgules (ou COF_DM_PROXIES ; par défaut "+serveur.ProxiesParDefaut+")")
 	desinstallerFlag := flag.Bool("desinstaller", false, "désinstaller l'application (Windows, lancé par « Applications installées »)")
 	modeMCP := flag.Bool("mcp", false, "serveur MCP pour Claude, sur l'entrée et la sortie standard : joint l'application lancée par son API (COF_DM_URL, COF_DM_JETON, COF_DM_UNIVERS)")
 	flag.Parse()
@@ -469,6 +474,14 @@ func main() {
 	if *modeServeur {
 		opt.Dialogue, opt.Config, opt.VeilleMaj = nil, nil, true
 		opt.ChangerReseau = nil // un serveur reste derrière son reverse proxy
+		// un conteneur en lecture seule range ses fichiers temporaires dans le volume (TMPDIR)
+		if err := os.MkdirAll(os.TempDir(), 0o700); err != nil {
+			log.Printf("dossier temporaire %s : %v", os.TempDir(), err)
+		}
+		if opt.Proxies, err = proxiesDemandes(*proxiesFlag); err != nil {
+			fatal("Option -proxies : %v", err)
+		}
+		opt.Limites = serveur.NouvellesLimites(*importsFlag, *quotaUniversFlag<<20, *quotaSauvegardesFlag<<20, *sauvegardesMaxFlag)
 		if opt.Comptes, err = comptes.Ouvrir(filepath.Join(dossier, "comptes.json")); err != nil {
 			fatal("Impossible de lire les comptes : %v", err)
 		}
@@ -536,21 +549,62 @@ func main() {
 	_ = srv.Close()
 }
 
-// premierAdmin crée le compte « admin » d'un serveur qui n'a encore aucun compte. Son mot de passe,
-// tiré au hasard, n'est affiché qu'ici (et pas dans le fichier journal) : il est à changer aussitôt.
+// proxiesDemandes : la liste de -proxies, sinon de COF_DM_PROXIES, sinon celle par défaut.
+func proxiesDemandes(option string) ([]*net.IPNet, error) {
+	if option == "" {
+		option = os.Getenv("COF_DM_PROXIES")
+	}
+	if option == "" {
+		option = serveur.ProxiesParDefaut
+	}
+	l, err := serveur.LireProxies(option)
+	if err == nil && len(l) == 0 {
+		err = fmt.Errorf("aucun réseau dans %q", option)
+	}
+	return l, err
+}
+
+// envMdpAdmin : le fichier qui donne le mot de passe du premier compte (un secret Docker), lu au premier
+// lancement seulement.
+const envMdpAdmin = "COF_DM_ADMIN_MDP_FICHIER"
+
+// premierAdmin crée le compte « admin » d'un serveur qui n'a encore aucun compte. Avec un secret, son
+// mot de passe n'est écrit nulle part. Sinon il est tiré au hasard et n'est affiché qu'ici (et pas
+// dans le fichier journal) : il reste lisible dans les journaux du conteneur, et le compte n'a accès à
+// rien d'autre que son propre compte tant qu'il ne l'a pas changé.
 func premierAdmin(reg *comptes.Registre) error {
 	if !reg.Vide() {
 		return nil
 	}
-	b := make([]byte, 15)
-	if _, err := rand.Read(b); err != nil {
-		return err
+	if fichier := os.Getenv(envMdpAdmin); fichier != "" {
+		b, err := os.ReadFile(fichier)
+		if err != nil {
+			return fmt.Errorf("%s : %w", envMdpAdmin, err)
+		}
+		if _, err := reg.Creer("admin", strings.TrimRight(string(b), "\r\n"), true); err != nil {
+			return fmt.Errorf("%s : %w", envMdpAdmin, err)
+		}
+		fmt.Printf("\nPremier lancement du serveur : compte administrateur créé, nom d'utilisateur admin, avec le mot de passe de %s.\n\n", envMdpAdmin)
+		return nil
 	}
-	mdp := base64.RawURLEncoding.EncodeToString(b)
+	var mdp string
+	for {
+		b := make([]byte, 15)
+		if _, err := rand.Read(b); err != nil {
+			return err
+		}
+		mdp = base64.RawURLEncoding.EncodeToString(b)
+		if comptes.MdpAcceptable("admin", mdp, true) == nil {
+			break
+		}
+	}
 	if _, err := reg.Creer("admin", mdp, true); err != nil {
 		return err
 	}
-	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nNotez-le et changez-le après la première connexion : il ne sera plus affiché.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
+	if err := reg.ExigerChangement("admin"); err != nil {
+		return err
+	}
+	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nÀ changer dès la première connexion : le compte n'a accès à rien d'autre avant, et ce mot de passe reste lisible dans les journaux du conteneur tant qu'il n'est pas changé.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
 	return nil
 }
 

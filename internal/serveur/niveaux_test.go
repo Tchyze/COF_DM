@@ -169,7 +169,7 @@ func TestMonteeRegles(t *testing.T) {
 // Seul le MJ fait monter un PJ de niveau ; le joueur voit l'historique et ne peut pas le réécrire.
 func TestMonteeRoles(t *testing.T) {
 	b, reg := bancServeur(t)
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur
@@ -210,7 +210,7 @@ func TestMonteeRoles(t *testing.T) {
 func TestMonteeAccordee(t *testing.T) {
 	b, reg := bancServeur(t)
 	for _, nom := range []string{"joueuse", "autre"} {
-		reg.Creer(nom, "mot-de-passe-"+nom, false)
+		reg.Creer(nom, mdpEssai(nom), false)
 		reg.Modifier(nom, func(c *comptes.Compte) error {
 			c.Admis = append(c.Admis, b.s.store.ID())
 			c.Roles[b.s.store.ID()] = comptes.Joueur

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+	"time"
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
 )
@@ -271,7 +272,7 @@ func TestAdminUnivers(t *testing.T) {
 func reconnecter(t *testing.T, a *Application, nom string) *navigateur {
 	t.Helper()
 	n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
-	if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": "mot-de-passe-" + nom}); c != 200 {
+	if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}); c != 200 {
 		t.Fatalf("connexion de %s : %d", nom, c)
 	}
 	return n
@@ -283,7 +284,7 @@ func TestAdminComptes(t *testing.T) {
 	a, reg, connecter := serveurMulti(t)
 	chef := connecter("chef")
 	id := a.st.ID()
-	if c, v := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "Lea", "mdp": "mot-de-passe-lea"}); c != 201 || v["nom"] != "lea" || v["mdp"] != nil {
+	if c, v := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "Lea", "mdp": "mot-de-passe-ael"}); c != 201 || v["nom"] != "lea" || v["mdp"] != nil {
 		t.Fatalf("création de compte : %d %v", c, v)
 	}
 	if c, _ := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "court", "mdp": "court"}); c != 422 {
@@ -412,4 +413,132 @@ func TestJoindreJoueurs(t *testing.T) {
 
 func jsonDe(w *httptest.ResponseRecorder, v any) error {
 	return json.Unmarshal(w.Body.Bytes(), v)
+}
+
+// La règle des mots de passe, vue de l'administration : rien ne change à moitié.
+func TestAdminRegleDesMotsDePasse(t *testing.T) {
+	_, reg, connecter := serveurMulti(t)
+	chef := connecter("chef")
+	connecter("cible")
+	for _, c := range []map[string]any{
+		{"nom": "aline", "mdp": "1234567890"},
+		{"nom": "aline", "mdp": "aline-2026-paris"},
+		{"nom": "aline", "mdp": "trop-court", "admin": true},
+	} {
+		if code, v := chef.faire("POST", "/api/admin/comptes", c); code != 422 {
+			t.Fatalf("création %v : %d %v", c, code, v)
+		}
+	}
+	if code, v := chef.faire("PATCH", "/api/admin/comptes/cible", map[string]any{"mdp": "aaaaaaaaaaaa"}); code != 422 {
+		t.Fatalf("réinitialisation : %d %v", code, v)
+	}
+	if code, v := chef.faire("PATCH", "/api/admin/comptes/cible", map[string]any{"mdp": "trop-court", "admin": true}); code != 422 {
+		t.Fatalf("futur administrateur : %d %v", code, v)
+	}
+	if c, _ := reg.Lire("cible"); c.Admin {
+		t.Fatal("un refus ne change rien")
+	}
+}
+
+// Le mot de passe initial, passé par les journaux, ne donne accès à rien avant d'être changé.
+func TestMdpInitialAChanger(t *testing.T) {
+	_, reg, connecter := serveurMulti(t)
+	chef := connecter("chef")
+	if err := reg.ExigerChangement("chef"); err != nil {
+		t.Fatal(err)
+	}
+	for _, x := range [][2]string{{"GET", "/api/admin/univers"}, {"GET", "/api/admin/comptes"}, {"GET", "/api/mes-univers"}, {"GET", "/api/univers/version"}} {
+		c, v := chef.faire(x[0], x[1], nil)
+		if c != 403 || v["changer_mdp"] != true {
+			t.Fatalf("%s %s avant le changement : %d %v", x[0], x[1], c, v)
+		}
+	}
+	if c, v := chef.faire("POST", "/api/admin/comptes", map[string]any{"nom": "intrus", "mdp": "une-phrase-bien-longue", "admin": true}); c != 403 {
+		t.Fatalf("création d'un compte avant le changement : %d %v", c, v)
+	}
+	// le compte, la santé du serveur et la page restent : c'est par là qu'on en sort
+	if c, v := chef.faire("GET", "/api/acces", nil); c != 200 || v["compte"].(map[string]any)["doit_changer"] != true {
+		t.Fatalf("état du compte : %d %v", c, v)
+	}
+	if c, _ := chef.faire("GET", "/api/sante", nil); c != 200 {
+		t.Fatalf("santé : %d", c)
+	}
+	if c, v := chef.faire("POST", "/api/compte/mdp", map[string]any{"ancien": mdpEssai("chef"), "nouveau": mdpEssai("chef")}); c != 422 {
+		t.Fatalf("le même mot de passe ne lève pas l'obligation : %d %v", c, v)
+	}
+	if c, v := chef.faire("POST", "/api/compte/mdp", map[string]any{"ancien": mdpEssai("chef"), "nouveau": "une-phrase-bien-longue"}); c != 200 {
+		t.Fatalf("changement : %d %v", c, v)
+	}
+	if c, v := chef.faire("GET", "/api/admin/univers", nil); c != 200 {
+		t.Fatalf("après le changement : %d %v", c, v)
+	}
+	if c, v := chef.faire("GET", "/api/acces", nil); c != 200 || v["compte"].(map[string]any)["doit_changer"] != nil {
+		t.Fatalf("état après le changement : %d %v", c, v)
+	}
+}
+
+// La session d'un administrateur est plus courte : à la connexion, et pour une session ouverte avant
+// sa nomination.
+func TestSessionAdministrateurCourte(t *testing.T) {
+	_, reg, connecter := serveurMulti(t)
+	chef, meneur := connecter("chef"), connecter("meneur")
+	duree := func(n *navigateur) time.Duration { return time.Until(n.cookies[cookieMJ].Expires) }
+	if d := duree(chef); d > dureeSessionAdmin+time.Minute || d < dureeSessionAdmin-time.Minute {
+		t.Fatalf("session de l'administrateur : %v", d)
+	}
+	if d := duree(meneur); d < dureeSession-time.Minute {
+		t.Fatalf("session d'un autre compte : %v", d)
+	}
+	// une session de 30 jours, ouverte avant : elle tombe dès que le compte est administrateur
+	if c, _ := meneur.faire("GET", "/api/compte", nil); c != 200 {
+		t.Fatalf("avant : %d", c)
+	}
+	reg.Modifier("meneur", func(c *comptes.Compte) error { c.Admin = true; return nil })
+	if c, _ := meneur.faire("GET", "/api/admin/univers", nil); c != 401 {
+		t.Fatalf("session longue d'un nouvel administrateur : %d", c)
+	}
+	// changer son mot de passe garde une session courte
+	if c, v := chef.faire("POST", "/api/compte/mdp", map[string]any{"ancien": mdpEssai("chef"), "nouveau": "une-phrase-bien-longue"}); c != 200 {
+		t.Fatalf("changement : %d %v", c, v)
+	}
+	if d := duree(chef); d > dureeSessionAdmin+time.Minute {
+		t.Fatalf("après le changement : %v", d)
+	}
+}
+
+// L'administration ne change pas le mot de passe de celui qui s'en sert : Mon compte demande l'ancien.
+func TestAdminPasSonPropreMdp(t *testing.T) {
+	_, _, connecter := serveurMulti(t)
+	chef := connecter("chef")
+	connecter("cible")
+	if c, _ := chef.faire("PATCH", "/api/admin/comptes/CHEF", map[string]any{"mdp": "une-phrase-bien-longue"}); c != 403 {
+		t.Fatalf("son propre mot de passe : %d", c)
+	}
+	if c, _ := chef.faire("GET", "/api/admin/univers", nil); c != 200 {
+		t.Fatalf("il reste connecté : %d", c)
+	}
+	if c, v := chef.faire("PATCH", "/api/admin/comptes/cible", map[string]any{"mdp": "une-phrase-bien-longue"}); c != 200 {
+		t.Fatalf("celui d'un autre : %d %v", c, v)
+	}
+}
+
+// Une erreur de fichier reste au journal : les réponses ne disent pas où sont les données du serveur.
+func TestErreursSansChemin(t *testing.T) {
+	a, reg, connecter := serveurMulti(t)
+	chef, meneur := connecter("chef"), connecter("meneur")
+	id := a.st.ID()
+	donner(reg, "meneur", id, comptes.MJ)
+	autre := creerUnivers(t, chef, "Les Marches")
+	secret := a.opt.DossierDon
+	// le dossier des archives ne peut pas être créé : un fichier est à sa place
+	if err := os.WriteFile(a.DossierArchives(), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c, v := chef.faire("PATCH", "/api/admin/univers/"+autre, map[string]any{"archive": true})
+	if c != 500 || strings.Contains(toJSON(v), secret) || strings.Contains(toJSON(v), "/") {
+		t.Fatalf("archivage : %d %v", c, v)
+	}
+	if c, v := meneur.faire("POST", "/api/univers/restaurer", map[string]any{"fichier": "2020-01-01_00-00-00_manuelle.cofdm"}, enTeteUnivers, id); c != 404 || strings.Contains(toJSON(v), secret) {
+		t.Fatalf("restauration : %d %v", c, v)
+	}
 }

@@ -749,10 +749,12 @@ func (s *Serveur) combatDirect(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 404, "Combat introuvable.")
 		return
 	}
+	droits := s.droitsDuSuivi(r)
 	conn, err := versWebSocket.Upgrade(w, r, nil)
 	if err != nil {
 		return // la réponse d'erreur est déjà partie
 	}
+	defer s.surveiller(conn, r, droits)()
 	e := &ecran{conn: conn, envoi: make(chan []byte, 64)}
 	go e.ecrire()
 	sa.mu.Lock()

@@ -33,28 +33,35 @@ import (
 const (
 	cookieMJ     = "cof_dm_mj"
 	dureeSession = 30 * 24 * time.Hour
-	iterations   = 210000
-	metaMdp      = "mj_mdp"
-	metaSecret   = "mj_secret"
-	metaFermees  = "mj_fermees" // sessions fermées avant leur terme : {"identifiant": échéance}
-	mdpMin       = 8
-	essaisMax    = 8 // essais ratés par adresse…
-	essaisDuree  = 5 * time.Minute
+	// dureeSessionAdmin : une session d'administrateur volée donne le serveur entier
+	dureeSessionAdmin = 12 * time.Hour
+	iterations        = 210000
+	metaMdp           = "mj_mdp"
+	metaSecret        = "mj_secret"
+	metaFermees       = "mj_fermees" // sessions fermées avant leur terme : {"identifiant": échéance}
+	mdpMin            = 8
+	essaisMax         = 8 // essais ratés par adresse (mode serveur : par nom et par adresse)
+	essaisDuree       = 5 * time.Minute
 )
 
 type acces struct {
 	reg     Reglages
 	comptes *comptes.Registre // mode serveur : nil sinon
+	proxies []*net.IPNet      // mode serveur : adresses dont on croit les en-têtes X-Forwarded-*
 	mu      sync.Mutex
 	echecs  map[string][]time.Time // limitation des essais par adresse
 	secret  []byte
 	fermees map[string]int64 // sessions fermées (déconnexion) : identifiant → échéance
 	pause   time.Duration    // attente après un mot de passe faux
+	pasNom  time.Duration    // ralentissement par essai de trop sur un même nom
 	hachage sync.Mutex       // un seul calcul de mot de passe à la fois
 }
 
-func nouvelAcces(reg Reglages, c *comptes.Registre) *acces {
-	a := &acces{reg: reg, comptes: c, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond}
+func nouvelAcces(reg Reglages, c *comptes.Registre, proxies []*net.IPNet) *acces {
+	if proxies == nil {
+		proxies, _ = LireProxies(ProxiesParDefaut)
+	}
+	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond, pasNom: 250 * time.Millisecond}
 	if v, ok := reg.Meta(metaSecret); ok {
 		a.secret, _ = hex.DecodeString(v)
 	}
@@ -234,6 +241,25 @@ func (a *acces) rendreEssai(ip string) {
 	} else {
 		delete(a.echecs, ip)
 	}
+}
+
+// ralenti : ce nom a dépassé le seuil des essais ratés.
+func (a *acces) ralenti(cle string) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return len(a.echecs[cle]) >= essaisSeuilNom
+}
+
+// attenteNom : le ralentissement dû aux essais déjà faits sur ce nom. Il ne refuse jamais personne :
+// un refus par nom donnerait à n'importe qui le moyen de bloquer un compte.
+func (a *acces) attenteNom(cle string) time.Duration {
+	a.mu.Lock()
+	n := len(a.echecs[cle])
+	a.mu.Unlock()
+	if n < essaisSeuilNom {
+		return 0
+	}
+	return min(time.Duration(n-essaisSeuilNom+1)*a.pasNom, attenteNomMax)
 }
 
 // temoin : le cookie de session. Il n'est renvoyé qu'en HTTPS quand la page est servie ainsi.
@@ -499,7 +525,7 @@ func (s *Serveur) qr(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "max-age=3600")
+	w.Header().Set("Cache-Control", "private, max-age=3600")
 	_, _ = w.Write(png)
 }
 

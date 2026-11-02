@@ -214,7 +214,7 @@ func TestAidesServeur(t *testing.T) {
 			t.Fatalf("envoi : %d %v", c, v)
 		}
 	}
-	reg.Creer("joueuse", "mot-de-passe-joueuse", false)
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
 		c.Roles[b.s.store.ID()] = comptes.Joueur

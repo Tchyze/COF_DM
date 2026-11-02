@@ -30,11 +30,16 @@ var (
 
 // pilote : SQLite avec les précautions recommandées pour un fichier venu d'ailleurs (un univers se
 // copie et s'échange). trusted_schema=OFF empêche les vues et déclencheurs d'un fichier d'appeler
-// des fonctions à effet de bord ; cell_size_check repère plus tôt une page abîmée.
+// des fonctions à effet de bord ; cell_size_check repère plus tôt une page abîmée. Une valeur reste
+// bornée : aucune fiche ni image n'approche ce plafond, et une expression piégée échoue au lieu
+// d'occuper presque toute la mémoire du serveur.
 const pilote = "sqlite3_cofdm"
+
+const valeurMaxSQLite = 128 << 20
 
 func init() {
 	sql.Register(pilote, &sqlite3.SQLiteDriver{ConnectHook: func(c *sqlite3.SQLiteConn) error {
+		c.SetLimit(sqlite3.SQLITE_LIMIT_LENGTH, valeurMaxSQLite)
 		_, err := c.Exec(`PRAGMA trusted_schema=OFF; PRAGMA cell_size_check=ON`, nil)
 		return err
 	}})
@@ -275,11 +280,25 @@ func verifierFichier(db *sql.DB) error {
 		LIMIT 1`).Scan(&genre, &nom)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return nil
+		return verifierColonnes(db)
 	case err != nil:
 		return err
 	}
 	return invalide("Ce fichier n'est pas ouvert : il contient un objet qu'un univers COF DM n'a jamais (%s « %s »). Il a pu être modifié par un autre programme.", genre, nom)
+}
+
+// verifierColonnes : un univers n'a jamais de colonne calculée, qui se recalcule à chaque lecture.
+func verifierColonnes(db *sql.DB) error {
+	var table string
+	err := db.QueryRow(`SELECT m.name FROM sqlite_master m, pragma_table_xinfo(m.name) x
+		WHERE m.type = 'table' AND x.hidden IN (2, 3) LIMIT 1`).Scan(&table)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return nil
+	case err != nil:
+		return err
+	}
+	return invalide("Ce fichier n'est pas ouvert : il contient un objet qu'un univers COF DM n'a jamais (colonne calculée de « %s »). Il a pu être modifié par un autre programme.", table)
 }
 
 // Chemin renvoie le fichier de l'univers.
