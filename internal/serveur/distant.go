@@ -71,12 +71,13 @@ type connexion struct {
 // lien : ce qui relie un univers de cet ordinateur à son serveur. Le jeton est celui de la
 // connexion ; Jeton ne sert qu'à reprendre les liens d'avant les modes.
 type lien struct {
-	URL    string `json:"url"`
-	Compte string `json:"compte"`
-	Copie  string `json:"copie"`            // nom de cette copie sur le serveur
-	Nom    string `json:"nom,omitempty"`    // nom de l'univers sur le serveur
-	Chemin string `json:"chemin,omitempty"` // fichier de la copie sur cet ordinateur
-	Jeton  string `json:"jeton,omitempty"`
+	URL     string `json:"url"`
+	Compte  string `json:"compte"`
+	Copie   string `json:"copie"`             // nom de cette copie sur le serveur
+	Nom     string `json:"nom,omitempty"`     // nom de l'univers sur le serveur
+	Chemin  string `json:"chemin,omitempty"`  // fichier de la copie sur cet ordinateur
+	Archive bool   `json:"archive,omitempty"` // archivée : elle ne s'ouvre pas et n'est pas tirée de nouveau
+	Jeton   string `json:"jeton,omitempty"`
 }
 
 // etatSync : où en est la synchronisation d'un univers.
@@ -570,11 +571,12 @@ func (a *Application) routeModeLocal(w http.ResponseWriter, r *http.Request) {
 }
 
 // univDistant : un univers du serveur ; Ici : le fichier de sa copie s'il est déjà sur cet
-// ordinateur ; Ouvert : c'est l'univers ouvert.
+// ordinateur ; Ouvert : c'est l'univers ouvert ; Archivee : sa copie est archivée ici.
 type univDistant struct {
 	synchro.Univers
-	Ici    string `json:"ici,omitempty"`
-	Ouvert bool   `json:"ouvert"`
+	Ici      string `json:"ici,omitempty"`
+	Ouvert   bool   `json:"ouvert"`
+	Archivee bool   `json:"archivee,omitempty"`
 }
 
 func (a *Application) marquerIci(us []synchro.Univers) []univDistant {
@@ -585,8 +587,9 @@ func (a *Application) marquerIci(us []synchro.Univers) []univDistant {
 	}
 	a.mu.RUnlock()
 	out := make([]univDistant, 0, len(us))
+	liens := a.liens()
 	for _, u := range us {
-		out = append(out, univDistant{u, a.parIdentifiant(u.ID), u.ID == courant})
+		out = append(out, univDistant{u, a.parIdentifiant(u.ID), u.ID == courant, liens[u.ID].Archive})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return strings.ToLower(out[i].Nom) < strings.ToLower(out[j].Nom) })
 	return out
@@ -691,6 +694,10 @@ func (a *Application) routeOuvrirDistant(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if l, ok := a.liens()[in.Univers]; ok && l.fichier() != "" {
+		if l.Archive {
+			erreur(w, 409, "Votre copie de cet univers est archivée : désarchivez-la d'abord dans « Mes univers ».")
+			return
+		}
 		if _, err := a.ouvrir(l.Chemin, false); err != nil {
 			erreurStore(w, err)
 			return

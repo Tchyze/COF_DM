@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -23,8 +24,10 @@ import (
 // l'application connaît. Une clé qui n'y est pas ne mène à rien. Elles n'existent pas sur un serveur,
 // où l'administrateur a sa page (admin.go).
 //
-// Verrous (fermeture.go) : a.gestion d'un bout à l'autre de l'opération, puis a.dist.mu, le temps de
+// Actions et bilan : gestion_actions.go. Verrous (fermeture.go) : a.gestion d'un bout à l'autre de l'opération, puis a.dist.mu, le temps de
 // laisser finir un échange en cours avec le serveur, jamais l'inverse.
+
+const msgDansArchives = "Cet univers est archivé : désarchivez-le d'abord dans « Mes univers »."
 
 const (
 	lieuDossier     = "dossier"     // dans le dossier des univers
@@ -32,9 +35,12 @@ const (
 	lieuArchive     = "archive"     // dans le dossier des archives
 	lieuIntrouvable = "introuvable" // connu, mais le fichier n'est plus là
 
-	actionOuvrir   = "ouvrir"
-	actionRenommer = "renommer"
-	actionOublier  = "oublier"
+	actionOuvrir      = "ouvrir"
+	actionRenommer    = "renommer"
+	actionOublier     = "oublier"
+	actionArchiver    = "archiver"
+	actionDesarchiver = "desarchiver"
+	actionSupprimer   = "supprimer"
 
 	suffixeJournal = "-journal" // le journal SQLite d'une écriture interrompue, à ne pas séparer de son fichier
 	msgInterrompu  = "Une écriture de cet univers a été interrompue : ouvrez-le une fois, puis réessayez."
@@ -53,6 +59,7 @@ type copieGeree struct {
 // ficheGeree : un univers tel que la fenêtre le montre. Gerable : un fichier d'univers ordinaire, sur
 // lequel les actions sont possibles (ni lien symbolique, ni autre extension, ni autre chose qu'un univers).
 // Interrompu : une écriture s'est arrêtée en route (un journal SQLite est à côté) ; l'ouvrir la répare.
+// Abime : le fichier ressemble à un univers mais ne se lit plus ; il ne reste qu'à le supprimer.
 type ficheGeree struct {
 	Cle        string      `json:"cle"`
 	Nom        string      `json:"nom"`
@@ -63,6 +70,7 @@ type ficheGeree struct {
 	Lieu       string      `json:"lieu"`
 	Gerable    bool        `json:"gerable"`
 	Interrompu bool        `json:"interrompu,omitempty"`
+	Abime      bool        `json:"abime,omitempty"`
 	Copie      *copieGeree `json:"copie,omitempty"`
 	Actions    []string    `json:"actions"`
 	id         string
@@ -82,6 +90,10 @@ func (a *Application) routesGestion() {
 	m.HandleFunc("GET /api/univers/gestion", a.gardeGestion(a.routeGestion))
 	m.HandleFunc("POST /api/univers/gestion/{cle}/renommer", a.gardeGestion(a.routeRenommerUnivers))
 	m.HandleFunc("POST /api/univers/gestion/{cle}/oublier", a.gardeGestion(a.routeOublierUnivers))
+	m.HandleFunc("POST /api/univers/gestion/{cle}/bilan", a.gardeGestion(a.routeBilanUnivers))
+	m.HandleFunc("POST /api/univers/gestion/{cle}/archiver", a.gardeGestion(a.routeArchiverUnivers))
+	m.HandleFunc("POST /api/univers/gestion/{cle}/desarchiver", a.gardeGestion(a.routeDesarchiverUnivers))
+	m.HandleFunc("POST /api/univers/gestion/{cle}/supprimer", a.gardeGestion(a.routeSupprimerUnivers))
 }
 
 // gardeGestion : l'ordinateur du MJ, par l'interface de l'application et rien d'autre. Plus strict que
@@ -222,6 +234,7 @@ func (a *Application) ficheGeree(chemin string, ouvert *store.Store, liens map[s
 	default:
 		ap, err := store.Apercu(chemin)
 		f.id, estCopie, lisible = ap.ID, ap.Copie, err == nil
+		f.Abime = err != nil && !errors.Is(err, store.ErrPasUnivers) && info.Mode().IsRegular() && strings.EqualFold(filepath.Ext(chemin), store.Extension)
 	}
 	f.Gerable = lisible && !f.Interrompu && info.Mode().IsRegular() && strings.EqualFold(filepath.Ext(chemin), store.Extension)
 	if estCopie {
@@ -237,6 +250,15 @@ func (a *Application) ficheGeree(chemin string, ouvert *store.Store, liens map[s
 	}
 	if f.Gerable {
 		f.Actions = append(f.Actions, actionRenommer)
+		switch f.Lieu {
+		case lieuDossier:
+			f.Actions = append(f.Actions, actionArchiver)
+		case lieuArchive:
+			f.Actions = append(f.Actions, actionDesarchiver)
+		}
+	}
+	if f.Gerable || f.Abime {
+		f.Actions = append(f.Actions, actionSupprimer)
 	}
 	if !f.Ouvert && f.Lieu == lieuAilleurs && f.Copie == nil {
 		f.Actions = append(f.Actions, actionOublier)
@@ -543,4 +565,38 @@ func (a *Application) retirerRecent(chemin string) error {
 		}
 	}
 	return a.ecrireRecents(l)
+}
+
+// resteSansUnivers : au lancement, le MJ avait retiré son dernier univers. L'application attend son
+// choix, sans recréer d'univers ; une première installation, elle, en crée un.
+func (a *Application) resteSansUnivers() bool {
+	if a.multi() {
+		return false
+	}
+	v, ok := a.reg.Meta(regSansUnivers)
+	return ok && v != ""
+}
+
+// dansArchives : ce chemin est dans le dossier des archives, qu'on quitte en désarchivant.
+func (a *Application) dansArchives(chemin string) bool {
+	if a.multi() {
+		return false
+	}
+	abs, err := filepath.Abs(strings.TrimSpace(chemin))
+	if err != nil {
+		return false
+	}
+	d, ok := a.archivesSures()
+	return ok && dansDossier(abs, d)
+}
+
+// servirSansUnivers : plus aucun univers n'est ouvert sur l'ordinateur du MJ. L'interface reste, pour en
+// créer ou en ouvrir un ; les routes d'un univers le disent à l'écran (aucun_univers).
+func (a *Application) servirSansUnivers(w http.ResponseWriter, r *http.Request) {
+	enTetes(w)
+	if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
+		repondre(w, 503, map[string]any{"detail": "Aucun univers n'est ouvert.", "aucun_univers": true})
+		return
+	}
+	servirInterface(a.opt.Frontend, false, w, r)
 }

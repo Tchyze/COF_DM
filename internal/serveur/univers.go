@@ -54,10 +54,11 @@ type universOuvert struct {
 }
 
 const (
-	regUnivers   = "univers"
-	regRecents   = "recents"
-	recentsMax   = 8
-	nomParDefaut = "Mon univers"
+	regUnivers     = "univers"
+	regRecents     = "recents"
+	regSansUnivers = "sans_univers" // le MJ a retiré son dernier univers : aucun ne se crée d'office au lancement
+	recentsMax     = 8
+	nomParDefaut   = "Mon univers"
 )
 
 // reglagesAppli : réglages rangés autrefois dans la base, qui ne doivent pas suivre un univers.
@@ -124,7 +125,7 @@ func (a *Application) Demarrer(demande string) error {
 		if err := a.Ouvrir(demande, true); err != nil {
 			return err
 		}
-	} else {
+	} else if !a.resteSansUnivers() {
 		dernier, _ := a.reg.Meta(regUnivers)
 		if dernier == "" || a.Ouvrir(dernier, false) != nil {
 			if err := a.Ouvrir(filepath.Join(a.DossierUnivers(), nomParDefaut+store.Extension), true); err != nil {
@@ -312,6 +313,7 @@ func (a *Application) installer(st *store.Store) *universOuvert {
 	a.mu.Unlock()
 	if courant {
 		_ = a.reg.SetMeta(regUnivers, st.Chemin())
+		_ = a.reg.SetMeta(regSansUnivers, "")
 		a.noterRecent(st.Chemin())
 		a.noterFichierCopie(st)
 	}
@@ -438,7 +440,12 @@ func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	a.mu.RLock()
 	if a.srv == nil {
+		sans := !a.multi() && len(a.fermetures) == 0
 		a.mu.RUnlock()
+		if sans && local(r) {
+			a.servirSansUnivers(w, r)
+			return
+		}
 		erreur(w, 503, "Aucun univers n'est ouvert.")
 		return
 	}
@@ -648,6 +655,10 @@ func (a *Application) routeOuvrir(w http.ResponseWriter, r *http.Request) {
 		erreurStore(w, err)
 		return
 	}
+	if a.dansArchives(in.Chemin) {
+		erreur(w, 422, msgDansArchives)
+		return
+	}
 	if err := a.Ouvrir(in.Chemin, false); err != nil {
 		erreurStore(w, err)
 		return
@@ -700,6 +711,10 @@ func (a *Application) routeNouveau(w http.ResponseWriter, r *http.Request) {
 		chemin = filepath.Join(a.DossierUnivers(), nom)
 	}
 	chemin = avecExtension(chemin)
+	if a.dansArchives(chemin) {
+		erreur(w, 422, msgDansArchives)
+		return
+	}
 	if _, err := os.Stat(chemin); err == nil {
 		erreur(w, 409, "Un fichier porte déjà ce nom : "+chemin)
 		return

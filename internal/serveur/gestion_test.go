@@ -216,6 +216,10 @@ func TestGestionAcces(t *testing.T) {
 		{"GET", routeGestion},
 		{"POST", routeGestion + "/" + cle + "/renommer"},
 		{"POST", routeGestion + "/" + cle + "/oublier"},
+		{"POST", routeGestion + "/" + cle + "/bilan"},
+		{"POST", routeGestion + "/" + cle + "/archiver"},
+		{"POST", routeGestion + "/" + cle + "/desarchiver"},
+		{"POST", routeGestion + "/" + cle + "/supprimer"},
 	}
 	for _, e := range essais {
 		for _, rt := range routes {
@@ -252,6 +256,10 @@ func TestGestionSurServeur(t *testing.T) {
 			{"GET", routeGestion},
 			{"POST", routeGestion + "/" + cle + "/renommer"},
 			{"POST", routeGestion + "/" + cle + "/oublier"},
+			{"POST", routeGestion + "/" + cle + "/bilan"},
+			{"POST", routeGestion + "/" + cle + "/archiver"},
+			{"POST", routeGestion + "/" + cle + "/desarchiver"},
+			{"POST", routeGestion + "/" + cle + "/supprimer"},
 		} {
 			if c, v := n.faire(rt.methode, rt.url, map[string]any{"nom": "Piraté"}, enTeteUnivers, id); c != 403 {
 				t.Errorf("%s %s : %d %v", rt.methode, rt.url, c, v)
@@ -447,6 +455,10 @@ func TestGestionCheminsHostiles(t *testing.T) {
 		// « .. » : le routeur redirige vers une route qui n'existe pas, sans rien exécuter
 		essai(routeGestion+"/"+cle+"/renommer", 404, 400, 301, 307)
 		essai(routeGestion+"/"+cle+"/oublier", 404, 400, 301, 307)
+		essai(routeGestion+"/"+cle+"/bilan", 404, 400, 301, 307)
+		essai(routeGestion+"/"+cle+"/archiver", 404, 400, 301, 307)
+		essai(routeGestion+"/"+cle+"/desarchiver", 404, 400, 301, 307)
+		essai(routeGestion+"/"+cle+"/supprimer", 404, 400, 301, 307)
 	}
 	// un chemin dans le corps ne vaut rien : la route ne connaît que la clé
 	cible := filepath.Join(b.dossier(), "Vrai.cofdm")
@@ -467,10 +479,16 @@ func TestGestionCheminsHostiles(t *testing.T) {
 			t.Errorf("« %s » devrait être listé : %v", nom, l)
 			continue
 		}
-		if f["gerable"] != false || aAction(f, "renommer") {
+		if f["gerable"] != false || aAction(f, "renommer") || aAction(f, "archiver") || aAction(f, "supprimer") {
 			t.Errorf("« %s » ne se gère pas : %v", nom, f)
 		}
-		essai(routeGestion+"/"+f["cle"].(string)+"/renommer", 422)
+		cle := routeGestion + "/" + f["cle"].(string)
+		essai(cle+"/renommer", 422)
+		essai(cle+"/archiver", 422)
+		essai(cle+"/desarchiver", 422)
+		if c, v := b.local("POST", cle+"/supprimer", map[string]any{"nom": nom}); c != 422 {
+			t.Errorf("supprimer « %s » : %d %v", nom, c, v)
+		}
 	}
 	if lireTout(t, secret) != "à ne pas toucher" {
 		t.Fatal("le fichier étranger a changé")
