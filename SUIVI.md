@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 1er novembre 2026 (version 1.3.0 ; durcissement de sécurité, lot 3).
+Dernière mise à jour : 2 novembre 2026 (version 1.3.1 : durcissement de sécurité, double authentification des administrateurs, installation sur tablette).
 
 ## Où on en est
 
-- **Version stable : 1.3.0** (1er novembre 2026) : PR 32 à 40 (image sur Docker Hub, menu repliable, mise à jour fiable, installation Windows, administrateur séparé du MJ, réseau sans relance, combat et dés en direct), essayées par le MJ.
-- **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.0, comme dans la 1.2.5), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `security/audit-fixes`, durcissement de sécurité avant la mise en ligne, en PR, à essayer par le MJ avant de fusionner. `essai-complet` ne sert plus qu'aux essais, à ne pas fusionner.
-- **Chantier en cours** : durcissement de sécurité (voir « Ce qui a été fait »). Lots 1 à 3 finis, à essayer par le MJ avant la PR ; réglages GitHub (F-12) encore à faire. Aucune version n'est publiée : les changements ne sont pas dans la 1.3.0.
+- **Version stable : 1.3.1** (2 novembre 2026) : PR 41 (durcissement de sécurité), 42 (double authentification des administrateurs), 43 (installation sur tablette). Image sur Docker Hub (`1.3.1`, `latest`). Avant elle : 1.3.0 (1er novembre 2026), PR 32 à 40.
+- **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.1, comme dans la 1.2.5 et la 1.3.0), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : `security/audit-fixes`, `security/mfa-admin` et `tablette-installable` sont fusionnées. `essai-complet` ne sert plus que d'instance d'essai.
+- **Chantier en cours** : aucun. Restent : F-12 (protection du workflow de release, avec les réglages GitHub), et rendre stable `TestEchecMemeCout`, qui échoue parfois en CI sur un écart de durée (relancer le job).
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -215,7 +215,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 | 35 | **Mise à jour fiable** (lot C1, en PR) : le programme d'avant (`.ancien`) est retiré en fond avec réessais pendant une minute (il tournait encore quand le nouveau le retirait) ; un `.ancien` encore tenu ne bloque plus la mise à jour suivante (`.ancien-2`) ; renommages réessayés (antivirus) ; dossier non modifiable vérifié avant de télécharger (`modifiable` dans l'état, message à l'écran). |
 | 36 | **Installation Windows** (lot C2, en PR, empilée sur la 35) : l'exe s'installe seul pour l'utilisateur (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis Bureau et menu Démarrer, « Applications installées », `-desinstaller`) ; copie du Bureau retirée ; Claude suit ; mode portable supprimé, ses données reprises au lancement. Paquet `internal/installation`, testé sur le vrai Windows. |
 
-### Durcissement de sécurité (novembre 2026, branche `security/audit-fixes`)
+### Durcissement de sécurité (novembre 2026, PR 41, version 1.3.1)
 
 Lot 1, avant la mise en ligne :
 
@@ -246,7 +246,7 @@ Lot 1, avant la mise en ligne :
 - **Vérifications** : V-01, charges dans les champs des joueurs, sans injection dans les écrans parcourus ; V-02, aucune faille prouvée, fichiers reçus durcis et cible de fuzzing `FuzzFichierRecu`.
 - **F-25** : historique non réécrit, conformément à la consigne. **F-12** : changement du workflow préparé, pas appliqué, en attente des réglages GitHub.
 
-### Double authentification des administrateurs (novembre 2026, branche `security/mfa-admin`, empilée sur `security/audit-fixes`)
+### Double authentification des administrateurs (novembre 2026, PR 42, version 1.3.1)
 
 **Lot 1, TOTP** :
 
@@ -266,7 +266,7 @@ Lot 1, avant la mise en ligne :
 - **Essayé** : authentificateur logiciel dans les tests, authentificateur virtuel du CDP dans Chrome à 1300 et 390 px ; en HTTPS derrière un vrai NPM sur un banc jetable, certificat de test accepté par une option de Chrome : clé, TOTP et WebSocket d'un joueur. 
 - **Essai du MJ** : une vraie clé et une vraie application d'authentification, sous Windows dans Chrome, sur une instance en `localhost` : enregistrement, connexion, un simple toucher sans PIN. Pas encore essayé en vrai : l'adresse HTTPS réelle, les autres navigateurs, fail2ban, Portainer.
 
-### Installation sur tablette (novembre 2026, branche `tablette-installable`, empilée sur `security/mfa-admin`)
+### Installation sur tablette (novembre 2026, PR 43, version 1.3.1)
 
 - **Application installable** : manifeste, icônes (dont une masquable pour Android), bouton « Installer sur cet appareil » sur la page de connexion, dans le menu du MJ, la page des joueurs et l'administration. Plein écran, dans le navigateur qui l'a installée. Une seule application : le rôle du compte mène à la bonne page.
 - **Sans service worker** : rien ne reste sur l'appareil, et il faut le réseau. Sans HTTPS, pas d'installation ni de bouton.
