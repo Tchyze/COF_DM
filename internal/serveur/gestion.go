@@ -594,6 +594,10 @@ func (a *Application) dansArchives(chemin string) bool {
 // créer ou en ouvrir un ; les routes d'un univers le disent à l'écran (aucun_univers).
 func (a *Application) servirSansUnivers(w http.ResponseWriter, r *http.Request) {
 	enTetes(w)
+	if r.URL.Path == "/api/acces" && r.Method == http.MethodGet { // la première question de l'interface : pas une erreur
+		repondre(w, 200, map[string]any{"aucun_univers": true, "local": true})
+		return
+	}
 	if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") || (r.Method != http.MethodGet && r.Method != http.MethodHead) {
 		repondre(w, 503, map[string]any{"detail": "Aucun univers n'est ouvert.", "aucun_univers": true})
 		return

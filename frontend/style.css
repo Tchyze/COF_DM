@@ -516,7 +516,7 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
   #t-large{display:none}
 }
 
-/* ---------- menu Fichier, univers ---------- */
+/* ---------- bouton du haut du menu (Mes univers, Fichier), fenêtre des univers ---------- */
 .fichier{display:flex;align-items:center;gap:9px;width:100%;text-align:left;background:var(--surface);margin-bottom:8px;padding:.35rem .6rem}
 .fichier .u{display:flex;flex-direction:column;min-width:0;flex:1;line-height:1.2}
 .fichier .u small{font-size:.66rem;text-transform:uppercase;letter-spacing:.12em;color:var(--faint)}
@@ -530,6 +530,31 @@ ul.attaques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:3p
 .menu-fichier a{display:block;text-decoration:none;color:inherit}
 .boite-corps{display:flex;flex-direction:column;gap:12px;padding:18px;overflow:auto}
 .boite-corps h3{margin:0}
+.boite-univers{width:min(860px,100%)}
+.boite-univers .boite-corps{position:relative}
+.boite-croix{position:absolute;top:12px;right:12px}
+.uv-groupe{display:flex;flex-direction:column;gap:6px;min-width:0}
+.uv-groupe h4,.uv-groupe summary{font:600 .72rem var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:0;cursor:default}
+.uv-groupe summary{cursor:pointer;padding:4px 0}
+.uv-ligne{display:flex;flex-direction:column;gap:6px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;min-width:0}
+.uv-tete{display:flex;align-items:center;gap:8px;min-width:0}
+.uv-tete .ic{width:18px;text-align:center;flex:none;color:var(--gold)}
+.uv-nom{display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex:1;min-width:0;overflow-wrap:anywhere}
+.uv-taille{white-space:nowrap;color:var(--muted);flex:none}
+.uv-detail{overflow-wrap:anywhere}
+.uv-chemin{overflow-wrap:anywhere;word-break:break-word}
+.uv-actions{justify-content:flex-end}
+.uv-plus{display:none}
+.uv-risques{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.uv-creer{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.uv-creer .champ{flex:1 1 200px}
+@media (max-width:640px){
+  .uv-plus{display:inline-flex}
+  .uv-ligne:not(.deplie) .uv-actions{display:none}
+  .uv-actions{justify-content:flex-start}
+  .uv-actions button{flex:1 1 100%}
+  .boite-univers .ligne > button{flex:1 1 100%}
+}
 .liste-univers{max-height:40vh;overflow:auto;border:1px solid var(--line);border-radius:10px;padding:4px}
 .liste-univers .u{display:flex;flex-direction:column;min-width:0;flex:1}
 .liste-univers .x{font-size:.78rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -202,6 +202,9 @@ func TestSupprimerDernier(t *testing.T) {
 		if c, v := b.local("GET", "/api/stats", nil); c != 503 || v["aucun_univers"] != true {
 			t.Fatalf("route d'un univers : %d %v", c, v)
 		}
+		if c, v := b.local("GET", "/api/acces", nil); c != 200 || v["aucun_univers"] != true {
+			t.Fatalf("accès : %d %v", c, v)
+		}
 		if c, v := b.local("GET", routeGestion, nil); c != 200 || len(v["univers"].([]any)) != 0 {
 			t.Fatalf("liste : %d %v", c, v)
 		}

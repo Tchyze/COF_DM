@@ -106,14 +106,28 @@ export function delai(f, ms = 160) {
   return (...a) => { clearTimeout(t); t = setTimeout(() => f(...a), ms); };
 }
 
-/** Une boîte de dialogue simple : titre et contenu HTML ; un clic à côté ou Échap la ferme. */
-export function dialogue(titre, corps) {
+/** Une boîte de dialogue simple : titre et contenu HTML ; un clic à côté ou Échap la ferme. Options :
+ * piege (Tab reste dans la boîte), rendre (l'élément qui reprend le focus à la fermeture ; sans lui, celui
+ * qui l'avait à l'ouverture, si piege), bloque (elle ne se ferme que par son code), classe, croix. */
+export function dialogue(titre, corps, { piege = false, rendre = null, bloque = false, classe = "", croix = false } = {}) {
   const voile = document.createElement("div");
   voile.className = "voile";
-  voile.innerHTML = `<div class="boite" role="dialog" aria-label="${esc(titre)}"><div class="boite-corps"><h3>${esc(titre)}</h3>${corps}</div></div>`;
+  const avant = rendre || (piege ? document.activeElement : null);
+  voile.innerHTML = `<div class="boite ${esc(classe)}" role="dialog" ${piege ? 'aria-modal="true"' : ""} aria-label="${esc(titre)}"><div class="boite-corps">${croix ? `<button type="button" class="ghost petit boite-croix" aria-label="Fermer">✕</button>` : ""}<h3>${esc(titre)}</h3>${corps}</div></div>`;
   document.body.append(voile);
-  const fermer = () => voile.remove();
-  voile.onclick = e => { if (e.target === voile) fermer(); };
-  voile.onkeydown = e => { if (e.key === "Escape") fermer(); };
+  const fermer = () => { voile.remove(); if (avant?.isConnected) avant.focus(); };
+  if (croix) voile.querySelector(".boite-croix").onclick = fermer;
+  voile.onclick = e => { if (e.target === voile && !bloque) fermer(); };
+  voile.onkeydown = e => {
+    if (e.key === "Escape" && !bloque) { e.stopPropagation(); fermer(); }
+    if (e.key === "Tab" && piege) {
+      const l = [...voile.querySelectorAll("a[href],button,input,select,textarea,summary")].filter(x => !x.disabled && x.getClientRects().length);
+      if (!l.length) return;
+      const premier = l[0], dernier = l[l.length - 1];
+      if (e.shiftKey && document.activeElement === premier) { e.preventDefault(); dernier.focus(); }
+      else if (!e.shiftKey && document.activeElement === dernier) { e.preventDefault(); premier.focus(); }
+    }
+  };
+  if (piege) voile.querySelector("button,input,select,textarea")?.focus();
   return { voile, fermer };
 }

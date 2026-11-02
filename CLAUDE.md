@@ -30,14 +30,14 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 |---|---|
 | `internal/modele` | **Seule source du schéma** (types, champs, relations, calendrier, validation), publié par `GET /api/schema`. |
 | `internal/store` | Un univers ouvert : fiches, relations, mentions `[[Nom]]`, images, FTS5, journal, export, réparation (`reparer.go`), synchro (`sync.go`), versions. |
-| `internal/serveur` | API REST (routes `METHODE /chemin`), accès (`acces.go`), comptes, page des joueurs, combats, dés, aides, multi-univers (`multi.go`), administration du serveur (`admin.go`), bureau relié (`distant.go`). `univers.go` : `Application`. |
+| `internal/serveur` | API REST (routes `METHODE /chemin`), accès (`acces.go`), comptes, page des joueurs, combats, dés, aides, multi-univers (`multi.go`), administration du serveur (`admin.go`), bureau relié (`distant.go`), fenêtre « Mes univers » du bureau (`gestion.go`, `gestion_actions.go`). `univers.go` : `Application`. |
 | `internal/comptes`, `internal/reglages` | Comptes du mode serveur (`comptes.json`) ; réglages de l'ordinateur (`reglages.json`). |
 | `internal/regles`, `internal/reference`, `internal/fiches` | Fichier de règles importé ; profils, peuples, voies ; validation des monstres et feuilles. |
 | `internal/combat`, `internal/des` | Moteur de combat (lit la partie `combat` des règles) ; formules de dés. |
 | `internal/synchro`, `internal/majour` | Client de synchro du bureau ; mises à jour signées (Ed25519 sur `SHA256SUMS`, clé privée = secret `COF_DM_SIGNATURE`, jamais dans le dépôt). |
 | `internal/mcp`, `internal/obsidian` | Serveur MCP ; export vers Obsidian. |
 | `internal/installation` | Bureau Windows : installation pour l'utilisateur au premier lancement (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis, « Applications installées », `-desinstaller`), sans CGO : ses tests se compilent pour Windows (`GOOS=windows go test -c`) et s'y lancent. Reprise de l'ancien mode portable (supprimé). Cache de WebView2 dans le dossier des données (`webview/`). |
-| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/`) ; `joueur.html` + `js/joueur.js` (joueurs) ; `admin.html` + `js/admin.js` (administrateur d'un serveur : seulement `/api/admin/…`, sa version et son compte) ; `style.css`, `combat.css` ; `manifest.webmanifest`, `icones/`, `js/installer.js` (installation sur une tablette, sans service worker : rien ne reste sur l'appareil). |
+| `frontend/` | `index.html` + `js/` (MJ et auditeur, routes `#/…`, vues dans `js/views/` ; `js/univers.js` : fenêtre « Mes univers » du bureau, `js/fichier.js` : le bouton, et le menu Fichier du MJ sur un serveur) ; `joueur.html` + `js/joueur.js` (joueurs) ; `admin.html` + `js/admin.js` (administrateur d'un serveur : seulement `/api/admin/…`, sa version et son compte) ; `style.css`, `combat.css` ; `manifest.webmanifest`, `icones/`, `js/installer.js` (installation sur une tablette, sans service worker : rien ne reste sur l'appareil). |
 | `docs/API.md` | Documentation de l'API. |
 
 ## Invariants à ne jamais casser
@@ -59,6 +59,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 - **Écoute sur `127.0.0.1` par défaut.** L'ouverture au réseau reste un choix du MJ (Paramètres ou `-reseau`) : jeton pour l'API, mot de passe MJ pour l'interface. Ces réglages ne se font que sur l'ordinateur du MJ (`surPlace`).
 - **Toute nouvelle route est protégée par défaut** : n'ajouter à `ouvert()` que ce que la page de connexion exige. Jamais d'écriture derrière un `GET`.
 - **Toute modification de l'API** se reporte dans `docs/API.md` dans le même commit.
+- **`/api/univers/gestion`** (`gardeGestion`, bureau seulement) : aucun jeton, même local ; jamais de chemin reçu, une clé désigne un univers connu (`ficheParCle`). Le bureau peut rester sans univers ouvert (`regSansUnivers`, `servirSansUnivers`). Le fichier archivé ou la copie d'un serveur ne s'y atteint que par ces routes (`dansArchives`, `lien.Archive`).
 - **`/api/univers` et `/api/claude`** ne répondent qu'à l'ordinateur du MJ. `/api/claude` (bureau seulement) n'écrit que l'entrée `cof-dm` de la config Claude, le reste du fichier gardé.
 - **Secrets MJ** : champs `Secret` et relations réservées ne fuitent jamais vers les joueurs (page, comptes joueurs, export Obsidian « joueurs »).
 - **Bureau / serveur** : le bureau n'est qu'un éditeur, le mode serveur n'existe que dans l'édition serveur (`edition_serveur.go`). Relié à un serveur, le bureau ne répond plus au réseau local (`Options.Relie`, `msgReseauRelie`, `BureauRelie`). Connexion par nom et mot de passe échangés contre un jeton propre au poste, rendu au départ (`DELETE /api/compte/jeton`) ; jamais de mot de passe gardé.

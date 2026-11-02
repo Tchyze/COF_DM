@@ -1,9 +1,7 @@
-// Menu Fichier : l'univers ouvert est un fichier .cofdm de cet ordinateur. Nouvel univers, ouvrir,
-// univers récents, enregistrer une copie, sauvegarder. Réservé à l'ordinateur du MJ ; sur un
-// serveur, au MJ de l'univers, qui y importe ses données (l'administrateur crée les univers).
-import { actif } from "./schema.js";
+// Le bouton en haut du menu latéral. Sur l'ordinateur du MJ : « Mes univers », qui ouvre la fenêtre de
+// ses univers (univers.js). Sur un serveur : « Fichier », un petit menu où le MJ de l'univers importe ses
+// données (l'administrateur crée les univers).
 import { $, esc, api, toast, choisirUniversOnglet, lien, dialogue, taille } from "./ui.js";
-import { ouvrirPanneau } from "./connexion.js";
 
 export { taille };
 
@@ -13,61 +11,6 @@ function recharger() {
   choisirUniversOnglet("");
   location.hash = "#/";
   location.reload();
-}
-
-async function ouvrir(chemin) {
-  try { await api("POST", "/api/univers/ouvrir", { chemin }); recharger(); }
-  catch (e) { toast(e.message, true); }
-}
-
-/** Boîte de dialogue du système ; renvoie "" si le MJ annule ou s'il n'y en a pas. */
-async function parcourir(enregistrer, nom = "") {
-  try { return (await api("POST", "/api/univers/parcourir", { enregistrer, nom })).chemin; }
-  catch (e) { toast(e.message, true); return ""; }
-}
-
-
-const ligneUnivers = u => `<button type="button" data-chemin="${esc(u.chemin)}" ${u.present ? "" : "disabled"}>
-    <span class="ic">🌍</span><span class="u"><b>${esc(u.nom)}</b><span class="x">${esc(u.chemin)}</span></span>
-    <small>${u.present ? taille(u.taille) : "introuvable"}</small></button>`;
-
-async function dialogueOuvrir() {
-  const etat = await api("GET", "/api/univers");
-  const connus = [...etat.recents, ...etat.autres];
-  const { voile, fermer } = dialogue("Ouvrir un univers", `
-    ${connus.length ? `<div class="menu liste-univers">${connus.map(ligneUnivers).join("")}</div>`
-      : `<p class="vide">Aucun autre univers connu sur cet ordinateur.</p>`}
-    <label class="champ"><span>Fichier d'univers <small>(.cofdm)</small></span><input id="u-chemin" placeholder="${esc(etat.dossier)}" autocomplete="off" spellcheck="false"></label>
-    <div class="ligne">${etat.parcourir ? `<button id="u-parcourir">Parcourir…</button>` : ""}<button class="primary" id="u-ouvrir">Ouvrir</button><button class="ghost" id="u-annuler">Annuler</button></div>`);
-  const champ = $("#u-chemin", voile);
-  $("#u-annuler", voile).onclick = fermer;
-  $("#u-ouvrir", voile).onclick = () => { if (champ.value.trim()) ouvrir(champ.value.trim()); else champ.focus(); };
-  champ.onkeydown = e => { if (e.key === "Enter") $("#u-ouvrir", voile).click(); };
-  const liste = $(".liste-univers", voile);
-  if (liste) liste.onclick = e => { const b = e.target.closest("button[data-chemin]"); if (b) ouvrir(b.dataset.chemin); };
-  const bouton = $("#u-parcourir", voile);
-  if (bouton) bouton.onclick = async () => { const c = await parcourir(false); if (c) ouvrir(c); };
-  champ.focus();
-}
-
-async function dialogueNouveau() {
-  const etat = await api("GET", "/api/univers");
-  const { voile, fermer } = dialogue("Nouvel univers", `
-    <p class="hint">Un univers est un fichier : fiches, images et journal y sont rangés ensemble. L'univers ouvert en ce moment n'est pas modifié.</p>
-    <label class="champ"><span>Nom de l'univers</span><input id="u-nom" autocomplete="off" maxlength="80"></label>
-    <p class="hint">Créé dans <code>${esc(etat.dossier)}</code>${etat.parcourir ? ", ou à l'emplacement de votre choix" : ""}.</p>
-    <div class="ligne"><button class="primary" id="u-creer">Créer</button>${etat.parcourir ? `<button id="u-ou">Choisir l'emplacement…</button>` : ""}<button class="ghost" id="u-annuler">Annuler</button></div>`);
-  const champ = $("#u-nom", voile);
-  const creer = async corps => {
-    try { await api("POST", "/api/univers/nouveau", corps); recharger(); }
-    catch (e) { toast(e.message, true); }
-  };
-  $("#u-annuler", voile).onclick = fermer;
-  $("#u-creer", voile).onclick = () => { if (champ.value.trim()) creer({ nom: champ.value.trim() }); else champ.focus(); };
-  champ.onkeydown = e => { if (e.key === "Enter") $("#u-creer", voile).click(); };
-  const bouton = $("#u-ou", voile);
-  if (bouton) bouton.onclick = async () => { const c = await parcourir(true, champ.value.trim() || "Nouvel univers"); if (c) creer({ chemin: c }); };
-  champ.focus();
 }
 
 /** Serveur : le MJ verse dans son univers (créé par l'administrateur) les données d'un fichier
@@ -99,37 +42,6 @@ function dialogueImporter(etat) {
   };
 }
 
-async function enregistrerCopie() {
-  const etat = await api("GET", "/api/univers");
-  const copier = async (chemin, remplacer) => {
-    const r = await api("POST", "/api/univers/copie", { chemin, remplacer });
-    toast("Copie enregistrée : " + r.chemin);
-  };
-  if (etat.parcourir) {
-    // la boîte du système a déjà demandé s'il fallait remplacer un fichier existant
-    const c = await parcourir(true, etat.courant.nom + " (copie)");
-    if (c) await copier(c, true).catch(e => toast(e.message, true));
-    return;
-  }
-  const { voile, fermer } = dialogue("Enregistrer une copie", `
-    <p class="hint">Une copie complète de « ${esc(etat.courant.nom)} », à ranger où vous voulez. L'univers ouvert reste le même.</p>
-    <label class="champ"><span>Fichier de la copie</span><input id="u-chemin" autocomplete="off" spellcheck="false"></label>
-    <div class="ligne"><button class="primary" id="u-copier">Enregistrer</button><button class="ghost" id="u-annuler">Annuler</button></div>`);
-  const champ = $("#u-chemin", voile), bouton = $("#u-copier", voile);
-  champ.value = etat.courant.chemin.replace(/\.cofdm$/i, "") + " (copie).cofdm";
-  let remplacer = false;
-  champ.oninput = () => { remplacer = false; bouton.textContent = "Enregistrer"; };
-  $("#u-annuler", voile).onclick = fermer;
-  bouton.onclick = async () => {
-    try { await copier(champ.value.trim(), remplacer); fermer(); }
-    catch (e) {
-      if (e.status === 409) { remplacer = true; bouton.textContent = "Remplacer le fichier existant"; }
-      toast(e.message, true);
-    }
-  };
-  champ.focus();
-}
-
 /** Export vers Obsidian : un zip de notes Markdown, avec ou sans ce qui est réservé au MJ. */
 export function dialogueObsidian() {
   const { voile, fermer } = dialogue("Exporter vers Obsidian", `
@@ -149,30 +61,15 @@ export function dialogueObsidian() {
   $("#o-annuler", voile).onclick = fermer;
 }
 
-async function sauvegarder() {
-  try { const r = await api("POST", "/api/sauvegarde"); toast("Sauvegarde : " + r.fichier); }
-  catch (e) { toast(e.message, true); }
-}
-
 function ouvrirMenu(bouton, etat) {
   const menu = document.createElement("div");
   menu.className = "menu menu-fichier";
   menu.setAttribute("role", "menu");
-  const recents = etat.recents.filter(u => u.present).slice(0, 5);
-  // sur un serveur, l'univers existe déjà (l'administrateur l'a créé) : son MJ y importe ses données
-  menu.innerHTML = etat.serveur ? `
+  // l'univers existe déjà (l'administrateur l'a créé) : son MJ y importe ses données
+  menu.innerHTML = `
     <button data-a="importer"><span class="ic">⬆</span>Importer un fichier d'univers…</button>
     <a href="${esc(lien("/api/export"))}" download role="menuitem"><button tabindex="-1"><span class="ic">⬇</span>Exporter en JSON</button></a>
-    <hr>` : `
-    <button data-a="nouveau"><span class="ic">✚</span>Nouvel univers…</button>
-    <button data-a="ouvrir"><span class="ic">📂</span>Ouvrir un univers…</button>
-    ${recents.length ? `<h4>Récents</h4>${recents.map(u => `<button data-chemin="${esc(u.chemin)}" title="${esc(u.chemin)}"><span class="ic">🌍</span>${esc(u.nom)}</button>`).join("")}<hr>` : "<hr>"}
-    <button data-a="copie"><span class="ic">⎘</span>Enregistrer une copie…</button>
-    <button data-a="sauver"><span class="ic">💾</span>Sauvegarder maintenant</button>
-    <button data-a="sauvegardes"><span class="ic">🕘</span>Sauvegardes…</button>
-    ${actif("obsidian") ? `<button data-a="obsidian"><span class="ic">📝</span>Exporter vers Obsidian…</button>` : ""}
-    ${etat.serveur ? "" : `<hr>
-    <button data-a="serveur"><span class="ic">🌐</span>Serveur et synchronisation…</button>`}`;
+    <hr>`;
   const r = bouton.getBoundingClientRect();
   menu.style.left = r.left + "px";
   menu.style.top = r.bottom + 4 + "px";
@@ -188,28 +85,35 @@ function ouvrirMenu(bouton, etat) {
     const b = e.target.closest("button");
     if (!b) return;
     fermer();
-    if (b.dataset.chemin) { ouvrir(b.dataset.chemin); return; }
-    const action = { nouveau: dialogueNouveau, ouvrir: dialogueOuvrir, importer: () => dialogueImporter(etat), copie: enregistrerCopie, sauver: sauvegarder,
-      sauvegardes: () => { location.hash = "#/parametres/donnees"; }, obsidian: dialogueObsidian,
-      serveur: ouvrirPanneau }[b.dataset.a];
-    Promise.resolve(action()).catch(err => toast(err.message, true));
+    if (b.dataset.a === "importer") dialogueImporter(etat);
   };
 }
 
-/** Affiche le bouton Fichier dans le menu latéral et le nom de l'univers ouvert. */
+/** Affiche le bouton dans le menu latéral et le nom de l'univers ouvert. */
 export async function initFichier() {
   const bouton = $("#fichier");
   let etat;
   try { etat = await api("GET", "/api/univers"); } catch { return; }
-  if (!etat.courant) return;
-  $("#univers-nom").textContent = etat.courant.nom;
-  bouton.title = etat.courant.chemin || etat.courant.nom;
+  if (etat.serveur && !etat.courant) return;
+  $("#univers-nom").textContent = etat.courant?.nom || "Aucun ouvert";
+  bouton.title = etat.courant?.chemin || etat.courant?.nom || "";
   bouton.hidden = false;
-  document.title = etat.courant.nom + " — COF DM";
-  bouton.onclick = async () => {
-    if ($(".menu-fichier")) return;
-    try { ouvrirMenu(bouton, await api("GET", "/api/univers")); }
-    catch (e) { toast(e.message, true); }
-  };
+  if (etat.courant) document.title = etat.courant.nom + " — COF DM";
+  if (etat.serveur) {
+    bouton.onclick = async () => {
+      if ($(".menu-fichier")) return;
+      try { ouvrirMenu(bouton, await api("GET", "/api/univers")); }
+      catch (e) { toast(e.message, true); }
+    };
+  } else {
+    $("small", bouton).textContent = "Mes univers";
+    bouton.setAttribute("aria-haspopup", "dialog");
+    $(".fl", bouton).textContent = "▸";
+    if (!bouton.title) bouton.title = "Vos univers sur cet ordinateur";
+    bouton.onclick = async () => {
+      try { (await import("./univers.js")).fenetreUnivers({ bouton }); }
+      catch (e) { toast(e.message, true); }
+    };
+  }
   if (etat.avertissement) toast(etat.avertissement, true);
 }
