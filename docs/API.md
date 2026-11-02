@@ -35,7 +35,7 @@ Par défaut l'application n'écoute que sur l'ordinateur du MJ. En mode local (a
 
 Depuis une session ouverte par mot de passe, `POST /api/acces/mdp`, `POST /api/acces/reseau` et `POST /api/parametres/jeton` répondent `403`, et `GET /api/parametres` ne donne pas le jeton : ces réglages se font sur l'ordinateur du MJ. Il en va de même avec le jeton d'API depuis le réseau.
 
-Toute réponse JSON porte `Cache-Control: no-store`, et toute réponse `Permissions-Policy` (ni caméra, ni micro, ni position, ni paiement).
+Toute réponse JSON porte `Cache-Control: no-store`, et toute réponse `Permissions-Policy` (ni caméra, ni micro, ni position, ni paiement ; les clés de sécurité pour le site lui-même seulement).
 
 ## Mode serveur
 
@@ -63,8 +63,9 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 | Requête | Effet |
 |---|---|
 | `GET /api/acces` | `{"serveur": true, "connecte", "mj", "lecture_seule", "joueur", "compte"}` : `mj` dit si le compte entre dans l'univers ouvert, `joueur` s'il n'y a que sa page de joueur (l'application le renvoie vers `/joueur.html`) ; un administrateur (`compte.admin`) est renvoyé vers `/admin.html`. |
-| `POST /api/acces/connexion` `{"nom", "mdp"}` | Ouvre la session (cookie `cof_dm_mj`, 30 jours, 12 heures pour un administrateur, `Secure` en HTTPS). `401` : nom ou mot de passe incorrect ; `429` : huit essais ratés en cinq minutes sur ce nom depuis cette adresse, ou trente tous noms confondus (en IPv6, une adresse se compte par `/64`). Au-delà de vingt essais ratés sur un même nom, d'où qu'ils viennent, la réponse est ralentie jusqu'à cinq secondes, sans refus : personne ne peut bloquer un compte en se trompant de mot de passe. |
+| `POST /api/acces/connexion` `{"nom", "mdp"}` | Ouvre la session (cookie `cof_dm_mj`, 30 jours, `Secure` en HTTPS). Pour un **administrateur**, le mot de passe seul n'ouvre pas de session : voir « Second facteur des administrateurs ». `401` : nom ou mot de passe incorrect ; `429` : huit essais ratés en cinq minutes sur ce nom depuis cette adresse, ou trente tous noms confondus (en IPv6, une adresse se compte par `/64`). Au-delà de vingt essais ratés sur un même nom, d'où qu'ils viennent, la réponse est ralentie jusqu'à cinq secondes, sans refus : personne ne peut bloquer un compte en se trompant de mot de passe. |
 | `POST /api/acces/deconnexion` | Ferme la session. |
+| `POST /api/acces/second-facteur`, `…/defi` | Administrateur, après son mot de passe : voir « Second facteur des administrateurs ». |
 | `GET /api/compte` | Son compte : `{"nom", "admin", "inactif", "role"` (dans l'univers ouvert)`, "roles"` (par identifiant d'univers)`, "pj", "jetons": [{"id", "nom", "cree", "utilise"?}], "cree"}` (`utilise` : dernière utilisation du jeton, à une heure près) ; pour un administrateur, ni `role`, ni `roles`, ni `pj`. |
 | `POST /api/compte/mdp` `{"ancien", "nouveau", "retirer_jetons"?}` | Change son mot de passe (10 caractères au moins, 12 pour un administrateur ; `422` s'il contient le nom du compte, répète un seul caractère ou figure parmi les mots de passe courants : la règle ne vaut qu'au changement, un compte existant se connecte toujours). Les autres sessions du compte sont fermées. Avec `"retirer_jetons": true`, tous ses jetons sont aussi retirés, ce qui déconnecte ses postes de bureau reliés ; absent, ils restent. Réponse `{"ok", "jetons_retires"}`. Il lève l'obligation du mot de passe initial : tant que `compte.doit_changer` est vrai (`GET /api/acces`), toute route `/api/…` hors `/api/compte`, `/api/acces` et `/api/sante` répond `403` `{"detail", "changer_mdp": true}`. |
 | `POST /api/compte/jetons` `{"nom": "script"}` | Crée un jeton d'API : `{"jeton": "cofdm_…", "id", "nom"}`. Il ne s'affiche que cette fois (20 par compte au plus). `409` pour un administrateur. |
@@ -73,7 +74,7 @@ Un jeton d'API a les droits de son compte, sauf ce qui garde le compte : le mot 
 
 ### Administration
 
-Routes de l'administrateur, connecté par son mot de passe (`403` à tout autre compte et à tout jeton, `404` sur l'application de bureau, qui ne sert pas non plus la page `/admin.html`). Elles ne lisent d'un univers que son identifiant, son nom (celui de son fichier), sa taille et sa date : jamais une fiche. Les actions sont notées dans le journal du serveur, pas dans celui des univers.
+Routes de l'administrateur, connecté par son mot de passe et son second facteur (`403` à tout autre compte et à tout jeton, `404` sur l'application de bureau, qui ne sert pas non plus la page `/admin.html`). Elles ne lisent d'un univers que son identifiant, son nom (celui de son fichier), sa taille et sa date : jamais une fiche. Les actions sont notées dans le journal du serveur, pas dans celui des univers.
 
 | Requête | Effet |
 |---|---|
@@ -81,12 +82,46 @@ Routes de l'administrateur, connecté par son mot de passe (`403` à tout autre 
 | `POST /api/admin/univers` `{"nom"}` | Crée un univers vide dans le dossier du serveur (`201`, sa fiche). Son contenu vient de son MJ. `409` : nom pris (servi ou archivé) ; `422` : sans nom. |
 | `PATCH /api/admin/univers/{id}` `{"nom"?, "archive"?}` | Renomme l'univers (son fichier) ; l'archive (il est fermé et rangé dans `univers/archives/` : il sort de toutes les listes et n'est plus accessible à personne, fichier et rôles gardés, ni rouvert au démarrage) ou le désarchive. `409` : nom pris, dernier univers servi, ou requêtes encore en cours sur l'univers après 30 secondes (rien n'a changé : réessayer). |
 | `DELETE /api/admin/univers/{id}` `{"nom"}` | Supprime l'univers, servi ou archivé, son nom retapé pour confirmer (`422` sinon). Une sauvegarde est faite avant (`avant-suppression`, rangée avec les sauvegardes de l'univers, gardées) : `{"supprime": true, "sauvegarde"}`. Les rôles et admissions des comptes dans cet univers sont retirés. `409` : dernier univers servi, ou requêtes encore en cours après 30 secondes (rien n'a changé). |
-| `GET /api/admin/comptes` | Tous les comptes : `[{"nom", "admin", "inactif", "roles": {"<univers>": "<rôle>"}, "admis": ["<univers>"], "jetons"` (leur nombre)`, "cree"}]`, sans PJ. |
-| `POST /api/admin/comptes` `{"nom", "mdp", "admin"?}` | Crée un compte. Nom : 3 à 32 caractères parmi `a-z`, `0-9`, `-`, `_` ; mot de passe : 10 caractères au moins, 12 pour un administrateur, même règle qu'au changement (`POST /api/compte/mdp`). |
-| `PATCH /api/admin/comptes/{nom}` `{"mdp"?, "admin"?, "inactif"?, "roles"?: {"<univers>": "mj" \| "auditeur" \| ""}, "admis"?: {"<univers>": true \| false}}` | Modifie un compte. L'administrateur donne les rôles `mj` et `auditeur` (`""` les retire) ; un joueur, il l'**admet** dans un univers, et c'est le MJ qui l'y joint (`422` pour `"joueur"`). Ne plus l'admettre le retire de l'univers, avec son PJ. Un compte administrateur n'a ni rôle, ni admission, ni jeton (`409`). Changer le mot de passe ou désactiver le compte ferme ses sessions. `409` s'il ne restait plus d'administrateur actif ; `404` : univers inconnu. Un `mdp` retire tous les jetons du compte : ses postes de bureau reliés devront se reconnecter. `mdp` sur son propre compte : `403`, cela passe par `POST /api/compte/mdp`. |
-| `DELETE /api/admin/comptes/{nom}` | Supprime un compte. `409` : dernier administrateur actif. |
+| `GET /api/admin/comptes` | Tous les comptes : `[{"nom", "admin", "inactif", "roles": {"<univers>": "<rôle>"}, "admis": ["<univers>"], "jetons"` (leur nombre)`, "cree", "second_facteur"?}]`, sans PJ ; `second_facteur` (un administrateur) : vrai s'il en a un. |
+| `POST /api/admin/comptes` `{"nom", "mdp", "admin"?, "confirmation"?}` | Crée un compte ; un administrateur demande une `confirmation` (« Second facteur des administrateurs »). Nom : 3 à 32 caractères parmi `a-z`, `0-9`, `-`, `_` ; mot de passe : 10 caractères au moins, 12 pour un administrateur, même règle qu'au changement (`POST /api/compte/mdp`). |
+| `PATCH /api/admin/comptes/{nom}` `{"mdp"?, "admin"?, "inactif"?, "roles"?: {"<univers>": "mj" \| "auditeur" \| ""}, "admis"?: {"<univers>": true \| false}, "confirmation"?}` | Modifie un compte. Faire d'un compte un administrateur, ou changer le mot de passe d'un administrateur, demande une `confirmation`. L'administrateur donne les rôles `mj` et `auditeur` (`""` les retire) ; un joueur, il l'**admet** dans un univers, et c'est le MJ qui l'y joint (`422` pour `"joueur"`). Ne plus l'admettre le retire de l'univers, avec son PJ. Un compte administrateur n'a ni rôle, ni admission, ni jeton (`409`). Changer le mot de passe ou désactiver le compte ferme ses sessions. `409` s'il ne restait plus d'administrateur actif ; `404` : univers inconnu. Un `mdp` retire tous les jetons du compte : ses postes de bureau reliés devront se reconnecter. `mdp` sur son propre compte : `403`, cela passe par `POST /api/compte/mdp`. |
+| `DELETE /api/admin/comptes/{nom}` `{"confirmation"?}` | Supprime un compte ; un administrateur demande une `confirmation`. `409` : dernier administrateur actif. |
+| `POST /api/admin/comptes/{nom}/second-facteur/reinitialiser` `{"confirmation"}` | Retire tous les facteurs d'un **autre** administrateur, qui repasse par l'enrôlement, et ferme ses sessions ; son mot de passe ne change pas. `403` sur soi-même ; `409` : pas un administrateur. Entre au journal. |
 
 Au passage à cette version, un compte administrateur perd ses rôles et ses jetons (il n'entre plus dans les univers), et un compte joueur est admis dans les univers où il joue déjà.
+
+### Second facteur des administrateurs
+
+Un administrateur prouve un second facteur à la connexion. Les comptes MJ, auditeur et joueur, et leurs jetons, ne sont pas concernés : ces routes leur répondent `403`.
+
+**Connexion.** `POST /api/acces/connexion` avec le bon mot de passe répond `200` sans session, et selon le compte :
+
+| Réponse | Ce qu'elle ouvre |
+|---|---|
+| `{"mj": false, "etape": "second_facteur", "facteurs": ["cle", "totp", "secours"]}` (ceux qu'il a) | Le cookie `cof_dm_2f` (`HttpOnly`, `SameSite=Strict`, 5 minutes), une preuve qui n'ouvre que `POST /api/acces/second-facteur`. |
+| `{"mj": false, "etape": "enrolement", "compte"}` | Une session d'enrôlement de 30 minutes : aucun facteur n'est encore enregistré. |
+
+`POST /api/acces/second-facteur` `{"facteur": "totp" | "secours", "code"}` ou `{"facteur": "cle", "reponse"}` ouvre la session, de 12 heures, et la preuve ne ressert pas : `{"mj": false, "compte"}`. `401` `{"reprendre": true}` sans preuve valable (absente, expirée, déjà servie, d'avant un changement de mot de passe) : retour au mot de passe ; `401` sans ce champ : code incorrect ou déjà utilisé. La preuve tombe après cinq erreurs. `429` : cinq essais en cinq minutes sur ce compte depuis cette adresse, vingt pour une adresse, ou, pour le TOTP seulement, dix par compte en cinq minutes et cinquante en une journée, d'où qu'ils viennent. Une clé ou un code de secours reste alors possible.
+
+**Clés de sécurité.** Elles demandent l'option `-origine` (ou `COF_DM_ORIGINE`) : l'adresse publique du serveur, `https://…`, seule source de l'origine et du domaine, jamais un en-tête. `-rp-id` (`COF_DM_RP_ID`) lie les clés à un domaine parent ; par défaut, à l'hôte de l'origine. Sans elle, ces routes répondent `409`. `POST /api/acces/second-facteur/defi`, avec la preuve, donne le défi à passer à `navigator.credentials.get` (`publicKey`) ; `reponse` est le résultat, champs binaires en base64url. Un défi vaut deux minutes et une seule réponse, même fausse. Toute clé FIDO2 convient (aucune attestation) ; à chaque usage, un compteur qui ne monte pas est refusé, sauf une clé dont le compteur reste à zéro. Sans preuve, aucun de ces compteurs n'est touché : qui n'a pas le mot de passe ne peut gêner personne.
+
+**Enrôlement.** Tant qu'il n'a aucun facteur, un administrateur n'atteint que `GET /api/acces`, `GET /api/compte`, `POST /api/compte/mdp`, `/api/compte/second-facteur/…`, `POST /api/acces/deconnexion` et `/api/sante` ; tout le reste répond `403` `{"detail", "second_facteur_requis": true}`. Le mot de passe initial passe avant (`403` `{"changer_mdp": true}` sur ces routes aussi).
+
+**Confirmation.** Certaines actions portent dans leur corps `"confirmation": {"mdp", "facteur", "code"}` : le mot de passe, et un second facteur s'il en a un. Avec une clé : `"confirmation": {"mdp", "facteur": "cle", "reponse"}`, après `POST /api/compte/second-facteur/defi`. Sans elle : `403` `{"confirmation_requise": true}`. Mot de passe ou code faux : `401`. `429` : vingt mots de passe faux en cinq minutes, puis les limites ci-dessus.
+
+| Requête | Effet |
+|---|---|
+| `POST /api/compte/second-facteur/totp/debut` `{"confirmation"}` | Tire un secret, sans rien activer : `{"secret", "otpauth", "qr"}` (`qr` : image PNG en `data:`, faite sur le serveur). Il attend 10 minutes, pour cette session seulement. Si un TOTP existe déjà, le nouveau le remplacera. |
+| `POST /api/compte/second-facteur/totp/activer` `{"code"}` | Active ce secret si le code en vient. `{"ok": true, "secours"?: [10 codes]}` : les codes de secours, montrés cette seule fois, s'il n'en restait aucun. Une session d'enrôlement devient une session complète sous un autre identifiant. `422` : code incorrect ; `409` : secret plus valable. |
+| `DELETE /api/compte/second-facteur/totp` `{"confirmation"}` | Retire le TOTP et ferme les autres sessions du compte. `409` si c'est le dernier facteur, sans consommer de code. `404` : aucun TOTP. |
+| `POST /api/compte/second-facteur/secours` `{"confirmation"}` | Remplace les 10 codes de secours, montrés cette seule fois : `{"secours"}`. |
+| `POST /api/compte/second-facteur/defi` | Le défi pour confirmer une action par une clé. `409` : ce compte n'a pas de clé. |
+| `POST /api/compte/second-facteur/cles/debut` `{"nom", "confirmation"}` | Le défi à passer à `navigator.credentials.create` (`publicKey`). Rien n'est enregistré avant la réponse. `422` : sans nom. |
+| `POST /api/compte/second-facteur/cles/activer` `{"reponse"}` | Enregistre la clé : `{"ok": true, "id", "secours"?}`. `422` : réponse qui ne correspond pas à ce serveur ; `409` : défi plus valable, clé déjà enregistrée (sur ce compte ou un autre). Dix clés au plus (`422`). Comme pour le TOTP, une session d'enrôlement devient une session complète. |
+| `PATCH /api/compte/second-facteur/cles/{id}` `{"nom"}` | Renomme la clé. |
+| `DELETE /api/compte/second-facteur/cles/{id}` `{"confirmation"}` | Retire la clé et ferme les autres sessions du compte. `409` si c'est le dernier facteur, sans consommer de code. |
+
+`GET /api/compte` et `GET /api/acces` donnent à un administrateur `compte.second_facteur` : `{"requis", "totp", "totp_active"?, "cles": [{"id", "nom", "cree", "utilise"?}], "cles_disponibles", "secours_restants"}`. Jamais un secret. Changer de mot de passe ne retire aucun facteur.
 
 ### Comptes joueurs
 

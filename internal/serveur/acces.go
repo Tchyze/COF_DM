@@ -45,23 +45,32 @@ const (
 )
 
 type acces struct {
-	reg     Reglages
-	comptes *comptes.Registre // mode serveur : nil sinon
-	proxies []*net.IPNet      // mode serveur : adresses dont on croit les en-têtes X-Forwarded-*
-	mu      sync.Mutex
-	echecs  map[string][]time.Time // limitation des essais par adresse
-	secret  []byte
-	fermees map[string]int64 // sessions fermées (déconnexion) : identifiant → échéance
-	pause   time.Duration    // attente après un mot de passe faux
-	pasNom  time.Duration    // ralentissement par essai de trop sur un même nom
-	hachage sync.Mutex       // un seul calcul de mot de passe à la fois
+	reg      Reglages
+	comptes  *comptes.Registre // mode serveur : nil sinon
+	proxies  []*net.IPNet      // mode serveur : adresses dont on croit les en-têtes X-Forwarded-*
+	mu       sync.Mutex
+	echecs   map[string][]time.Time   // limitation des essais par adresse
+	fenetres map[string]time.Duration // essais comptés sur une autre durée qu'essaisDuree
+	secret   []byte
+	fermees  map[string]int64 // sessions fermées (déconnexion) : identifiant → échéance
+	pause    time.Duration    // attente après un mot de passe faux
+	pasNom   time.Duration    // ralentissement par essai de trop sur un même nom
+	hachage  sync.Mutex       // un seul calcul de mot de passe à la fois
+	// second facteur (secondfacteur.go)
+	clePreuve      []byte
+	preuvesServies map[string]int64 // preuves qui ont servi : identifiant → échéance
+	totpAttente    map[string]totpEnAttente
+	cles           *ConfigCles // clés de sécurité : nil tant que -origine n'est pas donné
+	defis          map[string]defiCle
 }
 
 func nouvelAcces(reg Reglages, c *comptes.Registre, proxies []*net.IPNet) *acces {
 	if proxies == nil {
 		proxies, _ = LireProxies(ProxiesParDefaut)
 	}
-	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond, pasNom: 250 * time.Millisecond}
+	a := &acces{reg: reg, comptes: c, proxies: proxies, echecs: map[string][]time.Time{}, fenetres: map[string]time.Duration{}, fermees: map[string]int64{}, pause: 400 * time.Millisecond, pasNom: 250 * time.Millisecond,
+		clePreuve: make([]byte, 32), preuvesServies: map[string]int64{}, totpAttente: map[string]totpEnAttente{}, defis: map[string]defiCle{}}
+	_, _ = rand.Read(a.clePreuve)
 	if v, ok := reg.Meta(metaSecret); ok {
 		a.secret, _ = hex.DecodeString(v)
 	}
@@ -210,20 +219,33 @@ func adresseDe(r *http.Request) string {
 // essais envoyés en même temps ne passent pas tous sous la limite. Renvoie false quand elle est
 // atteinte. Au passage, les essais périmés de toutes les adresses sont oubliés.
 func (a *acces) reserverEssai(ip string, limite int) bool {
+	return a.reserverEssaiSur(ip, limite, essaisDuree)
+}
+
+// reserverEssaiSur : la même chose, ces essais comptant sur cette durée.
+func (a *acces) reserverEssaiSur(ip string, limite int, duree time.Duration) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for k, l := range a.echecs {
+		fenetre := essaisDuree
+		if d, ok := a.fenetres[k]; ok {
+			fenetre = d
+		}
 		recents := l[:0]
 		for _, t := range l {
-			if time.Since(t) < essaisDuree {
+			if time.Since(t) < fenetre {
 				recents = append(recents, t)
 			}
 		}
 		if len(recents) == 0 {
 			delete(a.echecs, k)
+			delete(a.fenetres, k)
 		} else {
 			a.echecs[k] = recents
 		}
+	}
+	if duree != essaisDuree {
+		a.fenetres[ip] = duree
 	}
 	if len(a.echecs[ip]) >= limite {
 		return false
@@ -240,7 +262,16 @@ func (a *acces) rendreEssai(ip string) {
 		a.echecs[ip] = l[:len(l)-1]
 	} else {
 		delete(a.echecs, ip)
+		delete(a.fenetres, ip)
 	}
+}
+
+// oublierEssais : tous les essais comptés sous cette clé.
+func (a *acces) oublierEssais(cle string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.echecs, cle)
+	delete(a.fenetres, cle)
 }
 
 // ralenti : ce nom a dépassé le seuil des essais ratés.
@@ -307,7 +338,7 @@ func ouvert(r *http.Request) bool {
 	if !strings.HasPrefix(chemin, "/api/") && !strings.HasPrefix(chemin, "/medias/") {
 		return r.Method == http.MethodGet || r.Method == http.MethodHead
 	}
-	return (r.Method == http.MethodGet && chemin == "/api/acces") || (r.Method == http.MethodPost && chemin == "/api/acces/connexion")
+	return (r.Method == http.MethodGet && chemin == "/api/acces") || (r.Method == http.MethodPost && (chemin == "/api/acces/connexion" || chemin == routeSecondFacteur || chemin == routeSecondFacteur+"/defi"))
 }
 
 // surPlace réserve à l'ordinateur du MJ les réglages qui gardent la porte : le mot de passe,

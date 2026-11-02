@@ -30,7 +30,7 @@ const (
 // pageAdmin : les fichiers de la page d'administration, que l'application de bureau ne sert pas.
 func pageAdmin(chemin string) bool {
 	chemin = path.Clean(chemin)
-	return chemin == "/admin.html" || chemin == "/js/admin.js"
+	return chemin == "/admin.html" || chemin == "/js/admin.js" || chemin == "/js/views/secondfacteur.js"
 }
 
 // DossierArchives : les fichiers des univers archivés, hors du dossier ouvert au démarrage.
@@ -61,6 +61,7 @@ func (a *Application) routesAdmin() *http.ServeMux {
 	m.HandleFunc("POST /api/admin/comptes", a.adminCreerCompte)
 	m.HandleFunc("PATCH /api/admin/comptes/{nom}", a.adminModifierCompte)
 	m.HandleFunc("DELETE /api/admin/comptes/{nom}", a.adminSupprimerCompte)
+	m.HandleFunc("POST /api/admin/comptes/{nom}/second-facteur/reinitialiser", a.adminReinitialiserSecondFacteur)
 	return m
 }
 
@@ -425,8 +426,12 @@ func vueAdmin(c comptes.Compte) map[string]any {
 	for u, role := range c.Roles {
 		roles[u] = role
 	}
-	return map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "roles": roles,
+	v := map[string]any{"nom": c.Nom, "admin": c.Admin, "inactif": c.Inactif, "roles": roles,
 		"admis": append([]string{}, c.Admis...), "jetons": len(c.Jetons), "cree": c.Cree}
+	if c.Admin {
+		v["second_facteur"] = c.AFacteur()
+	}
+	return v
 }
 
 func (a *Application) adminComptes(w http.ResponseWriter, r *http.Request) {
@@ -437,16 +442,39 @@ func (a *Application) adminComptes(w http.ResponseWriter, r *http.Request) {
 	repondre(w, 200, out)
 }
 
-// adminCreerCompte : {"nom", "mdp", "admin"?}.
+// confirmerAdmin : les actions qui donnent la main sur un compte administrateur demandent le mot de passe
+// et un second facteur de celui qui les fait. Sinon, une session volée se créerait un administrateur, ou
+// reprendrait celui d'un autre, et le second facteur ne servirait à rien.
+func (a *Application) confirmerAdmin(w http.ResponseWriter, r *http.Request, conf *confirmation) bool {
+	c, _ := compteDe(r)
+	return a.opt.acces.confirmer(w, r, c, conf)
+}
+
+// adminCreerCompte : {"nom", "mdp", "admin"?, "confirmation"?}. Créer un administrateur se confirme.
 func (a *Application) adminCreerCompte(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Nom   string `json:"nom"`
-		Mdp   string `json:"mdp"`
-		Admin bool   `json:"admin"`
+		Nom          string        `json:"nom"`
+		Mdp          string        `json:"mdp"`
+		Admin        bool          `json:"admin"`
+		Confirmation *confirmation `json:"confirmation"`
 	}
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
 		return
+	}
+	if in.Admin {
+		// refusé avant de consommer un code : un nom ou un mot de passe qu'on sait déjà refuser
+		if _, pris := a.opt.Comptes.Lire(in.Nom); pris {
+			erreurCompte(w, comptes.ErrExiste)
+			return
+		}
+		if err := comptes.MdpAcceptable(comptes.Normaliser(in.Nom), in.Mdp, true); err != nil {
+			erreurCompte(w, err)
+			return
+		}
+		if !a.confirmerAdmin(w, r, in.Confirmation) {
+			return
+		}
 	}
 	c, err := a.opt.Comptes.Creer(in.Nom, in.Mdp, in.Admin)
 	if err != nil {
@@ -458,15 +486,17 @@ func (a *Application) adminCreerCompte(w http.ResponseWriter, r *http.Request) {
 }
 
 // adminModifierCompte : {"mdp"?, "admin"?, "inactif"?, "roles"?: {"<univers>": "mj"|"auditeur"|""},
-// "admis"?: {"<univers>": true|false}}. L'administrateur donne les rôles MJ et auditeur ; pour un
-// joueur, il l'admet dans un univers, et c'est le MJ qui l'y joint. Ne plus l'admettre l'en retire.
+// "admis"?: {"<univers>": true|false}, "confirmation"?}. L'administrateur donne les rôles MJ et auditeur ;
+// pour un joueur, il l'admet dans un univers, et c'est le MJ qui l'y joint. Ne plus l'admettre l'en retire.
+// Faire d'un compte un administrateur, ou changer le mot de passe d'un administrateur, se confirme.
 func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request) {
 	var in struct {
-		Mdp     *string           `json:"mdp"`
-		Admin   *bool             `json:"admin"`
-		Inactif *bool             `json:"inactif"`
-		Roles   map[string]string `json:"roles"`
-		Admis   map[string]bool   `json:"admis"`
+		Mdp          *string           `json:"mdp"`
+		Admin        *bool             `json:"admin"`
+		Inactif      *bool             `json:"inactif"`
+		Roles        map[string]string `json:"roles"`
+		Admis        map[string]bool   `json:"admis"`
+		Confirmation *confirmation     `json:"confirmation"`
 	}
 	if err := lireJSON(r, &in); err != nil {
 		erreurStore(w, err)
@@ -508,6 +538,14 @@ func (a *Application) adminModifierCompte(w http.ResponseWriter, r *http.Request
 		if err := comptes.MdpAcceptable(comptes.Normaliser(nom), *in.Mdp, admin); err != nil {
 			erreurCompte(w, err)
 			return
+		}
+	}
+	if cible, ok := a.opt.Comptes.Lire(nom); ok {
+		promotion := in.Admin != nil && *in.Admin && !cible.Admin
+		if promotion || (in.Mdp != nil && (cible.Admin || (in.Admin != nil && *in.Admin))) {
+			if !a.confirmerAdmin(w, r, in.Confirmation) {
+				return
+			}
 		}
 	}
 	c, err := a.opt.Comptes.Modifier(nom, func(x *comptes.Compte) error {
@@ -555,12 +593,60 @@ func indexDe(l []string, v string) int {
 	return -1
 }
 
+// adminSupprimerCompte : supprimer un administrateur se confirme ({"confirmation"}).
 func (a *Application) adminSupprimerCompte(w http.ResponseWriter, r *http.Request) {
 	nom := comptes.Normaliser(r.PathValue("nom"))
+	if cible, ok := a.opt.Comptes.Lire(nom); ok && cible.Admin {
+		var in struct {
+			Confirmation *confirmation `json:"confirmation"`
+		}
+		_ = lireJSON(r, &in) // sans corps lisible : pas de confirmation, donc un refus
+		if !a.confirmerAdmin(w, r, in.Confirmation) {
+			return
+		}
+	}
 	if err := a.opt.Comptes.Supprimer(nom); err != nil {
 		erreurCompte(w, err)
 		return
 	}
 	log.Printf("compte « %s » supprimé par %s", nom, auteurDe(r))
 	repondre(w, 200, map[string]any{"supprime": true})
+}
+
+// adminReinitialiserSecondFacteur : {"confirmation"} retire tous les facteurs d'un autre administrateur,
+// qui repasse par l'enrôlement ; ses sessions tombent. Jamais les siens : un administrateur qui a tout
+// perdu passe par un autre, ou par la commande locale.
+func (a *Application) adminReinitialiserSecondFacteur(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Confirmation *confirmation `json:"confirmation"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	nom := comptes.Normaliser(r.PathValue("nom"))
+	if nom == auteurDe(r) {
+		erreur(w, 403, "Vous ne pouvez pas réinitialiser votre propre second facteur : un autre administrateur le fera, ou la commande locale du serveur (README).")
+		return
+	}
+	cible, ok := a.opt.Comptes.Lire(nom)
+	if !ok {
+		erreurCompte(w, comptes.ErrInconnu)
+		return
+	}
+	if !cible.Admin {
+		erreurCompte(w, comptes.ErrPasAdmin)
+		return
+	}
+	if !a.confirmerAdmin(w, r, in.Confirmation) {
+		return
+	}
+	if err := a.opt.Comptes.ReinitialiserSecondFacteur(nom); err != nil {
+		erreurCompte(w, err)
+		return
+	}
+	a.opt.acces.noter(r, "second_facteur_reinitialise", nom, "par="+strconv.Quote(auteurDe(r)))
+	log.Printf("second facteur de « %s » réinitialisé par %s", nom, auteurDe(r))
+	c, _ := a.opt.Comptes.Lire(nom)
+	repondre(w, 200, vueAdmin(c))
 }

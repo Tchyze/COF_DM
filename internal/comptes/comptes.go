@@ -86,6 +86,10 @@ type Compte struct {
 	// DoitChanger : son mot de passe est passé par les journaux ; il n'a accès à rien d'autre qu'à son
 	// compte tant qu'il ne l'a pas changé.
 	DoitChanger bool `json:"doit_changer,omitempty"`
+	// SecondFacteur : celui d'un administrateur (secondfacteur.go). Il reste s'il quitte l'administration
+	// et revaut s'il y revient : l'effacer là serait une réinitialisation sans trace.
+	SecondFacteur *SecondFacteur `json:"second_facteur,omitempty"`
+	ReinitLocale  float64        `json:"reinit_locale,omitempty"` // voir ReinitialiserLocalement
 }
 
 // Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
@@ -107,6 +111,9 @@ type Registre struct {
 	mu     sync.Mutex
 	m      map[string]*Compte
 	leurre []byte // sel du calcul fait pour un compte inconnu, pour répondre dans le même temps
+	cle    []byte // clé des secrets du second facteur, une fois lue
+	// horloge : l'heure des codes à usage unique, à la main dans les tests (nil : l'heure du système)
+	horloge func() time.Time
 }
 
 // Ouvrir lit le fichier des comptes ; absent, le registre est vide.
@@ -201,6 +208,7 @@ func copie(c *Compte) Compte {
 	}
 	x.Admis = append([]string(nil), c.Admis...)
 	x.Jetons = append([]Jeton(nil), c.Jetons...)
+	x.SecondFacteur = copieSecondFacteur(c.SecondFacteur)
 	return x
 }
 

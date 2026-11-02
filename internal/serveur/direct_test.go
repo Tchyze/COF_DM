@@ -300,8 +300,10 @@ func TestEcranNeBloquePas(t *testing.T) {
 	if _, err := d.a.opt.Comptes.Creer("chef", "mot-de-passe-fehc", true); err != nil {
 		t.Fatal(err)
 	}
-	chef := &navigateur{t: t, a: d.a, cookies: map[string]*http.Cookie{}}
+	doterDeFacteur(t, d.a.opt.Comptes, "chef")
+	chef := &navigateur{t: t, a: d.a, cookies: map[string]*http.Cookie{}, reg: d.a.opt.Comptes}
 	chef.faire("POST", "/api/acces/connexion", map[string]any{"nom": "chef", "mdp": "mot-de-passe-fehc"})
+	chef.finirConnexionAdmin("chef")
 	sous := func(quoi string, f func()) {
 		t.Helper()
 		fini := make(chan struct{})

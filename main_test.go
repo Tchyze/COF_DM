@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -305,5 +307,68 @@ func TestPremierAdmin(t *testing.T) {
 	}
 	if err := premierAdmin(r); err == nil || !r.Vide() {
 		t.Fatalf("secret absent : %v", err)
+	}
+}
+
+// La commande locale : elle agit sur un serveur arrêté seulement, sur un administrateur, et laisse sa note.
+func TestCommandeReinitialiserSecondFacteur(t *testing.T) {
+	comptes.CoutReduitPourTests()
+	dossier := t.TempDir()
+	if err := reinitialiserSecondFacteur(dossier, "chef"); err == nil {
+		t.Fatal("sans fichier de comptes")
+	}
+	chemin := filepath.Join(dossier, "comptes.json")
+	reg, err := comptes.Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Creer("chef", "une-phrase-bien-longue", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Creer("meneur", "une-phrase-bien-longue", false); err != nil {
+		t.Fatal(err)
+	}
+	secret := comptes.NouveauSecretTOTP()
+	if _, err := reg.ActiverTOTP("chef", secret, comptes.CodeTOTP(secret, time.Now())); err != nil {
+		t.Fatal(err)
+	}
+	// le serveur tourne : refus, et rien ne change
+	if runtime.GOOS != "windows" {
+		liberer, err := garderVerrouComptes(dossier)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := reinitialiserSecondFacteur(dossier, "chef"); err == nil || !strings.Contains(err.Error(), "arrêtez-le") {
+			t.Fatalf("serveur en marche : %v", err)
+		}
+		if _, err := comptes.Verrouiller(dossier); !errors.Is(err, comptes.ErrOccupe) {
+			t.Fatalf("second serveur sur le même dossier : %v", err)
+		}
+		if lu, _ := comptes.Ouvrir(chemin); func() bool { c, _ := lu.Lire("chef"); return !c.AFacteur() }() {
+			t.Fatal("facteur retiré malgré le serveur en marche")
+		}
+		liberer()
+	}
+	if err := reinitialiserSecondFacteur(dossier, "meneur"); !errors.Is(err, comptes.ErrPasAdmin) {
+		t.Fatalf("un compte qui n'est pas administrateur : %v", err)
+	}
+	if err := reinitialiserSecondFacteur(dossier, "inconnu"); !errors.Is(err, comptes.ErrInconnu) {
+		t.Fatalf("compte inconnu : %v", err)
+	}
+	if err := reinitialiserSecondFacteur(dossier, "chef"); err != nil {
+		t.Fatal(err)
+	}
+	lu, err := comptes.Ouvrir(chemin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c, _ := lu.Lire("chef"); c.AFacteur() {
+		t.Fatal("facteur encore là")
+	}
+	if l := lu.PrendreReinitLocales(); len(l) != 1 || l[0] != "chef" {
+		t.Fatalf("note pour le journal : %v", l)
+	}
+	if !strings.Contains(ligneReinitLocale("chef"), `securite evenement=second_facteur_reinitialise_local nom="chef" ip=local`) {
+		t.Fatal(ligneReinitLocale("chef"))
 	}
 }

@@ -65,10 +65,15 @@ func boucleLocale(r *http.Request) bool {
 }
 
 // sessionCompte : jeton de session d'un compte, « échéance.identifiant.nom.version.graine.signature ».
-func (a *acces) sessionCompte(c comptes.Compte, exp time.Time) string {
+// Celle d'un administrateur porte aussi son niveau avant la signature (secondfacteur.go).
+func (a *acces) sessionCompte(c comptes.Compte, niveau string, exp time.Time) string {
 	id := make([]byte, 9)
 	_, _ = rand.Read(id)
-	return a.signer(strings.Join([]string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version), c.Graine}, "."))
+	champs := []string{strconv.FormatInt(exp.Unix(), 10), base64.RawURLEncoding.EncodeToString(id), c.Nom, strconv.Itoa(c.Version), c.Graine}
+	if c.Admin {
+		champs = append(champs, niveau)
+	}
+	return a.signer(strings.Join(champs, "."))
 }
 
 // dureeDe : la durée d'une session de ce compte.
@@ -80,25 +85,39 @@ func dureeDe(c comptes.Compte) time.Duration {
 }
 
 // compteDeSession : le compte actif dont c'est la session, tant que son mot de passe n'a pas changé
-// et que c'est bien ce compte, pas un autre recréé sous le même nom.
-func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, bool) {
+// et que c'est bien ce compte, pas un autre recréé sous le même nom. Le niveau est celui d'une session
+// d'administrateur : une session sans niveau (ouverte avant que le compte le devienne, ou d'avant le
+// second facteur) ne lui ouvre rien, pas plus qu'un niveau que son compte ne justifie plus.
+func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, string, bool) {
 	t, err := r.Cookie(cookieMJ)
 	if err != nil {
-		return comptes.Compte{}, false
+		return comptes.Compte{}, "", false
 	}
 	id, fin, plus, ok := a.lireSession(t.Value)
-	if !ok || len(plus) != 3 || !a.ouverte(id) {
-		return comptes.Compte{}, false
+	if !ok || len(plus) < 3 || len(plus) > 4 || !a.ouverte(id) {
+		return comptes.Compte{}, "", false
 	}
 	c, ok := a.comptes.Lire(plus[0])
 	if !ok || c.Inactif || strconv.Itoa(c.Version) != plus[1] || c.Graine == "" || c.Graine != plus[2] {
-		return comptes.Compte{}, false
+		return comptes.Compte{}, "", false
+	}
+	niveau, duree := "", dureeDe(c)
+	if len(plus) == 4 {
+		niveau = plus[3]
+	}
+	switch {
+	case !c.Admin && niveau != "", c.Admin && niveau == "":
+		return comptes.Compte{}, "", false
+	case c.Admin && niveau == niveauEnrolement && !c.AFacteur():
+		duree = dureeEnrolement
+	case c.Admin && (niveau != niveauComplet || !c.AFacteur()):
+		return comptes.Compte{}, "", false
 	}
 	// une session plus longue que permis : ouverte avant que le compte devienne administrateur
-	if time.Until(time.Unix(fin, 0)) > dureeDe(c)+time.Minute {
-		return comptes.Compte{}, false
+	if time.Until(time.Unix(fin, 0)) > duree+time.Minute {
+		return comptes.Compte{}, "", false
 	}
-	return c, true
+	return c, niveau, true
 }
 
 // entrer identifie qui fait la requête, en mode serveur. Elle renvoie la requête marquée du compte,
@@ -107,7 +126,7 @@ func (a *acces) compteDeSession(r *http.Request) (comptes.Compte, bool) {
 func (a *acces) entrer(w http.ResponseWriter, r *http.Request) (*http.Request, bool) {
 	ctx := context.WithValue(r.Context(), cleServeur{}, true)
 	var c comptes.Compte
-	connu, jeton := false, false
+	niveau, connu, jeton := "", false, false
 	if j := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); j != r.Header.Get("Authorization") {
 		if c, connu = a.comptes.ParJeton(j); !connu {
 			erreur(w, 401, "Jeton d'API invalide.")
@@ -116,7 +135,7 @@ func (a *acces) entrer(w http.ResponseWriter, r *http.Request) (*http.Request, b
 		jeton = true
 		ctx = context.WithValue(ctx, cleJeton{}, true)
 	} else {
-		c, connu = a.compteDeSession(r)
+		c, niveau, connu = a.compteDeSession(r)
 	}
 	// sans jeton, les écritures portent l'en-tête qu'une page d'un autre site ne peut pas envoyer
 	if !jeton && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-COF-DM") != "1" {
@@ -134,17 +153,23 @@ func (a *acces) entrer(w http.ResponseWriter, r *http.Request) (*http.Request, b
 		repondre(w, 403, map[string]any{"detail": "Changez d'abord le mot de passe initial de ce compte (Mon compte).", "changer_mdp": true})
 		return nil, false
 	}
+	if niveau == niveauEnrolement && !ouvertEnEnrolement(r) {
+		repondre(w, 403, map[string]any{"detail": "Enregistrez d'abord un second facteur (Mon compte).", "second_facteur_requis": true})
+		return nil, false
+	}
 	ctx = context.WithValue(ctx, cleCompte{}, c)
+	ctx = context.WithValue(ctx, cleNiveau{}, niveau)
 	return r.WithContext(context.WithValue(ctx, cleContexte{}, c.Nom)), true
 }
 
 // mdpAChanger : la route est fermée à un compte qui doit changer son mot de passe. Il garde son compte
-// (pour en sortir), la santé du serveur et les pages, qui ne portent aucune donnée.
+// (pour en sortir), la santé du serveur et les pages, qui ne portent aucune donnée. Le second facteur
+// vient après : un secret ne s'enregistre pas derrière un mot de passe passé par les journaux.
 func mdpAChanger(chemin string) bool {
 	if !strings.HasPrefix(chemin, "/api/") && !strings.HasPrefix(chemin, "/medias/") {
 		return false
 	}
-	return !proprePerso(chemin) && chemin != "/api/sante"
+	return strings.HasPrefix(chemin, prefixeSecondFacteur) || (!proprePerso(chemin) && chemin != "/api/sante")
 }
 
 // proprePerso : ce qui touche au compte lui-même, ouvert à tout compte quel que soit son rôle.
@@ -186,6 +211,7 @@ func (s *Serveur) servirComptes(w http.ResponseWriter, r *http.Request) {
 func (s *Serveur) routesComptes() {
 	m := s.mux
 	s.routesJoueur()
+	s.routesSecondFacteur()
 	m.HandleFunc("GET /api/acces", s.etatCompte)
 	m.HandleFunc("POST /api/acces/connexion", s.connexionCompte)
 	m.HandleFunc("GET /api/compte", s.monCompte)
@@ -213,7 +239,9 @@ func (s *Serveur) vueCompte(c comptes.Compte) map[string]any {
 	if c.DoitChanger {
 		out["doit_changer"] = true
 	}
-	if !c.Admin {
+	if c.Admin {
+		out["second_facteur"] = s.acces.vueSecondFacteur(c)
+	} else {
 		out["role"], out["roles"], out["pj"] = c.Role(s.store.ID()), c.Roles, c.Persos[s.store.ID()]
 	}
 	return out
@@ -223,9 +251,9 @@ func erreurCompte(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, comptes.ErrInconnu):
 		erreur(w, 404, "Compte ou jeton introuvable.")
-	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis):
+	case errors.Is(err, comptes.ErrExiste), errors.Is(err, comptes.ErrDernierAdmin), errors.Is(err, comptes.ErrAdmin), errors.Is(err, comptes.ErrNonAdmis), errors.Is(err, comptes.ErrDernierFacteur), errors.Is(err, comptes.ErrSansFacteur), errors.Is(err, comptes.ErrPasAdmin), errors.Is(err, comptes.ErrCleConnue):
 		erreur(w, 409, majuscule(err.Error())+".")
-	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrMdpAdmin), errors.Is(err, comptes.ErrMdpFaible), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons):
+	case errors.Is(err, comptes.ErrNom), errors.Is(err, comptes.ErrMdp), errors.Is(err, comptes.ErrMdpAdmin), errors.Is(err, comptes.ErrMdpFaible), errors.Is(err, comptes.ErrRole), errors.Is(err, comptes.ErrTropDeJetons), errors.Is(err, comptes.ErrNomCle), errors.Is(err, comptes.ErrTropDeCles):
 		erreur(w, 422, majuscule(err.Error())+".")
 	default:
 		erreurStore(w, err)
@@ -296,9 +324,13 @@ func (s *Serveur) connexionCompte(w http.ResponseWriter, r *http.Request) {
 	s.acces.rendreEssai(parIP)
 	s.acces.rendreEssai(parCouple)
 	s.acces.rendreEssai(parNom)
+	if c.Admin {
+		s.suiteDuMdp(w, r, c)
+		return
+	}
 	s.acces.noter(r, "connexion_ok", c.Nom)
 	exp := time.Now().Add(dureeDe(c))
-	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
+	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, "", exp), exp))
 	repondre(w, 200, map[string]any{"mj": c.Role(s.store.ID()) != "", "compte": s.vueCompte(c)})
 }
 
@@ -364,8 +396,12 @@ func (s *Serveur) monMdp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c, _ = s.acces.comptes.Lire(c.Nom)
+	// la nouvelle session garde le niveau de l'ancienne : changer de mot de passe ne donne pas le second facteur
 	exp := time.Now().Add(dureeDe(c))
-	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, exp), exp))
+	if niveauSession(r) == niveauEnrolement {
+		exp = time.Now().Add(dureeEnrolement)
+	}
+	http.SetCookie(w, s.acces.temoin(r, s.acces.sessionCompte(c, niveauSession(r), exp), exp))
 	s.noterCompte(c, "mot de passe changé")
 	s.acces.noter(r, "mdp_change", c.Nom, "jetons_retires="+strconv.Itoa(retires))
 	repondre(w, 200, map[string]any{"ok": true, "jetons_retires": retires})

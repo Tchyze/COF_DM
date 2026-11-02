@@ -17,6 +17,8 @@ services:
     environment:
       # pour que le mot de passe initial ne passe pas par les journaux : un secret Docker (ci-dessous)
       # COF_DM_ADMIN_MDP_FICHIER: /run/secrets/cof_dm_admin
+      # clés de sécurité des administrateurs : l'adresse publique du serveur (README, « Double authentification »)
+      # COF_DM_ORIGINE: https://jdr.exemple.org
       # les imports passent par des fichiers temporaires, trop gros pour le /tmp en mémoire
       TMPDIR: /data/tmp
     volumes:

@@ -21,6 +21,7 @@ import * as preparation from "./views/preparation.js";
 import * as apres from "./views/apres.js";
 import { initFichier } from "./fichier.js";
 import { initEtatLien } from "./connexion.js";
+import { clesPossibles, prouverCle, messageCle } from "./webauthn.js";
 import { initBadgeMaj } from "./majour.js";
 import { initDes } from "./des.js";
 
@@ -340,9 +341,56 @@ function ecranCompte(acces) {
   $("#nom").focus();
   $("#connexion").onsubmit = async e => {
     e.preventDefault();
-    try { await api("POST", "/api/acces/connexion", { nom: $("#nom").value, mdp: $("#mdp").value }); location.reload(); }
+    try {
+      const r = await api("POST", "/api/acces/connexion", { nom: $("#nom").value, mdp: $("#mdp").value });
+      if (r.etape === "second_facteur") ecranSecondFacteur(marque, r.facteurs);
+      else location.reload();
+    }
     catch (err) { toast(err.message, true); $("#mdp").select(); }
   };
+}
+
+/** Un administrateur dont le mot de passe est bon : sa clé, son application, ou un code de secours. */
+function ecranSecondFacteur(marque, facteurs) {
+  const modes = facteurs.filter(f => f !== "cle" || clesPossibles());
+  const noms = { cle: "Utiliser ma clé de sécurité", totp: "Utiliser mon application", secours: "Utiliser un code de secours" };
+  let mode = modes[0] || "secours";
+  const envoyer = async corps => {
+    await api("POST", "/api/acces/second-facteur", corps);
+    location.reload();
+  };
+  const refus = err => {
+    toast(messageCle(err), true);
+    if (err.data?.reprendre) setTimeout(() => location.reload(), 1500);
+  };
+  const dessiner = () => {
+    const champ = mode === "secours"
+      ? `<label class="champ"><span>Code de secours</span><input id="code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX" required></label>`
+      : `<label class="champ"><span>Code de votre application d'authentification</span><input id="code" inputmode="numeric" autocomplete="one-time-code" maxlength="7" placeholder="123456" required></label>`;
+    $("#vue").innerHTML = `<section class="panneau connexion">${marque}
+      ${mode === "cle" ? `<p class="hint">Votre mot de passe est bon. Branchez votre clé de sécurité, puis touchez-la quand elle clignote.</p>
+        <div><button class="primary" id="cle">Utiliser ma clé</button></div>`
+      : `<form id="connexion" class="colonne" style="gap:12px">${champ}<div><button class="primary" type="submit">Entrer</button></div></form>`}
+      <p class="hint">${modes.filter(f => f !== mode).map(f => `<button class="ghost petit" data-mode="${f}">${noms[f]}</button>`).join(" ")}</p>
+    </section>`;
+    $$("[data-mode]").forEach(b => b.onclick = () => { mode = b.dataset.mode; dessiner(); });
+    if (mode === "cle") {
+      $("#cle").onclick = async () => {
+        try {
+          const o = await api("POST", "/api/acces/second-facteur/defi");
+          await envoyer({ facteur: "cle", reponse: await prouverCle(o) });
+        } catch (err) { refus(err); }
+      };
+      return;
+    }
+    $("#code").focus();
+    $("#connexion").onsubmit = async e => {
+      e.preventDefault();
+      try { await envoyer({ facteur: mode, code: $("#code").value }); }
+      catch (err) { refus(err); $("#code")?.select(); }
+    };
+  };
+  dessiner();
 }
 
 (async () => {

@@ -147,8 +147,15 @@ var ErrCompteAdmin = errors.New("compte administrateur")
 func Connecter(base, nom, mdp, poste string) (jeton string, univers []Univers, err error) {
 	jar, _ := cookiejar.New(nil)
 	c := &Client{Base: base, http: &http.Client{Timeout: time.Minute, Jar: jar}}
-	if err := c.appel("POST", "/api/acces/connexion", map[string]string{"nom": nom, "mdp": mdp}, nil); err != nil {
+	var connexion struct {
+		Etape string `json:"etape"` // un administrateur : second facteur ou enrôlement, jamais d'ici
+	}
+	if err := c.appel("POST", "/api/acces/connexion", map[string]string{"nom": nom, "mdp": mdp}, &connexion); err != nil {
 		return "", nil, err
+	}
+	if connexion.Etape != "" {
+		_ = c.appel("POST", "/api/acces/deconnexion", nil, nil)
+		return "", nil, ErrCompteAdmin
 	}
 	libelle := LibelleJeton(poste)
 	var compte struct {

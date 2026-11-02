@@ -238,13 +238,33 @@ Lot 1, avant la mise en ligne :
 
 **Lot 3, durcissement.**
 
-- **Comptes (F-13, F-14)** : empreinte versionnée à 600 000 itérations, migrée à la connexion réussie ; session d'administrateur de 12 heures ; son propre mot de passe passe par « Mon compte ». Le TOTP reste une proposition, non codée.
+- **Comptes (F-13, F-14)** : empreinte versionnée à 600 000 itérations, migrée à la connexion réussie ; session d'administrateur de 12 heures ; son propre mot de passe passe par « Mon compte ». Le TOTP : voir « Double authentification » ci-dessous.
 - **En-têtes (F-17, F-20)** : images en cache privé, JSON en `no-store`, `Permissions-Policy`.
 - **Dépôt (F-21, F-22)** : Dependabot, govulncheck, gitleaks et analyse de l'image en CI ; secrets exclus de Git et de l'image.
 - **Serveur (F-23, F-24, F-26)** : pot et documents suivent le partage du PJ ; erreurs de fichiers au journal ; dossiers non listés.
 - **Documentation (F-27)** : ce que voient l'administrateur et l'hébergeur, conservation des sauvegardes.
 - **Vérifications** : V-01, charges dans les champs des joueurs, sans injection dans les écrans parcourus ; V-02, aucune faille prouvée, fichiers reçus durcis et cible de fuzzing `FuzzFichierRecu`.
 - **F-25** : historique non réécrit, conformément à la consigne. **F-12** : changement du workflow préparé, pas appliqué, en attente des réglages GitHub.
+
+### Double authentification des administrateurs (novembre 2026, branche `security/mfa-admin`, empilée sur `security/audit-fixes`)
+
+**Lot 1, TOTP** :
+
+- **Connexion en deux étapes** : le mot de passe d'un administrateur ne donne qu'une preuve de cinq minutes (`secondfacteur.go`), ou une session d'enrôlement de trente minutes s'il n'a aucun facteur. Les autres comptes ne changent pas.
+- **Session d'administrateur à niveau** : les sessions d'avant et celles d'un compte promu ne valent plus rien. **Les administrateurs se reconnectent une fois.**
+- **TOTP** (RFC 6238, bibliothèque standard), secret chiffré avec une clé rangée à côté (`comptes.cle`), aucun code réutilisable. Dix codes de secours, sous forme d'empreinte.
+- **Limites** : sans la preuve, aucun compteur n'est atteint ; par compte, seul le TOTP s'arrête.
+- **Actions confirmées** par le mot de passe et un second facteur : facteurs, codes de secours, création et promotion d'un administrateur, mot de passe, suppression et réinitialisation d'un autre.
+- **Réinitialisation** par un autre administrateur, ou commande locale `-reinitialiser-second-facteur`, serveur arrêté (verrou de fichier).
+- **Essayé** : suite de tests et `-race`, écrans dans Chrome à 1300 et 390 px, HTTPS derrière un vrai NPM sur un banc jetable (par l'API, pas par les écrans), commande locale dans Docker.
+
+**Lot 2, WebAuthn et clés de sécurité** :
+
+- **Clés FIDO2** par `go-webauthn/webauthn` (`webauthn.go`), dépendance acceptée par le MJ. Toute clé FIDO2, sans attestation. Plusieurs clés, nommées et retirables, une deuxième conseillée à l'écran.
+- **Configuration** : `-origine` (`COF_DM_ORIGINE`), et `-rp-id` (`COF_DM_RP_ID`) pour lier les clés à un domaine parent ; jamais d'en-tête. Sans `-origine`, le TOTP reste seul.
+- **Vérifications** : origine, domaine, signature, présence, défi à usage unique de deux minutes, compteur incohérent refusé (la bibliothèque ne fait que le signaler). Une clé peut aussi confirmer une action.
+- **Essayé** : authentificateur logiciel dans les tests, authentificateur virtuel du CDP dans Chrome à 1300 et 390 px ; en HTTPS derrière un vrai NPM sur un banc jetable, certificat de test accepté par une option de Chrome : clé, TOTP et WebSocket d'un joueur. 
+- **Essai du MJ** : une vraie clé et une vraie application d'authentification, sous Windows dans Chrome, sur une instance en `localhost` : enregistrement, connexion, un simple toucher sans PIN. Pas encore essayé en vrai : l'adresse HTTPS réelle, les autres navigateurs, fail2ban, Portainer.
 
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 

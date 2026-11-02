@@ -124,7 +124,7 @@ func TestAdminReserve(t *testing.T) {
 		t.Fatalf("univers créé par un MJ : %d", c)
 	}
 	// la page d'administration : sur le serveur seulement, ni ses routes ni ses fichiers sur le bureau
-	page := fstest.MapFS{"index.html": {Data: []byte("<html>")}, "admin.html": {Data: []byte("<html>")}, "js/admin.js": {Data: []byte("//")}}
+	page := fstest.MapFS{"index.html": {Data: []byte("<html>")}, "admin.html": {Data: []byte("<html>")}, "js/admin.js": {Data: []byte("//")}, "js/views/secondfacteur.js": {Data: []byte("//")}}
 	srv := NouvelleApplication(Options{Version: "test", DossierDon: t.TempDir(), Port: 8100, Comptes: reg, Frontend: page})
 	if err := srv.Demarrer(""); err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestAdminReserve(t *testing.T) {
 	if c, _ := b.local("GET", "/api/admin/univers", nil); c != 404 {
 		t.Fatalf("administration sur le bureau : %d", c)
 	}
-	for _, u := range []string{"/admin.html", "/js/admin.js"} {
+	for _, u := range []string{"/admin.html", "/js/admin.js", "/js/views/secondfacteur.js"} {
 		if c, _ := b.local("GET", u, nil); c != 404 {
 			t.Fatalf("GET %s sur le bureau : %d", u, c)
 		}
@@ -271,9 +271,13 @@ func TestAdminUnivers(t *testing.T) {
 // reconnecter : une nouvelle session sur l'application a.
 func reconnecter(t *testing.T, a *Application, nom string) *navigateur {
 	t.Helper()
-	n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
-	if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}); c != 200 {
+	n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}, reg: a.opt.Comptes}
+	c, v := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)})
+	if c != 200 {
 		t.Fatalf("connexion de %s : %d", nom, c)
+	}
+	if v["etape"] != nil {
+		n.finirConnexionAdmin(nom)
 	}
 	return n
 }

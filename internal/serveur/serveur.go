@@ -55,6 +55,8 @@ type Options struct {
 	// Relie : l'application de bureau est reliée à un serveur ; elle ne répond alors plus au réseau
 	// local (ni tablette, ni page des joueurs), même si elle y écoute. nil : jamais reliée.
 	Relie func() bool
+	// Cles : l'adresse publique du serveur, pour les clés de sécurité (mode serveur). nil : pas de clés.
+	Cles *ConfigCles
 	// Relancer : après une mise à jour, l'application ferme l'univers et relance ce programme
 	// (application de bureau seulement ; nil : pas de relance automatique).
 	Relancer func(programme string)
@@ -111,6 +113,7 @@ func Nouveau(st *store.Store, opt Options) *Serveur {
 	}
 	if s.acces = opt.acces; s.acces == nil {
 		s.acces = nouvelAcces(s.reg, opt.Comptes, opt.Proxies)
+		s.acces.cles = opt.Cles
 	}
 	s.opt.partagerVoulu()
 	s.routes()
@@ -223,7 +226,7 @@ func enTetes(w http.ResponseWriter) {
 	h.Set("X-Frame-Options", "SAMEORIGIN")
 	h.Set("X-Content-Type-Options", "nosniff")
 	h.Set("Referrer-Policy", "no-referrer")
-	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+	h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), publickey-credentials-get=(self), publickey-credentials-create=(self)")
 }
 
 func contexte(r *http.Request, auteur string) context.Context {

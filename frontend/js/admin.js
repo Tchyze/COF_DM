@@ -5,6 +5,7 @@
 import { $, $$, esc, api, toast, armer, dateHeure, dialogue, taille } from "./ui.js";
 import { panneauCompte } from "./views/comptes.js";
 import { panneauVersionServeur } from "./majour.js";
+import { panneauSecondFacteur, enrolement, confirmerAction } from "./views/secondfacteur.js";
 
 const MDP_MIN = 10;
 
@@ -136,7 +137,7 @@ async function vueComptes(el, moi) {
   const [l, univers] = await Promise.all([api("GET", "/api/admin/comptes"), api("GET", "/api/admin/univers")]);
   const nomDe = id => univers.find(u => u.id === id)?.nom || id;
   const places = c => {
-    if (c.admin) return `<span class="hint">Administrateur du serveur</span>`;
+    if (c.admin) return `<span class="hint">Administrateur du serveur</span> <span class="badge">${c.second_facteur ? "second facteur actif" : "sans second facteur"}</span>`;
     const ids = [...new Set([...Object.keys(c.roles), ...c.admis])];
     return ids.length ? ids.map(id => `<span class="badge">${esc(nomDe(id))} · ${esc(PLACES[place(c, id)]?.[0].toLowerCase() || "")}</span>`).join(" ")
       : `<span class="hint">aucun univers</span>`;
@@ -148,7 +149,7 @@ async function vueComptes(el, moi) {
         <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons ? ` <span class="hint">· ${c.jetons} jeton(s)</span>` : ""}</td>
         <td><div class="ligne" style="gap:4px">${places(c)}</div></td>
         <td><label class="adm-actif"><input type="checkbox" data-a="actif" aria-label="${esc(c.nom)} actif" ${c.inactif ? "" : "checked"}><span>actif</span></label></td>
-        <td style="text-align:right;white-space:nowrap">${c.nom === moi ? `<a class="hint" href="#/compte">Mon compte</a>` : `<button class="ghost petit" data-a="mdp">Mot de passe…</button><button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
+        <td style="text-align:right;white-space:nowrap">${c.nom === moi ? `<a class="hint" href="#/compte">Mon compte</a>` : `${c.admin && c.second_facteur ? `<button class="ghost petit" data-a="reinit">Second facteur…</button>` : ""}<button class="ghost petit" data-a="mdp">Mot de passe…</button><button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
       </tr>`).join("")}
     </tbody></table></div>
     <form id="adm-compte" class="panneau colonne" style="gap:10px">
@@ -165,15 +166,37 @@ async function vueComptes(el, moi) {
   const maj = () => vueComptes(el, moi);
   $$("tr[data-nom]", el).forEach(tr => {
     const nom = tr.dataset.nom;
+    const compte = l.find(c => c.nom === nom);
     $('[data-a="actif"]', tr).onchange = async e => {
       try { await api("PATCH", "/api/admin/comptes/" + encodeURIComponent(nom), { inactif: !e.target.checked }); toast(e.target.checked ? `${nom} est réactivé.` : `${nom} est désactivé et déconnecté.`); }
       catch (err) { toast(err.message, true); }
       maj();
     };
     const mdp = $('[data-a="mdp"]', tr); // pas sur sa propre ligne : son mot de passe se change dans « Mon compte »
-    if (mdp) mdp.onclick = () => saisirMdp(nom);
+    if (mdp) mdp.onclick = () => saisirMdp(compte);
+    const reinit = $('[data-a="reinit"]', tr);
+    if (reinit) reinit.onclick = () => confirmerAction({
+      titre: `Second facteur de ${nom}`,
+      texte: `Tous ses facteurs et ses codes de secours seront retirés, et ses sessions fermées. Son mot de passe ne change pas : à sa prochaine connexion, ${nom} en enregistrera un nouveau. Cela entre au journal.`,
+      bouton: "Réinitialiser",
+      action: async confirmation => {
+        await api("POST", `/api/admin/comptes/${encodeURIComponent(nom)}/second-facteur/reinitialiser`, { confirmation });
+        toast(`Second facteur de ${nom} réinitialisé.`);
+        maj();
+      },
+    });
     const suppr = $('[data-a="suppr"]', tr);
-    if (suppr) armer(suppr, "Confirmer", async () => {
+    if (suppr && compte.admin) suppr.onclick = () => confirmerAction({
+      titre: `Supprimer ${nom}`,
+      texte: "Ce compte administrateur sera supprimé.",
+      bouton: "Supprimer",
+      action: async confirmation => {
+        await api("DELETE", "/api/admin/comptes/" + encodeURIComponent(nom), { confirmation });
+        toast(`Compte ${nom} supprimé.`);
+        maj();
+      },
+    });
+    else if (suppr) armer(suppr, "Confirmer", async () => {
       try { await api("DELETE", "/api/admin/comptes/" + encodeURIComponent(nom)); toast(`Compte ${nom} supprimé.`); }
       catch (err) { toast(err.message, true); }
       maj();
@@ -183,7 +206,17 @@ async function vueComptes(el, moi) {
     e.preventDefault();
     const mdp = nouveauMdp($("#n-mdp", el), $("#n-mdp2", el));
     if (!mdp) return;
-    try { await api("POST", "/api/admin/comptes", { nom: $("#n-nom", el).value, mdp, admin: $("#n-admin", el).checked }); toast("Compte créé."); maj(); }
+    const nom = $("#n-nom", el).value;
+    if ($("#n-admin", el).checked) {
+      confirmerAction({
+        titre: "Créer un administrateur",
+        texte: `${nom} pourra gérer tout le serveur. À sa première connexion, il enregistrera son second facteur.`,
+        bouton: "Créer",
+        action: async confirmation => { await api("POST", "/api/admin/comptes", { nom, mdp, admin: true, confirmation }); toast("Compte créé."); maj(); },
+      });
+      return;
+    }
+    try { await api("POST", "/api/admin/comptes", { nom, mdp, admin: false }); toast("Compte créé."); maj(); }
     catch (err) { toast(err.message, true); }
   };
 }
@@ -194,7 +227,8 @@ function nouveauMdp(a, b) {
   return a.value;
 }
 
-function saisirMdp(nom) {
+function saisirMdp(compte) {
+  const nom = compte.nom;
   const { voile, fermer } = dialogue(`Mot de passe de ${nom}`, `
     <form class="colonne" style="gap:10px">
       <label class="champ"><span>Nouveau mot de passe</span><input type="password" id="m-mdp" autocomplete="new-password" placeholder="${MDP_MIN} caractères au moins" required></label>
@@ -208,6 +242,16 @@ function saisirMdp(nom) {
     e.preventDefault();
     const mdp = nouveauMdp($("#m-mdp", voile), $("#m-mdp2", voile));
     if (!mdp) return;
+    if (compte.admin) { // le mot de passe d'un administrateur se confirme : le dialogue suivant prend le relais
+      fermer();
+      confirmerAction({
+        titre: `Mot de passe de ${nom}`,
+        texte: "Changer le mot de passe d'un autre administrateur demande votre confirmation. Son second facteur ne change pas.",
+        bouton: "Changer",
+        action: async confirmation => { await api("PATCH", "/api/admin/comptes/" + encodeURIComponent(nom), { mdp, confirmation }); toast(`Mot de passe de ${nom} changé.`); },
+      });
+      return;
+    }
     try { await api("PATCH", "/api/admin/comptes/" + encodeURIComponent(nom), { mdp }); toast(`Mot de passe de ${nom} changé.`); fermer(); }
     catch (err) { toast(err.message, true); }
   };
@@ -223,8 +267,8 @@ async function route(moi) {
   try {
     if (vue === "comptes") await vueComptes(el, moi);
     else if (vue === "serveur" || vue === "compte") {
-      el.innerHTML = `<div class="panneau" id="adm-panneau"></div>`;
-      await (vue === "serveur" ? panneauVersionServeur($("#adm-panneau")) : panneauCompte($("#adm-panneau"), { jetons: false }));
+      el.innerHTML = `<div class="panneau" id="adm-panneau"></div>${vue === "compte" ? `<div class="panneau" id="adm-facteurs" style="margin-top:12px"></div>` : ""}`;
+      await (vue === "serveur" ? panneauVersionServeur($("#adm-panneau")) : Promise.all([panneauCompte($("#adm-panneau"), { jetons: false }), panneauSecondFacteur($("#adm-facteurs"))]));
     } else await vueUnivers(el);
   } catch (e) { el.innerHTML = `<div class="erreur">${esc(e.message)}</div>`; }
 }
@@ -240,6 +284,11 @@ async function route(moi) {
   if (acces.compte.doit_changer) { // le mot de passe initial, passé par les journaux : rien d'autre avant
     $("#vue").innerHTML = `<div class="alerte">Ce mot de passe a été écrit dans les journaux du serveur : changez-le avant de continuer.</div><div class="panneau" id="adm-panneau"></div>`;
     await panneauCompte($("#adm-panneau"), { jetons: false, apres: () => location.reload() });
+    return;
+  }
+  if (acces.compte.second_facteur?.requis) { // le mot de passe seul n'ouvre que ceci
+    $("#vue").innerHTML = `<div class="panneau" id="adm-panneau"></div>`;
+    enrolement($("#adm-panneau"), () => location.reload());
     return;
   }
   $("#adm-nav").hidden = false;

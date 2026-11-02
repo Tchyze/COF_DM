@@ -31,6 +31,9 @@ func bancServeur(t *testing.T) (*banc, *comptes.Registre) {
 		if _, err := reg.Creer(nom, mdpEssai(nom), nom == "chef"); err != nil {
 			t.Fatal(err)
 		}
+		if nom == "chef" {
+			doterDeFacteur(t, reg, nom)
+		}
 		if role != "" {
 			if _, err := reg.Modifier(nom, func(c *comptes.Compte) error { c.Roles[b.s.store.ID()] = role; return nil }); err != nil {
 				t.Fatal(err)
@@ -63,17 +66,16 @@ func (b *banc) proxy(methode, url string, corps any, prep func(*http.Request)) (
 		if c.Name == cookieMJ {
 			recu = c
 		}
+		if c.Name == cookiePreuve {
+			b.dernierePreuve = c
+		}
 	}
 	return w.Code, v, recu
 }
 
 func (b *banc) connecter(nom string) func(*http.Request) {
 	b.t.Helper()
-	c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}, nil)
-	if c != 200 || cookie == nil {
-		b.t.Fatalf("connexion de %s : %d", nom, c)
-	}
-	return func(r *http.Request) { r.AddCookie(cookie) }
+	return b.connecter2(nom, mdpEssai(nom))
 }
 
 // Derrière un reverse proxy, toute requête vient de la machine elle-même : sans compte, rien.
@@ -260,6 +262,7 @@ type navigateur struct {
 	a       *Application
 	cookies map[string]*http.Cookie
 	jeton   string
+	reg     *comptes.Registre // pour les codes du second facteur
 }
 
 func (n *navigateur) faire(methode, url string, corps any, enTetes ...string) (int, map[string]any) {
@@ -323,10 +326,17 @@ func serveurMulti(t *testing.T) (*Application, *comptes.Registre, func(nom strin
 			if _, err := reg.Creer(nom, mdpEssai(nom), nom == "chef"); err != nil {
 				t.Fatal(err)
 			}
+			if nom == "chef" {
+				doterDeFacteur(t, reg, nom)
+			}
 		}
-		n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}}
-		if c, _ := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)}); c != 200 {
+		n := &navigateur{t: t, a: a, cookies: map[string]*http.Cookie{}, reg: reg}
+		c, v := n.faire("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdpEssai(nom)})
+		if c != 200 {
 			t.Fatalf("connexion de %s : %d", nom, c)
+		}
+		if v["etape"] != nil {
+			n.finirConnexionAdmin(nom)
 		}
 		return n
 	}
@@ -877,6 +887,11 @@ func TestUniversParOnglet(t *testing.T) {
 // connecter2 : la connexion d'un compte dont le mot de passe a changé.
 func (b *banc) connecter2(nom, mdp string) func(*http.Request) {
 	b.t.Helper()
+	if reg := b.s.acces.comptes; reg != nil {
+		if x, ok := reg.Lire(nom); ok && x.Admin {
+			return b.connecterAdmin(nom, mdp)
+		}
+	}
 	c, _, cookie := b.proxy("POST", "/api/acces/connexion", map[string]any{"nom": nom, "mdp": mdp}, nil)
 	if c != 200 || cookie == nil {
 		b.t.Fatalf("connexion de %s : %d", nom, c)

@@ -99,12 +99,15 @@ func (a *Application) ordre() []*universOuvert {
 }
 
 // reconnaitre : le compte qui fait la requête, sans rien répondre (voir entrer pour le contrôle).
-func (a *acces) reconnaitre(r *http.Request) (c comptes.Compte, connu, jeton bool) {
+func (a *acces) reconnaitre(r *http.Request) (comptes.Compte, bool, bool) {
 	if j := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "); j != r.Header.Get("Authorization") {
-		c, connu = a.comptes.ParJeton(j)
+		c, connu := a.comptes.ParJeton(j)
 		return c, connu, true
 	}
-	c, connu = a.compteDeSession(r)
+	c, niveau, connu := a.compteDeSession(r)
+	if niveau == niveauEnrolement { // pas encore un compte qui entre quelque part : il n'apprend rien des univers
+		return comptes.Compte{}, false, false
+	}
 	return c, connu, false
 }
 

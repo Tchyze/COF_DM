@@ -373,6 +373,9 @@ func main() {
 	sauvegardesMaxFlag := flag.Int("sauvegardes-max", serveur.SauvegardesMaxParDefaut, "mode serveur : sauvegardes gardées par univers, demandées d'une part, d'avant une opération de l'autre (0 : pas de plafond)")
 	proxiesFlag := flag.String("proxies", "", "mode serveur : réseaux des proxys de confiance, en CIDR séparés par des virgules (ou COF_DM_PROXIES ; par défaut "+serveur.ProxiesParDefaut+")")
 	desinstallerFlag := flag.Bool("desinstaller", false, "désinstaller l'application (Windows, lancé par « Applications installées »)")
+	origineFlag := flag.String("origine", "", "mode serveur : l'adresse publique du serveur, pour les clés de sécurité, comme https://jdr.exemple.org (ou COF_DM_ORIGINE ; sans elle, pas de clés)")
+	rpIDFlag := flag.String("rp-id", "", "mode serveur : le domaine auquel les clés de sécurité sont liées (ou COF_DM_RP_ID ; par défaut, l'hôte de -origine)")
+	reinit2FFlag := flag.String("reinitialiser-second-facteur", "", "mode serveur, dernier recours sur la machine, serveur arrêté : retire tous les seconds facteurs de ce compte administrateur, puis s'arrête (README, « Double authentification »)")
 	modeMCP := flag.Bool("mcp", false, "serveur MCP pour Claude, sur l'entrée et la sortie standard : joint l'application lancée par son API (COF_DM_URL, COF_DM_JETON, COF_DM_UNIVERS)")
 	flag.Parse()
 	if *desinstallerFlag {
@@ -387,6 +390,19 @@ func main() {
 		fatal("Le mode serveur n'existe que dans l'image Docker (voir README, « Avec Docker »). L'application de bureau se relie à un serveur depuis la zone en bas à gauche de sa fenêtre.")
 	}
 	*modeServeur = editionServeur // l'édition serveur n'a pas d'autre mode
+	if *reinit2FFlag != "" {
+		if !editionServeur {
+			fatal("Cette option n'existe que dans l'image Docker du serveur.")
+		}
+		dossier := *dataFlag
+		if dossier == "" {
+			dossier = dossierParDefaut()
+		}
+		if err := reinitialiserSecondFacteur(dossier, *reinit2FFlag); err != nil {
+			fatal("Second facteur non réinitialisé : %v", err)
+		}
+		return
+	}
 	if *modeServeur {
 		*headless = true
 	}
@@ -481,12 +497,25 @@ func main() {
 		if opt.Proxies, err = proxiesDemandes(*proxiesFlag); err != nil {
 			fatal("Option -proxies : %v", err)
 		}
+		if opt.Cles, err = clesDemandees(*origineFlag, *rpIDFlag); err != nil {
+			fatal("Option -origine ou -rp-id : %v", err)
+		}
 		opt.Limites = serveur.NouvellesLimites(*importsFlag, *quotaUniversFlag<<20, *quotaSauvegardesFlag<<20, *sauvegardesMaxFlag)
+		// tenu jusqu'à l'arrêt : le fichier des comptes vit en mémoire, et une écriture d'ailleurs serait écrasée
+		switch _, err := garderVerrouComptes(dossier); {
+		case errors.Is(err, comptes.ErrOccupe):
+			fatal("Un autre programme utilise déjà les comptes de %s : un seul serveur par dossier.", dossier)
+		case err != nil:
+			log.Printf("verrou du fichier des comptes indisponible : %v", err)
+		}
 		if opt.Comptes, err = comptes.Ouvrir(filepath.Join(dossier, "comptes.json")); err != nil {
 			fatal("Impossible de lire les comptes : %v", err)
 		}
 		if err := premierAdmin(opt.Comptes); err != nil {
 			fatal("Impossible de créer le compte administrateur : %v", err)
+		}
+		for _, nom := range opt.Comptes.PrendreReinitLocales() {
+			log.Print(ligneReinitLocale(nom))
 		}
 	}
 	var app *serveur.Application
@@ -605,6 +634,65 @@ func premierAdmin(reg *comptes.Registre) error {
 		return err
 	}
 	fmt.Printf("\nPremier lancement du serveur : compte administrateur créé.\n  nom d'utilisateur : admin\n  mot de passe      : %s\nÀ changer dès la première connexion : le compte n'a accès à rien d'autre avant, et ce mot de passe reste lisible dans les journaux du conteneur tant qu'il n'est pas changé.\nL'administrateur gère le serveur (univers, comptes) sans voir leur contenu : créez-vous un compte MJ pour préparer vos univers.\n\n", mdp)
+	return nil
+}
+
+// clesDemandees : la configuration des clés de sécurité, depuis les options, sinon l'environnement.
+func clesDemandees(origine, rpID string) (*serveur.ConfigCles, error) {
+	if origine == "" {
+		origine = os.Getenv("COF_DM_ORIGINE")
+	}
+	if rpID == "" {
+		rpID = os.Getenv("COF_DM_RP_ID")
+	}
+	if origine == "" {
+		if rpID != "" {
+			return nil, errors.New("-rp-id demande -origine")
+		}
+		return nil, nil
+	}
+	return serveur.LireConfigCles(origine, rpID)
+}
+
+// verrouComptes : tenu tant que le serveur tourne ; le système le lâche à la fin du programme.
+var verrouComptes func()
+
+func garderVerrouComptes(dossier string) (func(), error) {
+	l, err := comptes.Verrouiller(dossier)
+	if err == nil {
+		verrouComptes = l
+	}
+	return l, err
+}
+
+func ligneReinitLocale(nom string) string {
+	return fmt.Sprintf("securite evenement=second_facteur_reinitialise_local nom=%q ip=local", nom)
+}
+
+// reinitialiserSecondFacteur : le dernier recours, quand un administrateur a tout perdu. Aucune route
+// réseau n'y mène : il faut la main sur la machine. Le serveur doit être arrêté : il garde les comptes en
+// mémoire et écraserait ce changement. La note laissée dans le fichier ressort au journal à son démarrage.
+func reinitialiserSecondFacteur(dossier, nom string) error {
+	if _, err := os.Stat(filepath.Join(dossier, "comptes.json")); err != nil {
+		return fmt.Errorf("aucun fichier de comptes dans %s", dossier)
+	}
+	liberer, err := comptes.Verrouiller(dossier)
+	switch {
+	case errors.Is(err, comptes.ErrOccupe):
+		return errors.New("le serveur tourne sur ces données : arrêtez-le d'abord (docker compose stop)")
+	case err != nil: // un système de fichiers sans verrou : rien ne peut le vérifier ici
+		fmt.Fprintf(os.Stderr, "Verrou indisponible (%v) : vérifiez vous-même que le serveur est arrêté.\n", err)
+	}
+	defer liberer()
+	reg, err := comptes.Ouvrir(filepath.Join(dossier, "comptes.json"))
+	if err != nil {
+		return err
+	}
+	if err := reg.ReinitialiserLocalement(nom); err != nil {
+		return err
+	}
+	fmt.Println(ligneReinitLocale(comptes.Normaliser(nom)))
+	fmt.Printf("Second facteur de « %s » retiré, ses sessions fermées. À sa prochaine connexion, il en enregistrera un nouveau.\n", comptes.Normaliser(nom))
 	return nil
 }
 
