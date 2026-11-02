@@ -17,7 +17,7 @@ Dernière mise à jour : 2 novembre 2026 (fenêtre « Mes univers », branche `g
 
 - **Une branche par lot**, PR vers `main`. **Ne pas fusionner avant que le MJ l'ait essayée.** Plusieurs lots d'un même chantier : PR empilées, chacune sur la précédente.
 - **Faire essayer** : `gh workflow run release.yml --ref <branche> -f canal=test` ; la préversion `X.Y.(Z+1)-test.N` arrive dans l'application de qui suit le canal Test.
-- **PR empilées** : avant de fusionner celle du dessous avec `--delete-branch`, reporter celle du dessus sur `main` par l'API REST (`gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` ; `gh pr edit --base` échoue). Sinon GitHub ferme la PR du dessus.
+- **PR empilées** : une branche fusionnée est supprimée d'office sur GitHub (réglage du dépôt, depuis le 2 novembre 2026) ; avant de fusionner celle du dessous, reporter celle du dessus sur `main` par l'API REST (`gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` ; `gh pr edit --base` échoue). Sinon GitHub ferme la PR du dessus.
 - **Version stable** : seulement à la demande du MJ, par un tag `vX.Y.Z` (trois nombres : `internal/majour` et le workflow *Release* ne lisent rien d'autre ; « 1.2.2.1 » a été écarté pour cette raison). En tête des notes de version, un résumé « Nouveautés » en français, ajouté à la main.
 - **SUIVI.md** : commit direct sur `main`, sans PR. Le tenir à jour à la fin de chaque lot.
 - **Écrans** : vérifiés dans Chrome (CDP), à 1300 et 390 px, sans erreur de console.
