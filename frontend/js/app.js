@@ -404,6 +404,15 @@ function ecranSecondFacteur(marque, facteurs) {
   }
   // sur l'ordinateur du MJ, rien n'est demandé ; ailleurs, le mot de passe MJ
   const acces = await api("GET", "/api/acces").catch(() => ({ mj: false, mdp_defini: true }));
+  // bureau, sans univers ouvert : seul l'écran d'accueil de « Mes univers » a un sens
+  if (acces.aucun_univers) {
+    document.body.dataset.sansUnivers = "1";
+    initFichier();
+    initEtatLien();
+    initBadgeMaj();
+    (await import("./univers.js")).fenetreUnivers({ accueil: true }).catch(e => toast(e.message, true));
+    return;
+  }
   // l'administrateur d'un serveur n'entre dans aucun univers : il a sa page
   if (acces.serveur && acces.compte?.admin) { location.replace("/admin.html"); return; }
   if (!acces.mj) { ecranConnexion(acces); return; }
@@ -425,7 +434,7 @@ function ecranSecondFacteur(marque, facteurs) {
     if (acces.lecture_seule) $(".side .bas").insertAdjacentHTML("beforebegin", `<p class="lecture-avis">👁 Lecture seule</p>`);
   }
   if (acces.serveur) choixUnivers();
-  // le menu Fichier : sur l'ordinateur du MJ, ou pour le MJ de l'univers sur un serveur
+  // « Mes univers » sur l'ordinateur du MJ ; « Fichier » pour le MJ de l'univers sur un serveur
   if (acces.local || (acces.serveur && acces.compte?.role === "mj")) initFichier();
   // en bas à gauche : local, connecté à un serveur ou hors connexion (application de bureau)
   if (acces.local && !acces.serveur) { initEtatLien(); initBadgeMaj(); }

@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 2 novembre 2026 (version 1.3.1 : durcissement de sécurité, double authentification des administrateurs, installation sur tablette).
+Dernière mise à jour : 2 novembre 2026 (fenêtre « Mes univers », branche `gestion-univers`, en préversion ; version stable : 1.3.1).
 
 ## Où on en est
 
 - **Version stable : 1.3.1** (2 novembre 2026) : PR 41 (durcissement de sécurité), 42 (double authentification des administrateurs), 43 (installation sur tablette). Image sur Docker Hub (`1.3.1`, `latest`). Avant elle : 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.1, comme dans la 1.2.5 et la 1.3.0), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `security/audit-fixes`, `security/mfa-admin` et `tablette-installable` sont fusionnées. `essai-complet` ne sert plus que d'instance d'essai.
-- **Chantier en cours** : aucun. Restent : F-12 (protection du workflow de release, avec les réglages GitHub), et rendre stable `TestEchecMemeCout`, qui échoue parfois en CI sur un écart de durée (relancer le job).
+- **Chantier en cours** : fenêtre « Mes univers » (branche `gestion-univers`), en préversion sur le canal Test, à essayer dans la vraie fenêtre WebView2 avant de fusionner. Restent aussi : F-12 (protection du workflow de release, avec les réglages GitHub), et rendre stable `TestEchecMemeCout`, qui échoue parfois en CI sur un écart de durée (relancer le job).
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -17,7 +17,7 @@ Dernière mise à jour : 2 novembre 2026 (version 1.3.1 : durcissement de sécur
 
 - **Une branche par lot**, PR vers `main`. **Ne pas fusionner avant que le MJ l'ait essayée.** Plusieurs lots d'un même chantier : PR empilées, chacune sur la précédente.
 - **Faire essayer** : `gh workflow run release.yml --ref <branche> -f canal=test` ; la préversion `X.Y.(Z+1)-test.N` arrive dans l'application de qui suit le canal Test.
-- **PR empilées** : avant de fusionner celle du dessous avec `--delete-branch`, reporter celle du dessus sur `main` par l'API REST (`gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` ; `gh pr edit --base` échoue). Sinon GitHub ferme la PR du dessus.
+- **PR empilées** : une branche fusionnée est supprimée d'office sur GitHub (réglage du dépôt, depuis le 2 novembre 2026) ; avant de fusionner celle du dessous, reporter celle du dessus sur `main` par l'API REST (`gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` ; `gh pr edit --base` échoue). Sinon GitHub ferme la PR du dessus.
 - **Version stable** : seulement à la demande du MJ, par un tag `vX.Y.Z` (trois nombres : `internal/majour` et le workflow *Release* ne lisent rien d'autre ; « 1.2.2.1 » a été écarté pour cette raison). En tête des notes de version, un résumé « Nouveautés » en français, ajouté à la main.
 - **SUIVI.md** : commit direct sur `main`, sans PR. Le tenir à jour à la fin de chaque lot.
 - **Écrans** : vérifiés dans Chrome (CDP), à 1300 et 390 px, sans erreur de console.
@@ -77,6 +77,17 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - Le bureau propose de se mettre à jour ; l'administrateur voit la version de chaque poste relié (Paramètres → Version du serveur). Le serveur Docker annonce les versions publiées sans rien installer.
 - Un univers ouvert par un modèle plus récent ne s'ouvre plus dans une version plus ancienne (même refus pour un export).
 - Ce que l'autre côté refuse ou ne sait pas appliquer est gardé et repasse plus tard.
+
+### Fenêtre « Mes univers » (2 novembre 2026)
+
+- **Bouton** : « Mes univers » sur le bureau (pas seulement « Univers », à côté de « Univers du serveur »). Sur un serveur, rien ne change : l'administrateur garde sa page, le MJ son bouton « Fichier ».
+- **Liste** : l'univers ouvert, le dossier des univers, les récents, les copies reliées, les archivés. Une clé (empreinte du chemin) désigne un fichier : l'identifiant ne suffit pas, une copie porte celui de l'original. Aucune route ne reçoit de chemin.
+- **Fichier rangé ailleurs** : il s'ouvre, se renomme sur place, s'oublie et se supprime ; il ne s'archive pas (il faudrait le déplacer, parfois d'un disque à l'autre).
+- **Archivé** : un fichier du dossier `archives`, sans registre ; il ne s'ouvre plus jusqu'au désarchivage.
+- **Suppression** : nom retapé ; sauvegarde relue avant, sinon rien ne part. Un fichier abîmé se supprime, sa sauvegarde n'étant qu'une copie non vérifiée. L'univers ouvert demande quoi ouvrir ensuite.
+- **Dernier univers** : il peut être supprimé ou archivé. L'application reste alors sans univers, y compris au lancement suivant, et propose d'en créer un ; seule une première installation en crée un d'office.
+- **Copie reliée** : seule la copie locale est touchée, jamais le serveur. Changements non envoyés, conflits et combat lancé ici se confirment, et un bilan qui a grandi depuis est refusé.
+- **Clavier et jeton** : la fenêtre se mène au clavier ; ces routes refusent tout jeton, même local : Claude et le MCP n'effacent rien.
 
 ### Synchronisation
 

@@ -71,6 +71,13 @@ func (h *salles) estDistant(id int64) bool {
 	return h.distants[id]
 }
 
+// nombreDistants : les combats joués sur le serveur que ce poste suit.
+func (h *salles) nombreDistants() int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return len(h.distants)
+}
+
 func (h *salles) noterDistant(id int64, enCours bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -489,9 +489,9 @@ En bas à gauche de la fenêtre, une zone dit comment travaille l'application :
 
 Connecté, un combat et les jets de dés se jouent sur le serveur : l'écran reste le même et les joueurs suivent aussitôt, les jets cachés restant cachés. Si la connexion se perd en plein combat, l'écran affiche « connexion perdue », bloque les actions et reprend seul au retour du serveur. Un combat lancé hors connexion reste sur l'ordinateur, invisible des joueurs, et part une fois terminé.
 
-Relié à un serveur, un bouton **Univers du serveur** apparaît sous le bouton Fichier : il ouvre la liste des univers du serveur où vous avez un rôle (l'univers ouvert, ceux déjà copiés sur l'ordinateur, ceux qui ne sont que sur le serveur). Un clic passe à l'un d'eux : sa copie s'ouvre, ou elle est d'abord tirée la première fois (il faut en être MJ). Hors connexion, la liste montre les copies de l'ordinateur, qui s'ouvrent normalement.
+Relié à un serveur, un bouton **Univers du serveur** apparaît sous le bouton **Mes univers** : il ouvre la liste des univers du serveur où vous avez un rôle (l'univers ouvert, ceux déjà copiés sur l'ordinateur, ceux qui ne sont que sur le serveur). Un clic passe à l'un d'eux : sa copie s'ouvre, ou elle est d'abord tirée la première fois (il faut en être MJ). Hors connexion, la liste montre les copies de l'ordinateur, qui s'ouvrent normalement.
 
-Un clic sur la zone ouvre le panneau : passer de **Client seul** à **Serveur** et inversement, **changer de serveur**, copier un univers du serveur, envoyer celui-ci, synchroniser tout de suite, voir les conflits. **Fichier → Serveur et synchronisation…** ouvre le même panneau.
+Un clic sur la zone ouvre le panneau : passer de **Client seul** à **Serveur** et inversement, **changer de serveur**, copier un univers du serveur, envoyer celui-ci, synchroniser tout de suite, voir les conflits. **Mes univers → Serveur et synchronisation…** ouvre le même panneau.
 
 - **Se connecter** : l'adresse du serveur (HTTPS ; le HTTP n'est admis que sur l'ordinateur ou le réseau local), votre nom d'utilisateur et votre mot de passe. Le mot de passe ne sert qu'à cette connexion et n'est jamais gardé : le serveur donne à l'ordinateur son propre jeton, visible dans « Mon compte » sur le serveur, et retiré quand l'ordinateur quitte ce serveur (sinon, retirez-le là). Ensuite, choisissez l'univers à copier (il faut en être MJ) ou envoyez l'univers ouvert.
 - **Envoyer cet univers sur le serveur** : verse l'univers ouvert dans un univers du serveur dont vous êtes MJ (l'administrateur le crée), puis le garde synchronisé. L'univers tel qu'il était reste dans ses sauvegardes.
@@ -607,7 +607,7 @@ Fiches de règles officielles (résumés) et maison, par domaine. **Paramètres 
 - **Calendrier du monde** paramétrable : mois et durées, jours de la semaine, ère. Par défaut : douze mois de trente jours (noms républicains), une décade et cinq jours complémentaires.
 - **Images** : plusieurs par fiche (portraits, illustrations), image principale, légendes, glisser-déposer.
 - **Archivage** (masquer sans supprimer), **journal** de toutes les modifications avec leur auteur (MJ ou client de l'API).
-- **Un univers = un fichier** `.cofdm` (fiches, images, journal) : menu **Fichier** pour créer un univers, en ouvrir un autre, retrouver les récents, enregistrer une copie.
+- **Un univers = un fichier** `.cofdm` (fiches, images, journal) : fenêtre **Mes univers** pour créer, ouvrir, renommer, archiver et supprimer ses univers, enregistrer une copie. Sur un serveur, le MJ d'un univers garde le menu **Fichier** (importer, exporter).
 - **Sauvegardes automatiques** de l'univers (à l'ouverture, toutes les demi-heures, à la fermeture), restauration en un clic ; **export JSON** complet, images comprises ; **export vers Obsidian** (voir plus bas).
 - **Paramètres**, en quatre groupes (Univers ; Sauvegardes et exports ; Joueurs et accès ; Application) : seuls les titres s'affichent, avec leur description au survol, et un clic étend le réglage sur place.
 - **Menu de gauche** en catégories (Monde, Campagnes, Secrets, Règles, Combat, Outils…) qui se replient d'un clic sur leur titre, ou au clavier (Tab puis Entrée ou Espace). Les catégories repliées sont gardées sur l'appareil ; celle de la page ouverte se déplie le temps qu'on y est, et repliée à la main garde le lien de cette page.
@@ -658,7 +658,7 @@ Au lancement, l'application ouvre sa fenêtre ; ses données sont dans :
 
 **Désinstaller (Windows)** : « Applications installées » → COF DM → Désinstaller. Le programme, ses raccourcis et son inscription partent ; vos données restent, sauf si vous demandez à les supprimer (elles serviront si vous réinstallez). COF DM doit être fermé.
 
-**L'ancien mode portable n'existe plus.** Un dossier `COF DM - données` posé à côté du programme (ou de l'AppImage) est repris au lancement, sans rien perdre : déplacé dans le dossier ci-dessus s'il est vide, sinon copié dans un sous-dossier « Repris du mode portable … », dont les univers s'ouvrent par **Fichier → Récents**. L'ancien dossier est renommé « … (repris) ».
+**L'ancien mode portable n'existe plus.** Un dossier `COF DM - données` posé à côté du programme (ou de l'AppImage) est repris au lancement, sans rien perdre : déplacé dans le dossier ci-dessus s'il est vide, sinon copié dans un sous-dossier « Repris du mode portable … », dont les univers s'ouvrent par **Mes univers → Ouvrir un fichier…**, puis restent dans la liste. L'ancien dossier est renommé « … (repris) ».
 
 On y trouve `univers/` (les univers créés sans choisir d'emplacement), `sauvegardes/` (un dossier par univers), `reglages.json` (univers ouvert, mot de passe MJ haché, jeton d'API), `config.json`, `cof-dm.log` et, tant que l'application tourne, `port.json` (le port qu'elle a pris, lu par `-mcp`).
 
@@ -675,7 +675,19 @@ Le mode serveur (`-serveur`) n'existe que dans l'image Docker : l'application de
 
 ### Univers
 
-Un univers est **un seul fichier** `.cofdm` : fiches, relations, images, calendrier et journal. Il peut être rangé n'importe où (Documents, clé USB, dossier synchronisé) et se copie tel quel. Le menu **Fichier**, en haut du menu latéral, permet de créer un univers, d'en ouvrir un autre, de rouvrir un univers récent et d'enregistrer une copie. L'application rouvre au lancement le dernier univers utilisé.
+Un univers est **un seul fichier** `.cofdm` : fiches, relations, images, calendrier et journal. Il peut être rangé n'importe où (Documents, clé USB, dossier synchronisé) et se copie tel quel. L'application rouvre au lancement le dernier univers utilisé.
+
+Le bouton **Mes univers**, en haut du menu latéral, ouvre la fenêtre des univers de cet ordinateur : ceux du dossier des univers, les récents, les copies d'un serveur et les archivés.
+
+- **Créer, ouvrir** : **Ouvrir un fichier…** va chercher un univers rangé ailleurs ; il reste ensuite dans la liste tant qu'il est parmi les récents.
+- **Renommer** : le fichier change de nom sur place ; les sauvegardes, les récents et le lien avec un serveur suivent. Un nom déjà pris est refusé.
+- **Archiver** : le fichier passe tel quel dans le dossier `archives`, sort de la liste courante et ne s'ouvre plus jusqu'au **désarchivage**. Seul un univers du dossier des univers s'archive.
+- **Supprimer** : le nom de l'univers est retapé pour confirmer et une sauvegarde est faite avant ; si elle échoue, rien n'est supprimé. La fenêtre dit où se trouve la sauvegarde : pour effacer vraiment, supprimez vous-même ce dossier, qui contient aussi les sauvegardes automatiques. Un fichier abîmé se supprime aussi, sa sauvegarde n'étant alors qu'une copie non vérifiée.
+- **Univers ouvert** : la fenêtre demande lequel ouvrir à sa place. Pour le dernier univers, l'application propose d'en créer un, y compris au lancement suivant.
+- **Oublier** retire de la liste un fichier rangé ailleurs ou disparu, sans toucher à aucun fichier.
+- **Copie d'un serveur** : ces actions ne portent que sur la copie de cet ordinateur ; **le serveur n'est jamais touché**, et une copie supprimée peut être tirée de nouveau. Des changements pas encore envoyés, un combat lancé ici et pas terminé se confirment avant d'archiver ou de supprimer. Une copie archivée ne se synchronise plus jusqu'au désarchivage.
+
+La même fenêtre mène à **Enregistrer une copie**, **Sauvegarder maintenant**, **Sauvegardes**, **Exporter vers Obsidian** et **Serveur et synchronisation**. Ces routes ne répondent qu'à l'application, sur l'ordinateur du MJ : ni tablette, ni jeton, et elles n'existent pas sur un serveur.
 
 Une sauvegarde complète de l'univers est faite à son ouverture, toutes les demi-heures et à la fermeture de l'application, quand il a changé (sur un serveur, voir aussi « Limites d'un serveur partagé »). Les cinq dernières sont gardées, puis une par jour pendant deux semaines ; celles que vous demandez (« Sauvegarder maintenant ») ne sont jamais effacées. **Paramètres → Sauvegardes, exports et import** les liste et permet de revenir à l'une d'elles.
 
@@ -696,7 +708,7 @@ Le second lit les propriétés `responsable: "[[X]]"` et `responsable_secret: "[
 
 ### Vers un vault Obsidian
 
-**Fichier → Exporter vers Obsidian…** (ou le bouton de Paramètres) télécharge un zip de notes Markdown, rangées sous un seul dossier au nom de l'univers, à décompresser dans le vault :
+**Mes univers → Exporter vers Obsidian…** (ou le bouton de Paramètres) télécharge un zip de notes Markdown, rangées sous un seul dossier au nom de l'univers, à décompresser dans le vault :
 
 - une note par fiche, rangée comme le vault que lit `vault_vers_cofdm.py` : `01 - Monde` (lieux, factions, lore, événements et `Chronologie`), `02 - PNJ`, `03 - PJ`, `04 - Objets & économie`, `05 - Campagnes/<campagne>` (la campagne, ses fils rouges, ses quêtes, séances, rencontres et combats), `06 - Secrets`, `07 - Règles`, `Archives` ;
 - les champs courts en propriétés (frontmatter : statut, lieu, campagne… les références en liens `[[Nom]]`), les textes en sections, les relations en tableau, les images dans `Images/` ;
@@ -723,7 +735,7 @@ La fenêtre native utilise WebView2 sous Windows, GTK 3 et WebKitGTK 4.1 sous Li
 |---|---|
 | `internal/modele` | Types de fiches, champs, relations, calendrier, fonctionnalités, validation : la seule source du schéma |
 | `internal/store` | Un univers = un fichier SQLite : fiches, relations, références, mentions, images, recherche FTS5, graphe, chronologie, journal, export, bibliothèque, synchronisation, versions |
-| `internal/serveur` | API HTTP, contrôle d'accès, comptes et univers du serveur, menu Fichier, sauvegardes, secrets, aides de jeu, rencontres, combats, écran du MJ, page des joueurs |
+| `internal/serveur` | API HTTP, contrôle d'accès, comptes et univers du serveur, fenêtre « Mes univers » et menu Fichier, sauvegardes, secrets, aides de jeu, rencontres, combats, écran du MJ, page des joueurs |
 | `internal/comptes` | Comptes de l'édition serveur : mots de passe hachés, rôles par univers, jetons |
 | `internal/reglages` | Réglages de l'application sur cet ordinateur (univers ouvert, mot de passe MJ, jeton d'API, serveur relié) |
 | `internal/synchro` | Synchronisation du bureau avec un serveur, numéros de version |

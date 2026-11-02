@@ -308,23 +308,27 @@ func (s *Serveur) routes() {
 	m.HandleFunc("GET /api/parametres", s.parametres)
 	m.HandleFunc("POST /api/parametres/jeton", s.nouveauJeton)
 
-	statique := http.FileServer(http.FS(s.opt.Frontend))
 	m.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.acces.comptes == nil && pageAdmin(r.URL.Path) { // l'administration n'existe que sur un serveur
-			http.NotFound(w, r)
-			return
-		}
-		if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") { // les dossiers de l'interface ne se listent pas
-			http.NotFound(w, r)
-			return
-		}
-		if strings.HasSuffix(r.URL.Path, ".webmanifest") { // une extension que le système ne connaît pas toujours
-			w.Header().Set("Content-Type", "application/manifest+json")
-		}
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"+socketsDeLaPage(r))
-		statique.ServeHTTP(w, r)
+		servirInterface(s.opt.Frontend, s.acces.comptes != nil, w, r)
 	}))
+}
+
+// servirInterface : les fichiers de l'interface. L'administration n'existe que sur un serveur.
+func servirInterface(frontend fs.FS, surServeur bool, w http.ResponseWriter, r *http.Request) {
+	if !surServeur && pageAdmin(r.URL.Path) {
+		http.NotFound(w, r)
+		return
+	}
+	if r.URL.Path != "/" && strings.HasSuffix(r.URL.Path, "/") { // les dossiers de l'interface ne se listent pas
+		http.NotFound(w, r)
+		return
+	}
+	if strings.HasSuffix(r.URL.Path, ".webmanifest") { // une extension que le système ne connaît pas toujours
+		w.Header().Set("Content-Type", "application/manifest+json")
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"+socketsDeLaPage(r))
+	http.FileServer(http.FS(frontend)).ServeHTTP(w, r)
 }
 
 // ---------------------------------------------------------------- utilitaires HTTP
@@ -1160,7 +1164,7 @@ func (s *Serveur) remplacerPar(w http.ResponseWriter, r *http.Request, motif str
 // ?remplacer=1, après une sauvegarde. Le fichier est lu à part, jamais servi.
 func (s *Serveur) importerUnivers(w http.ResponseWriter, r *http.Request) {
 	if !modeServeur(r) {
-		erreur(w, 404, "Sur cet ordinateur, ouvrez le fichier directement (menu Fichier, « Ouvrir un univers »).")
+		erreur(w, 404, "Sur cet ordinateur, ouvrez le fichier directement (« Mes univers », « Ouvrir un fichier »).")
 		return
 	}
 	if _, n, err := s.store.Compter(); err != nil || (n > 0 && r.URL.Query().Get("remplacer") != "1") {

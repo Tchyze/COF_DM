@@ -1,7 +1,7 @@
 // Mode de travail de l'application de bureau, en bas à gauche de la fenêtre : client seul (local)
 // ou reliée à un serveur (connectée, ou hors connexion : les changements partiront plus tard). Un
 // clic ouvre le panneau : se connecter, changer de serveur, repasser en client seul, copier un
-// univers du serveur ou y envoyer celui-ci. Relié à un serveur, un bouton sous Fichier ouvre la
+// univers du serveur ou y envoyer celui-ci. Relié à un serveur, un bouton sous « Mes univers » ouvre la
 // fenêtre de ses univers, pour passer de l'un à l'autre. Réservé à l'ordinateur du MJ (routes
 // /api/univers).
 import { $, esc, api, toast, dialogue, choisirUniversOnglet } from "./ui.js";
@@ -115,7 +115,7 @@ export async function ouvrirPanneau() {
       d.synchro?.ecart === "serveur_recent" ? action("mettre-a-jour", "⬆", "Mettre à jour l'application…") : "",
       d.actif ? action("synchroniser", "⇅", "Synchroniser maintenant") : "",
       action("copier", "🌍", "Univers du serveur…"),
-      !d.copie ? action("envoyer", "⇪", "Envoyer cet univers sur le serveur…") : "",
+      !d.copie && !document.body.dataset.sansUnivers ? action("envoyer", "⇪", "Envoyer cet univers sur le serveur…") : "",
       d.relie ? action("details", "⚖", d.conflits ? `Conflits (${d.conflits}) et détails…` : "Synchronisation et conflits…") : "",
       action("changer", "🔁", "Changer de serveur…"),
     ].join("") : [
@@ -230,6 +230,7 @@ export function dialogueConnexion({ url = "", compte = "", changer: ancien = "",
 function listeUnivers(boite, r, fermer) {
   const envoi = !dernier?.copie;
   const etat = u => u.ouvert ? ["✓", "Ouvert en ce moment", ""]
+    : u.archivee ? ["🗄", "Votre copie est archivée : désarchivez-la dans « Mes univers »", ""]
     : u.ici ? ["🌍", `Sur cet ordinateur · ${esc(ROLES[u.role] || u.role)}`, "Ouvrir"]
     : u.role === "mj" ? ["☁", "Sur le serveur : copié ici à l'ouverture", "Copier et ouvrir"]
     : ["☁", `${esc(ROLES[u.role] || u.role)} : la copie est réservée au MJ`, ""];
