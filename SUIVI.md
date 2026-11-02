@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 2 novembre 2026 (fenêtre « Mes univers », branche `gestion-univers`, en préversion ; version stable : 1.3.1).
+Dernière mise à jour : 2 novembre 2026 (version 1.3.2 : fenêtre « Mes univers » du bureau).
 
 ## Où on en est
 
-- **Version stable : 1.3.1** (2 novembre 2026) : PR 41 (durcissement de sécurité), 42 (double authentification des administrateurs), 43 (installation sur tablette). Image sur Docker Hub (`1.3.1`, `latest`). Avant elle : 1.3.0 (1er novembre 2026), PR 32 à 40.
-- **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.1, comme dans la 1.2.5 et la 1.3.0), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
-- **Branches** : `security/audit-fixes`, `security/mfa-admin` et `tablette-installable` sont fusionnées. `essai-complet` ne sert plus que d'instance d'essai.
-- **Chantier en cours** : fenêtre « Mes univers » (branche `gestion-univers`), en préversion sur le canal Test, à essayer dans la vraie fenêtre WebView2 avant de fusionner. Restent aussi : F-12 (protection du workflow de release, avec les réglages GitHub), et rendre stable `TestEchecMemeCout`, qui échoue parfois en CI sur un écart de durée (relancer le job).
+- **Version stable : 1.3.2** (2 novembre 2026) : PR 47 (fenêtre « Mes univers » du bureau). Image sur Docker Hub (`1.3.2`, `latest`). Avant elle : 1.3.1 (2 novembre 2026), PR 41 à 43 (durcissement de sécurité, double authentification des administrateurs, installation sur tablette) ; 1.3.0 (1er novembre 2026), PR 32 à 40.
+- **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.2, comme dans la 1.2.5, la 1.3.0 et la 1.3.1), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
+- **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
+- **Chantier en cours** : aucun. Restent : F-12 (protection du workflow de release, avec les réglages GitHub), et rendre stable `TestEchecMemeCout`, qui échoue parfois en CI sur un écart de durée (relancer le job).
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -28,7 +28,7 @@ Dernière mise à jour : 2 novembre 2026 (fenêtre « Mes univers », branche `g
 
 - `Tchyze/COF_DM` est **public** depuis le 18 octobre 2026, reparti d'un commit unique. L'ancien dépôt, avec tout l'historique et ses PR 1 à 54, est gardé à part, privé (voir `LOCAL.md`). Les numéros de PR de ce fichier renvoient au dépôt public, sauf dans la section « Avant le dépôt public ».
 - **Clé de publication** : hors dépôt (voir `LOCAL.md`), aussi en secret `COF_DM_SIGNATURE` du dépôt. À sauvegarder ailleurs : sans elle, plus de mise à jour automatique (il faudrait changer la clé publique de `internal/majour`, et chacun réinstallerait à la main).
-- **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4) ; 1.2.4 (22 octobre 2026 : PR 17, 19 à 22, modèle 5) ; 1.2.5 (31 octobre 2026 : PR 23 à 26, 28 à 31, modèle 8).
+- **Versions publiées** : 1.2.0 (première publique) ; 1.2.2 (19 octobre 2026 : PR 3 à 6) ; 1.2.3 (21 octobre 2026 : PR 7 à 16, modèle 4) ; 1.2.4 (22 octobre 2026 : PR 17, 19 à 22, modèle 5) ; 1.2.5 (31 octobre 2026 : PR 23 à 26, 28 à 31, modèle 8) ; 1.3.0 (1er novembre 2026 : PR 32 à 40) ; 1.3.1 (2 novembre 2026 : PR 41 à 43) ; 1.3.2 (2 novembre 2026 : PR 47).
 - **Version affichée** : en petit à côté de « Thème » (une version d'essai en pastille ; « dev <commit> » pour une compilation de développement), lue dans `GET /api/sante` ; sur le bureau, elle mène à Paramètres → Mises à jour.
 
 ## Pour reprendre sur un autre poste
