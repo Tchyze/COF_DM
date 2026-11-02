@@ -10,6 +10,9 @@ export const clesPossibles = () => !!window.PublicKeyCredential && window.isSecu
 
 /** Un message pour ce que le navigateur a refusé. */
 export function messageCle(err) {
+  if (err?.name === "SecurityError" && err.domaine) {
+    return `Vos clés sont liées à « ${err.domaine} », et cette page est ouverte sur « ${location.hostname} » : ouvrez-la à l'adresse du serveur.`;
+  }
   switch (err?.name) {
     case "NotAllowedError": return "Opération annulée, ou délai dépassé : recommencez et touchez votre clé.";
     case "InvalidStateError": return "Cette clé est déjà enregistrée sur ce compte.";
@@ -27,7 +30,7 @@ function commun(c) {
 /** navigator.credentials.create, pour ces options du serveur. */
 export async function creerCle(o) {
   const publicKey = { ...o, challenge: enOctets(o.challenge), user: { ...o.user, id: enOctets(o.user.id) }, excludeCredentials: liste(o.excludeCredentials) };
-  const c = await navigator.credentials.create({ publicKey });
+  const c = await navigator.credentials.create({ publicKey }).catch(e => { e.domaine = o.rp?.id; throw e; });
   return { ...commun(c), response: { clientDataJSON: enTexte(c.response.clientDataJSON), attestationObject: enTexte(c.response.attestationObject),
     transports: c.response.getTransports?.() || [] } };
 }
@@ -35,7 +38,7 @@ export async function creerCle(o) {
 /** navigator.credentials.get, pour ces options du serveur. */
 export async function prouverCle(o) {
   const publicKey = { ...o, challenge: enOctets(o.challenge), allowCredentials: liste(o.allowCredentials) };
-  const c = await navigator.credentials.get({ publicKey });
+  const c = await navigator.credentials.get({ publicKey }).catch(e => { e.domaine = o.rpId; throw e; });
   return { ...commun(c), response: { clientDataJSON: enTexte(c.response.clientDataJSON), authenticatorData: enTexte(c.response.authenticatorData),
     signature: enTexte(c.response.signature), userHandle: c.response.userHandle ? enTexte(c.response.userHandle) : undefined } };
 }

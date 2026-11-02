@@ -272,6 +272,8 @@ Lot 1, avant la mise en ligne :
 - **Sans service worker** : rien ne reste sur l'appareil, et il faut le réseau. Sans HTTPS, pas d'installation ni de bouton.
 - **Essayé** : Chrome la juge installable en contexte sûr, et non en `http` (CDP) ; bouton à 1300, 800 et 390 px, invitation du navigateur simulée. **Pas essayé** : une vraie tablette Android, l'affichage plein écran réel, les encoches.
 
+- **Corrections avant la version** : l'image contient les certificats racines (le serveur ne joignait pas GitHub pour chercher les versions) ; une clé refusée pour son adresse dit quel domaine est attendu.
+
 ### Avant le dépôt public (ancien dépôt privé, PR 1 à 54)
 
 | PR | Contenu |

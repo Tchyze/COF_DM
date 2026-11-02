@@ -325,7 +325,7 @@ docker compose start cof-dm
 
 **L'heure du serveur** doit être juste : un code est accepté trente secondes de part et d'autre.
 
-**Essayer une vraie YubiKey**, sur votre adresse HTTPS ou sur `http://localhost` avec `-origine http://localhost:<port>` : enregistrez-la, déconnectez-vous, reconnectez-vous en la touchant, puis enregistrez une deuxième clé et retirez la première. Une clé refusée à l'enregistrement dit pourquoi à l'écran ; « cette adresse n'est pas celle que le serveur connaît » renvoie à `-origine`.
+**Essayer une vraie YubiKey**, sur votre adresse HTTPS ou sur `http://localhost` avec `-origine http://localhost:<port>` : enregistrez-la, déconnectez-vous, reconnectez-vous en la touchant, puis enregistrez une deuxième clé et retirez la première. Une clé refusée à l'enregistrement dit pourquoi à l'écran ; si elle dit que vos clés sont liées à un autre domaine, ouvrez la page à l'adresse de `-origine` (`localhost` et `127.0.0.1` ne sont pas la même adresse pour le navigateur).
 
 ### Avec Docker
 

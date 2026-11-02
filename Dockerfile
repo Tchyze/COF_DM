@@ -19,6 +19,8 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
 FROM debian:bookworm-slim
 RUN useradd --system --uid 1000 --home-dir /data cof && mkdir -p /data && chown cof /data
 COPY --from=build /out/cof-dm /usr/local/bin/cof-dm
+# les certificats racines : sans eux, le serveur ne joint pas GitHub pour chercher les versions publiées
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER cof
 VOLUME /data
 EXPOSE 8100
