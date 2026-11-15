@@ -1,6 +1,6 @@
 # Projets — COF DM
 
-Les chantiers possibles pour faire de COF DM le meilleur outil de MJ pour Chroniques Oubliées Fantasy, classés par priorité. Liste établie le 16 octobre 2026, remise à jour le 15 novembre 2026 (version 1.3.2).
+Les chantiers possibles pour faire de COF DM le meilleur outil de MJ pour Chroniques Oubliées Fantasy, classés par priorité. Liste établie le 16 octobre 2026, remise à jour le 15 novembre 2026 (version 1.4.0).
 
 Rappel des règles qui s'appliquent à chaque projet (voir `CLAUDE.md`) : aucune donnée des livres dans le dépôt (les tables viennent du fichier de règles ou du MJ), un univers = un fichier, rien de secret vers les joueurs (liste blanche + test de non-fuite), tout nouvel objet pris en compte par la synchronisation (`aplatir` / `appliquer`) et par `VersionModele`.
 
@@ -14,7 +14,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Où on en est
 
-- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités), projet 11 (inventaire structuré, 1.2.5), projet 12 (montée de niveau guidée, 1.2.4), projet 14 (butin et pot commun, 1.2.5), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public), et l'installation sur tablette du projet 29 (1.3.1). Le détail, PR par PR, est dans `SUIVI.md`.
+- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités), projet 11 (inventaire structuré, 1.2.5), projet 12 (montée de niveau guidée, 1.2.4), projet 14 (butin et pot commun, 1.2.5), projet 15 (afficheur de table, 1.4.0), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public), et l'installation sur tablette du projet 29 (1.3.1). Le détail, PR par PR, est dans `SUIVI.md`.
 - **Hors de cette liste, aussi fait** : image Docker Hub, menu repliable, installation Windows, rôles du serveur et page d'administration, combat et dés en direct (1.3.0) ; durcissement de sécurité et double authentification des administrateurs (1.3.1) ; fenêtre « Mes univers » du bureau (1.3.2).
 - **Chantier en cours** : aucun. Le projet 41 (ambiance sonore) est conçu, puis mis de côté par le MJ (15 novembre 2026).
 - **Au fil de l'eau** : projet 6, les essais qui ne se font qu'à la main.
@@ -35,7 +35,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 12 | Montée de niveau guidée | P2 | M | ★★ | 10 | fait |
 | 13 | Impression et export PDF | P2 | M | ★★ | — | |
 | 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | fait |
-| 15 | Afficheur de table (télé) | P2 | S | ★★ | — | |
+| 15 | Afficheur de table (télé) | P2 | S | ★★ | — | fait |
 | 16 | Générateurs et tables aléatoires du MJ | P2 | M | ★★ | — | |
 | 17 | PNJ express en jeu | P2 | S | ★★ | 16 (conseillé) | |
 | 18 | Notes rapides de séance | P2 | S | ★★ | — | |
@@ -68,7 +68,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Ordre conseillé
 
-1. Les petits lots visibles à la table, au choix : **15** (afficheur), **18** (notes rapides), **9** (suite des aides de jeu).
+1. Les petits lots visibles à la table, au choix : **18** (notes rapides), **9** (suite des aides de jeu).
 2. **13** (impression), puis **16** et **17** (tables aléatoires, PNJ express).
 3. Le P3 par valeur, puis le P4 à la demande. Le **41** (ambiance sonore) attend que le MJ le reprenne.
 4. **Projet 6** au fil de l'eau, avant chaque version stable.
@@ -120,8 +120,8 @@ Mise en page imprimable (feuille de style `@media print`, sans dépendance) : fe
 ### 14. Butin et récompenses de fin de combat — fait (1.2.5)
 Butin noté dans la rencontre, proposé au bilan du combat et réparti entre les PJ (bourse, objets de l'inventaire).
 
-### 15. Afficheur de table
-Une vue plein écran pour une télé : ordre d'initiative, round, états, santé des adversaires en mots (« indemne », « blessé », « en sang ») plutôt qu'en chiffres. Construite sur la page des joueurs (même filtre `reduire`).
+### 15. Afficheur de table — fait (1.4.0)
+Une seconde fenêtre du MJ pour une télé en HDMI : ordre d'initiative, round, PV et PM des PJ, adversaires sans aucun indice de santé (vivants ou grisés), états, portraits, jets publics ; noms d'affichage, combattants cachés, sbires qui disparaissent en tombant ; hors combat, l'écran d'attente et « Montrer à la table » (aussi sur la page des joueurs). Décisions dans `SUIVI.md`.
 
 ### 16. Générateurs et tables aléatoires
 Une fiche « Table aléatoire » que le MJ remplit (noms, rumeurs, rencontres par zone, trésors), avec pondération et tables imbriquées. Tirage depuis l'écran du MJ. Aucune table des livres dans le dépôt : elles viennent du MJ ou du fichier de règles.
