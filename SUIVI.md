@@ -9,7 +9,7 @@ Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test sta
 - **Version stable : 1.3.2** (2 novembre 2026) : PR 47 (fenêtre « Mes univers » du bureau). Image sur Docker Hub (`1.3.2`, `latest`). Avant elle : 1.3.1 (2 novembre 2026), PR 41 à 43 (durcissement de sécurité, double authentification des administrateurs, installation sur tablette) ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.2, comme dans la 1.2.5, la 1.3.0 et la 1.3.1), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Reste à retirer les copies des secrets au niveau du dépôt (`COF_DM_SIGNATURE`, `DOCKERHUB_*`), après accord du MJ.
+- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
