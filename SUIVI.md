@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49 ; projet 41, ambiance sonore, conçu avec le MJ, pas commencé).
+Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49 ; projet 41, ambiance sonore, conçu avec le MJ puis mis de côté).
 
 ## Où on en est
 
 - **Version stable : 1.3.2** (2 novembre 2026) : PR 47 (fenêtre « Mes univers » du bureau). Image sur Docker Hub (`1.3.2`, `latest`). Avant elle : 1.3.1 (2 novembre 2026), PR 41 à 43 (durcissement de sécurité, double authentification des administrateurs, installation sur tablette) ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.2, comme dans la 1.2.5, la 1.3.0 et la 1.3.1), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable. **Prochain chantier prévu** : projet 41, ambiance sonore, conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions) ; **rien n'est commencé, attendre le feu vert du MJ**.
+- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -167,7 +167,7 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 
 ### Ambiance sonore (15 novembre 2026, projet 41, avant le code)
 
-Conçue avec le MJ ; rien n'est codé. Attendre son feu vert avant le lot 1, et reposer la question si un point manque.
+Conçue avec le MJ, puis **mise de côté** le même jour : son application actuelle lui suffit. Rien n'est codé ; ne la reprendre qu'à sa demande, et reposer la question si un point manque.
 
 - **Où sort le son** : de l'application de bureau, sur l'ordinateur qui la fait tourner. Le serveur ne joue rien ; les téléphones des joueurs non plus. Jeu en présentiel seulement : rien à diffuser à des joueurs à distance.
 - **Ambiances toutes prêtes**, lancées d'un clic depuis un **lieu**, une **rencontre** ou l'écran du MJ. Une ambiance a trois couches :
@@ -330,7 +330,7 @@ Voir « Où on en est ». Image Docker publiée sur Docker Hub (`tchyze/cof-dm`,
 
 ### Ensuite
 
-**Projet 41, ambiance sonore**, conçu le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions) : le MJ dira quand commencer. Sinon, à choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+À choisir avec le MJ dans `PROJETS.md`. Le projet 41 (ambiance sonore) est conçu mais mis de côté (voir « Ambiance sonore » dans les décisions). Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
