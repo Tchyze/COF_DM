@@ -98,6 +98,20 @@ async function liste(el) {
   };
 }
 
+/* ------------------------------------------------------------ afficheur de table */
+// Une seconde fenêtre (afficheur.html), que le MJ place sur la télé. Elle suit le combat que cet écran
+// ouvre : déjà ouverte, elle change de combat par le canal ; sinon, elle s'ouvre sur celui-ci.
+const CANAL_AFFICHEUR = "cof-afficheur";
+function annoncerAfficheur(cid) {
+  try { const c = new BroadcastChannel(CANAL_AFFICHEUR); c.postMessage({ combat: cid }); c.close(); } catch { /* navigateur sans canal */ }
+}
+function ouvrirAfficheur(cid) {
+  const adresse = lien(`/afficheur.html?combat=${cid}`);
+  const f = window.open(adresse, "cof-afficheur", "popup=yes,width=1280,height=720");
+  if (f) { f.focus?.(); annoncerAfficheur(cid); return; }
+  toast(`Cette fenêtre ne peut pas en ouvrir une autre : ouvrez ${location.origin}${adresse} dans un navigateur, sur cet ordinateur.`, true);
+}
+
 /* ------------------------------------------------------------ écran */
 // Dés réels (lancés à la table, saisis ici) ou virtuels : réglage gardé sur l'appareil.
 const CLE_DES = "cof-des";
@@ -138,6 +152,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
         <button id="bUndo" class="ghost" title="Annuler la dernière action">↶<span class="lib"> Annuler</span><span class="kbd">Z</span></button>
         <button id="bPrev" class="ghost" title="Revenir au tour précédent">◀<span class="lib"> Précédent</span></button>
         <button id="bNext" class="primary big">Fin du tour ▶<span class="kbd">N</span></button>
+        <button id="bAff" class="ghost" title="Afficheur de table : une seconde fenêtre à placer sur la télé">📺<span class="lib"> Afficheur</span></button>
         <button class="ghost" data-ouvre="fMenu" title="Ajouter, test, état, journal, options…">☰<span class="lib"> Menu</span></button>
       </div>
     </div>
@@ -1037,6 +1052,8 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     $e("#tNat").value = ""; $e("#tNatOpp").value = "";
   };
   $e("#bNext").onclick = () => send({ type: "suivant" });
+  $e("#bAff").onclick = () => ouvrirAfficheur(cid);
+  annoncerAfficheur(cid);
   $e("#bPrev").onclick = () => send({ type: "precedent" });
   $e("#bSort").onclick = () => send({ type: "trier" });
   $e("#bUndo").onclick = () => send({ type: "annuler" });
