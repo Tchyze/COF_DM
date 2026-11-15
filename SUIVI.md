@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49).
+Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49 ; projet 41, ambiance sonore, conçu avec le MJ, pas commencé).
 
 ## Où on en est
 
 - **Version stable : 1.3.2** (2 novembre 2026) : PR 47 (fenêtre « Mes univers » du bureau). Image sur Docker Hub (`1.3.2`, `latest`). Avant elle : 1.3.1 (2 novembre 2026), PR 41 à 43 (durcissement de sécurité, double authentification des administrateurs, installation sur tablette) ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.2, comme dans la 1.2.5, la 1.3.0 et la 1.3.1), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable.
+- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable. **Prochain chantier prévu** : projet 41, ambiance sonore, conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions) ; **rien n'est commencé, attendre le feu vert du MJ**.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -165,6 +165,25 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Partage annulable par le MJ** : pièces et objets reviennent au pot, tant que le PJ les a encore.
 - **Trace** : le champ « Butin & récompenses » de la séance se remplit, le journal note ce que chaque PJ reçoit, et la rencontre passe à « jouée », avec son butin marqué versé (il ne se verse pas deux fois).
 
+### Ambiance sonore (15 novembre 2026, projet 41, avant le code)
+
+Conçue avec le MJ ; rien n'est codé. Attendre son feu vert avant le lot 1, et reposer la question si un point manque.
+
+- **Où sort le son** : de l'application de bureau, sur l'ordinateur qui la fait tourner. Le serveur ne joue rien ; les téléphones des joueurs non plus. Jeu en présentiel seulement : rien à diffuser à des joueurs à distance.
+- **Ambiances toutes prêtes**, lancées d'un clic depuis un **lieu**, une **rencontre** ou l'écran du MJ. Une ambiance a trois couches :
+  - **musique** : une liste de morceaux, à la suite ou au hasard, fondu entre deux morceaux ;
+  - **fond** : jusqu'à 4 sons en boucle en même temps (feu, bavardages, pluie…), chacun avec son volume, enregistré ou généré ;
+  - **bruitages** : des sons joués une fois.
+- **Touches du clavier, propres à chaque ambiance**, de deux sortes : celles qui **règlent une couche** du fond (monter, baisser, couper : le feu sur 2, les bavardages sur 3) et celles qui jouent un **bruit unique** (tonnerre, porte qui claque, chaise). Quelques touches **communes** à toutes les ambiances (0 : Silence, qui coupe tout en fondu). Volume général.
+- **Transitions** : fondu enchaîné d'une ambiance à l'autre, et retour à l'ambiance d'avant après une interruption.
+- **Sons générés par calcul** (Web Audio, dans la page) : pluie, vent, orage, feu, eau, grotte, nuit en forêt. Chacun **varie seul** (option) ou se règle à la main par les touches (intensité, et bruits uniques comme un coup de tonnerre). Le calcul ne sait pas bien faire la musique, les voix ni la foule : celles-là viennent d'enregistrements.
+- **Fichiers son hors univers** : une bibliothèque dans un dossier de l'ordinateur (jusqu'à une dizaine de Go), classée par **lieu, humeur, type et étiquettes libres**, avec **licence et auteur** de chaque son. L'univers ne garde que les ambiances et la liste de leurs sons ; elles se synchronisent, pas les fichiers. Un son absent sur un poste est signalé, pas bloquant.
+- **Libre et partageable** : chacun importe ce qu'il veut, mais seuls les sons **CC0 et CC-BY** (auteur crédité dans l'application) se partagent. Le logiciel ne fournit aucun son : un bouton télécharge un **pack de sons libres**, publié à part du programme (licence vérifiée son par son, crédits), avec des ambiances prêtes. Les MJ s'échangent leurs ambiances **par un fichier** (voir le projet 44) : seuls les sons libres partent avec.
+- **Écartée** : la génération par IA (droits des sons produits flous ou non commerciaux, modèles lourds) ; les liens YouTube ou Spotify.
+- **Télécommande** : le téléphone du MJ, lui seul, pilote l'ordinateur **en passant par le serveur** (le bureau relié ne répond pas au réseau local, et cela ne change pas).
+- **Plus tard** : les automatismes (ambiance de combat au début d'un combat, ambiance du lieu ouvert…).
+- **Lots prévus** : 1. bibliothèque (importer, classer, licence et auteur, écouter) ; 2. ambiances, trois couches et fondus, rattachées à un lieu ou une rencontre ; 3. touches ; 4. sons générés ; 5. pack de sons libres et partage d'ambiances ; 6. télécommande ; 7. automatismes. Les lots 1 à 3 font déjà un outil utilisable avec ses propres sons.
+
 ### Schéma des fiches (31 octobre 2026)
 
 - **Inventaire des champs** fait type par type ; corrigé en une PR (28) : cinq incohérences, puis les champs utiles en jeu.
@@ -311,7 +330,7 @@ Voir « Où on en est ». Image Docker publiée sur Docker Hub (`tchyze/cof-dm`,
 
 ### Ensuite
 
-À choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+**Projet 41, ambiance sonore**, conçu le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions) : le MJ dira quand commencer. Sinon, à choisir avec le MJ dans `PROJETS.md`. Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
