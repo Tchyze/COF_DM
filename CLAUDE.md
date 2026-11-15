@@ -102,7 +102,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 
 - Une branche et une PR vers `main` par lot (workflow *Tests* sur chaque PR). **Ne pas fusionner avant l'essai du MJ.**
 - Une branche fusionnée est supprimée d'office sur GitHub. PR empilées : avant de fusionner celle du dessous, reporter celle du dessus sur `main` : `gh api -X PATCH repos/Tchyze/COF_DM/pulls/<n> -f base=main` (`gh pr edit --base` échoue).
-- Faire essayer : `gh workflow run release.yml --ref <branche> -f canal=test`.
+- Faire essayer : `gh workflow run release.yml --ref <branche> -f canal=test`. Toute publication attend l'approbation du MJ sur GitHub (environnement `publication`) ; ne jamais approuver à sa place.
 - Version stable : tag `vX.Y.Z` (trois nombres, rien d'autre), **jamais sans demande explicite** ; notes de version commençant par « Nouveautés » en français.
 - Image Docker : le job `docker` de *Release* la construit et l'essaie à chaque passage, et ne l'envoie sur Docker Hub (`X.Y.Z` et `latest`) que pour un tag stable. Secrets `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` ; image `tchyze/cof-dm` (`<DOCKERHUB_USERNAME>/cof-dm`, ou variable `DOCKERHUB_IMAGE`). Sur une branche, le job vérifie seulement les identifiants (connexion, sans envoi). Republier une version stable déjà publiée : `gh workflow run release.yml -f docker=X.Y.Z` (image reconstruite depuis le tag ; `latest` seulement si c'est la plus récente).
 - `SUIVI.md` seul : commit direct sur `main`, sans PR.
