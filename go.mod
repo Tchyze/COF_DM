@@ -3,7 +3,7 @@ module github.com/Tchyze/cof_dm
 go 1.26.10
 
 require (
-	github.com/mattn/go-sqlite3 v1.14.52
+	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/webview/webview_go v0.0.0-20240831120633-6173450d4dd6
 )
 
