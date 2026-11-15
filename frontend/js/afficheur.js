@@ -3,6 +3,8 @@
 // aussi quand le combat se joue sur le serveur), et n'en montre que ce que la table peut voir :
 // l'ordre d'initiative, le round, qui joue et qui suit, les PV et PM des PJ, les états de chacun.
 // D'un adversaire ou d'un allié, rien que vivant ou hors de combat : aucun indice sur sa santé.
+// Un combattant caché par le MJ n'apparaît pas ; un nom d'affichage remplace le vrai nom (et son
+// portrait, qui le trahirait) ; un sbire disparaît dès qu'il tombe.
 // Elle ne fait qu'afficher : aucune action, aucun POST.
 import { $, esc, api, lien } from "./ui.js";
 import { chargerSchema, actif } from "./schema.js";
@@ -23,12 +25,12 @@ const tombe = c => c.pv <= 0;
 
 /** La place d'un combattant, réduite à ce qui s'affiche : jamais les PV d'un adversaire ou d'un allié. */
 export function vueCombattant(c, i, st) {
-  const pj = c.camp === "pj";
+  const pj = c.camp === "pj", alias = (c.alias || "").trim();
   return {
     id: c.id,
-    nom: c.nom,
+    nom: alias || c.nom,
     camp: c.camp,
-    fiche: c.ref && (c.ref.kind === "pj" || c.ref.kind === "pnj") ? c.ref.id : 0,
+    fiche: !alias && c.ref && (c.ref.kind === "pj" || c.ref.kind === "pnj") ? c.ref.id : 0,
     courant: i === st.tour,
     tombe: tombe(c),
     etats: etatsDe(c),
@@ -37,9 +39,13 @@ export function vueCombattant(c, i, st) {
   };
 }
 
-/** L'ordre d'initiative tel que la table le voit, et qui joue ensuite (le premier encore debout). */
+// Ce que la table ne voit pas : un combattant caché, un sbire tombé.
+const invisible = c => !c || c.cache || (c.sbire && c.camp !== "pj" && tombe(c));
+
+/** L'ordre d'initiative tel que la table le voit, et qui joue ensuite (le premier encore debout).
+ * Le tour d'un combattant invisible ne désigne personne. */
 export function vueOrdre(st) {
-  const ordre = st.ordre.map((id, i) => st.cbts[id] && vueCombattant(st.cbts[id], i, st)).filter(Boolean);
+  const ordre = st.ordre.map((id, i) => !invisible(st.cbts[id]) && vueCombattant(st.cbts[id], i, st)).filter(Boolean);
   const cur = ordre.findIndex(p => p.courant);
   let suivant = null;
   if (cur >= 0) {
@@ -89,11 +95,11 @@ function rendre() {
       <h1>${esc(st.nom)}</h1>
       <span class="aff-round"><span class="lbl">Round</span><span class="n num">${st.round}</span></span>
     </header>
-    <div class="aff-tour ${courant?.camp || ""}">
-      ${courant ? portrait(courant, true) : ""}
-      <span class="aff-tour-texte"><span class="lbl">C'est au tour de</span><span class="aff-tour-nom">${courant ? esc(courant.nom) : "—"}</span>
+    ${courant ? `<div class="aff-tour ${courant.camp}">
+      ${portrait(courant, true)}
+      <span class="aff-tour-texte"><span class="lbl">C'est au tour de</span><span class="aff-tour-nom">${esc(courant.nom)}</span>
       ${suivant ? `<span class="aff-ensuite"><span class="lbl">Ensuite</span> <b>${esc(suivant.nom)}</b></span>` : ""}</span>
-    </div>
+    </div>` : ""}
     <ol class="aff-ordre${ordre.length > 12 ? " tres-serre" : ordre.length > 8 ? " serre" : ""}" style="--lignes:${Math.ceil(ordre.length / 2)}">${ordre.map(ligne).join("")}</ol>
   </section>`;
   chargerPortraits(ordre);

@@ -27,6 +27,13 @@
 .combat .seg button{border:0;border-radius:0;background:transparent;min-height:36px}
 .combat .seg button[aria-pressed=true]{background:var(--ink);color:var(--surface)}
 .combat .tag{font:600 .66rem var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--c,var(--muted));border:1px solid var(--c,var(--line));border-radius:3px;padding:0 4px;white-space:nowrap}
+/* ce que la table voit : combattant caché (un clic le révèle), nom d'affichage, cases de l'ajout */
+.combat button.tag.cache,.combat .cbt .name button.tag.cache{--c:var(--secret);font:600 .66rem var(--f-body);text-transform:uppercase;letter-spacing:.08em;color:var(--secret);border:1px solid var(--secret);border-radius:3px;padding:0 4px;background:color-mix(in srgb,var(--secret) 14%,transparent);min-height:0;min-width:0;flex:none;cursor:pointer}
+.combat button.tag.cache:hover,.combat .cbt .name button.tag.cache:hover{background:color-mix(in srgb,var(--secret) 28%,transparent)}
+.combat .tag.alias{--c:var(--accent);text-transform:none;letter-spacing:0;max-width:45%;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto}
+.combat label.case{flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:.9rem;color:var(--ink)}
+.combat .add-table{border-top:1px solid var(--line);padding-top:10px;align-items:flex-end;flex-wrap:wrap}
+.combat .table-vue{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .combat .pj{--c:var(--pj)} .combat .allie{--c:var(--allie)} .combat .ennemi{--c:var(--ennemi)}
 .combat .conn{font-size:.8rem;padding:2px 8px;border-radius:999px;background:var(--warn);color:var(--bg)}
 .combat .libre{display:flex;flex-direction:column;gap:6px}

@@ -355,7 +355,7 @@ func recalerEtat(st *combat.Etat, pj int64, utils map[string]fiches.Utilisation)
 
 func ficheDeMonstre(id int64, m *fiches.Monstre) combat.FicheCombat {
 	return combat.FicheCombat{ID: id, Nom: m.Nom, Init: m.Init, Defense: m.Defense, Pv: m.Pv, Rd: m.Rd, Crit: m.Crit,
-		Attaques: m.Attaques, Capacites: m.Capacites, Carac: m.Carac, Superieures: m.Superieures}
+		Attaques: m.Attaques, Capacites: m.Capacites, Carac: m.Carac, Superieures: m.Superieures, Sbire: m.Sbire}
 }
 
 // ficheCombat : ce qu'il faut pour combattre, d'après un monstre du bestiaire (« monstre »), la
@@ -380,6 +380,7 @@ func (s *Serveur) ficheCombat(kind string, id int64) (*combat.FicheCombat, error
 		}
 		f := ficheDeMonstre(id, m)
 		f.Nom = e.Nom
+		f.Sbire = false // un PNJ du monde a un nom : il reste à l'écran, grisé, s'il tombe
 		return &f, nil
 	case "pj":
 		e, err := s.store.Lire(id)

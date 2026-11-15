@@ -48,9 +48,13 @@ import "strconv"
 //
 // Modèle 8 : le butin chiffré d'une rencontre (« butin_chiffre », genre « butin » ; « butin_verse »),
 // le pot commun de chaque campagne (collection « pots ») et la fonctionnalité « butin ».
+//
+// Modèle 9 : l'afficheur de table. Un monstre du bestiaire peut être « sbire » (il disparaît en
+// tombant) ; un combattant a un nom d'affichage (« alias »), peut être caché aux joueurs (« cache »)
+// et être « sbire ». Un serveur plus ancien les perdrait, et montrerait aux joueurs un combattant caché.
 const (
 	VersionProtocole = 1
-	VersionModele    = 8
+	VersionModele    = 9
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

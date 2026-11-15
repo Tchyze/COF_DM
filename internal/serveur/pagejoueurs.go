@@ -147,16 +147,16 @@ type combatJoueur struct {
 }
 
 // reduire ne garde d'un combat que ce qu'un joueur en voit : l'ordre d'initiative, qui joue, qui
-// joue ensuite, et les états. Les adversaires et les alliés hors de combat disparaissent ; aucun
-// chiffre n'est transmis.
+// joue ensuite, et les états. Les adversaires et les alliés hors de combat disparaissent, comme les
+// combattants cachés par le MJ ; chacun porte son nom d'affichage ; aucun chiffre n'est transmis.
 func reduire(st *combat.Etat) *combatJoueur {
 	cj := &combatJoueur{Nom: st.Nom, Round: st.Round, Ordre: []placeJoueur{}}
 	for i, id := range st.Ordre {
 		c := st.Cbts[id]
-		if c == nil || (c.Camp != "pj" && c.Pv <= 0) {
+		if c == nil || c.Cache || (c.Camp != "pj" && c.Pv <= 0) {
 			continue
 		}
-		p := placeJoueur{Nom: c.Nom, Camp: c.Camp, ATerre: c.Camp == "pj" && c.Pv <= 0, Courant: i == st.Tour, Etats: []string{}}
+		p := placeJoueur{Nom: c.NomVu(), Camp: c.Camp, ATerre: c.Camp == "pj" && c.Pv <= 0, Courant: i == st.Tour, Etats: []string{}}
 		if c.Ref != nil && c.Ref.Kind == "pj" {
 			p.Pj = c.Ref.ID
 		}

@@ -132,12 +132,20 @@ export async function mount(el, arg) {
       <div class="ligne"><h2 style="flex:1;margin:0">${esc(m.nom)}</h2><span class="badge">${esc(m.source)}</span></div>
       ${verrouillee(m) ? `<p class="hint">${esc(m.livre || "")}${m.page ? `, page ${esc(m.page)}` : ""} · fiche verrouillée. Dupliquez-la pour en faire une version maison modifiable.</p>` : ""}
       ${blocStats(m)}
+      ${lecture ? (m.sbire ? `<p class="hint">Disparaît en tombant (sbire, invocation).</p>` : "") : `<form id="b-sbire"><label class="bst-case"><input type="checkbox" name="sbire"${m.sbire ? " checked" : ""}> Disparaît en tombant <small>(sbire, invocation : il quitte l'afficheur de table et la page des joueurs dès qu'il tombe, au lieu d'y rester grisé)</small></label></form>`}
       ${m.capacites ? `<h3>Capacités</h3><div class="bst-texte">${esc(m.capacites)}</div>` : ""}
       ${m.description ? `<h3>Description</h3><div class="bst-texte">${esc(m.description)}</div>` : ""}
       ${POUR_JOUER.filter(([k]) => m[k]).map(([k, t]) => `<h3>${t}</h3><div class="bst-texte">${esc(m[k])}</div>`).join("")}
       ${m.notes ? `<p class="hint bst-texte">${esc(m.notes)}</p>` : ""}
       ${lecture ? "" : `<div class="ligne" style="margin-top:12px"><button class="primary" id="b-dup">Dupliquer pour personnaliser</button><span style="flex:1"></span><button class="danger" id="b-suppr">Supprimer</button></div>`}`;
     if (lecture) return;
+    // la seule case qui change sur une fiche officielle verrouillée
+    $("#b-sbire", fiche).sbire.onchange = async e => {
+      const d = { ...m, sbire: e.target.checked };
+      delete d.id; delete d.modifie;
+      try { const r = await api("PUT", `/api/bestiaire/${m.id}`, d); Object.assign(m, r); toast(r.sbire ? "Il disparaîtra en tombant." : "Il restera grisé en tombant."); await charger(); }
+      catch (err) { e.target.checked = !e.target.checked; toast(err.message, true); }
+    };
     $("#b-dup", fiche).onclick = async () => {
       try { const c = await api("POST", `/api/bestiaire/${m.id}/dupliquer`); toast("Copie maison créée : vous pouvez la modifier."); await charger(); ouvrir(c); aller(c.id); }
       catch (e) { toast(e.message, true); }
@@ -170,6 +178,7 @@ export async function mount(el, arg) {
         <div class="bst-grille">
           ${nombre("defense", "DEF", f.defense)}${nombre("pv", "PV", f.pv, 'min="1"')}${nombre("init", "Init", f.init)}${nombre("rd", "RD", f.rd, 'min="0"')}${nombre("crit", "Critique sur", f.crit, 'min="2" max="20"')}
         </div>
+        <label class="bst-case"><input type="checkbox" name="sbire"${f.sbire ? " checked" : ""}> Disparaît en tombant <small>(sbire, invocation : il quitte l'afficheur de table et la page des joueurs dès qu'il tombe, au lieu d'y rester grisé)</small></label>
         <div class="bst-grille">${CARAC.map(k => `<label class="champ"><span>${k} <small><input type="checkbox" name="s_${k}"${sup(f, k) ? " checked" : ""}> sup.</small></span><input name="c_${k}" type="number" value="${esc(c[k] ?? 0)}"></label>`).join("")}</div>
         <p class="hint">Modificateurs (−2, +1, +3…). « sup. » : Carac. supérieure, deux dés et on garde le meilleur.</p>
         <h3>Attaques</h3>
@@ -201,7 +210,7 @@ export async function mount(el, arg) {
         carac: Object.fromEntries(CARAC.map(k => [k, +g("c_" + k) || 0])), superieures: CARAC.filter(k => fd.get("s_" + k)),
         attaques: $$(".bst-atk", atks).map(r => ({ nom: $("[data-k=nom]", r).value.trim() || "Attaque", type: $("[data-k=type]", r).value,
           bonus: +$("[data-k=bonus]", r).value || 0, dm: $("[data-k=dm]", r).value.trim() })),
-        capacites: g("capacites") || "", description: g("description") || "", notes: g("notes") || "",
+        capacites: g("capacites") || "", description: g("description") || "", notes: g("notes") || "", sbire: fd.get("sbire") === "on",
         ...Object.fromEntries(POUR_JOUER.map(([k]) => [k, (g(k) || "").trim()])),
       };
     };
