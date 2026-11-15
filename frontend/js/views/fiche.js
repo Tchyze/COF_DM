@@ -6,6 +6,7 @@ import { selecteur, saisieDate, completerLiens, hauteurAuto, selecteurMonstre, e
 import * as panneaux from "./panneaux.js";
 import { panneauFeuille } from "./feuille.js";
 import { organigramme } from "./organigramme.js";
+import { ouvrirMontrer } from "../montrer.js";
 
 let courant = "";
 export const typeCourant = () => courant;
@@ -77,6 +78,8 @@ function lecture(el, f) {
   // le butin chiffré d'une rencontre, et son versement au pot commun
   const butin = t.champs.find(c => c.genre === "butin" && f.data[c.cle]);
   const versable = butin && !f.data.butin_verse && !window.cofAcces?.lecture_seule && f.data.campagne;
+  // une image de la fiche (portrait, lieu…), ou une aide de jeu, sur l'afficheur et la page des joueurs
+  const montrable = !window.cofAcces?.lecture_seule && (f.medias?.length > 0 || f.type === "aide");
 
   el.innerHTML = `
     <div class="fiche-tete" data-type="${f.type}">
@@ -92,6 +95,7 @@ function lecture(el, f) {
           ${f.type === "seance" && !window.cofAcces?.lecture_seule && fonctionActive("seances") ? `<a href="#/apres/${f.id}"><button title="Reporter ce qui s'est passé et préparer la séance suivante">✅ Après la séance</button></a>` : ""}
           ${liensCreation(f)}
           <span style="flex:1"></span>
+          ${montrable ? `<button id="montrer" class="ghost" title="Sur l'afficheur de table et la page des joueurs">📺 Montrer à la table</button>` : ""}
           ${partageable ? `<button id="partager" class="${f.partage ? "" : "ghost"}" title="Les joueurs ne voient jamais les champs réservés au MJ">${f.partage ? "Retirer aux joueurs" : "👁 Partager avec les joueurs"}</button>` : ""}
           <button id="archiver" class="${f.archive ? "" : "ghost"}">${f.archive ? "Restaurer" : "Archiver"}</button>
           ${f.archive ? `<button id="supprimer" class="danger">Supprimer définitivement</button>` : ""}
@@ -154,6 +158,7 @@ function lecture(el, f) {
       recharger(el, f.id);
     } catch (err) { toast(err.message, true); }
   });
+  if ($("#montrer", el)) $("#montrer", el).onclick = () => ouvrirMontrer(f);
   const partager = $("#partager", el);
   if (partager) partager.onclick = async () => {
     try {

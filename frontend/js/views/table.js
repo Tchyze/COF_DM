@@ -4,7 +4,7 @@
 import { $, $$, esc, api, toast, armer } from "../ui.js";
 import { typeDe, champDe, vignette, lienFiche, badgeType, valeurCourte, actif as fonctionActive } from "../schema.js";
 import { rendu, inline, resolveur } from "../md.js";
-import { ecran as ecranCombat, lancerCombat } from "./combat.js";
+import { ecran as ecranCombat, lancerCombat, ouvrirAfficheur } from "./combat.js";
 import { lireMonstre, blocMonstre } from "../monstres.js";
 import { COURTS, RESUMES } from "./fiche.js";
 import { aideEditionJoueurs } from "./comptes.js";
@@ -62,6 +62,7 @@ export async function mount(el, arg) {
       <span class="t-pot" id="t-pot"></span>
       <span class="t-rappels" id="t-rappels"></span>
       <button class="ghost num" id="t-chrono" title="Chronomètre de séance et rappels" hidden></button>
+      <button class="ghost" id="t-aff" title="Afficheur de table : une seconde fenêtre à placer sur la télé" aria-label="Afficheur de table">📺</button>
       <button class="ghost" id="t-cherche" title="Rechercher une fiche ( / )" aria-label="Rechercher">🔍</button>
       <button class="ghost" id="t-options" title="Options de l'écran" aria-label="Options">⚙</button>
       <button class="ghost" id="t-plein" title="Plein écran" aria-label="Plein écran"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
@@ -457,6 +458,7 @@ export async function mount(el, arg) {
 
   $("#t-menu", el).onclick = e => { e.stopPropagation(); $("#app").classList.toggle("menu-ouvert"); };
   $("#t-cherche", el).onclick = () => window.cofRecherche();
+  $("#t-aff", el).onclick = () => ouvrirAfficheur(); // l'afficheur de table, combat ou pas
   $("#t-options", el).onclick = e => { e.stopPropagation(); ouvrirPop("options"); };
   $("#t-chrono", el).onclick = e => { e.stopPropagation(); ouvrirPop("chrono"); };
   $("#t-rappels", el).onclick = e => {

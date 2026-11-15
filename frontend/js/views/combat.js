@@ -74,7 +74,7 @@ async function liste(el) {
         <div><button class="primary big" id="nGo">Lancer le combat</button></div>
       </section>`}
       <section class="panel">
-        <h2>Combats</h2>
+        <div class="panel-head"><h2>Combats</h2><button class="ghost" id="lAff" title="Afficheur de table : une seconde fenêtre à placer sur la télé">📺 Afficheur</button></div>
         <div class="cards" id="cards">${combats.length ? combats.map(c => `
           <article class="ccard${c.termine ? " done" : ""}">
             <h3>${esc(c.nom)}</h3>
@@ -89,6 +89,7 @@ async function liste(el) {
     catch (e) { toast(e.message, true); }
   }));
   $$("[data-open]", el).forEach(b => { b.onclick = () => { location.hash = `#/combat/${b.dataset.open}`; }; });
+  $("#lAff", el).onclick = () => ouvrirAfficheur();
   if ($("#nGo", el)) $("#nGo", el).onclick = async () => {
     const ren = +$("#nRen", el).value, camp = +$("#nCamp", el).value;
     try {
@@ -105,10 +106,11 @@ const CANAL_AFFICHEUR = "cof-afficheur";
 function annoncerAfficheur(cid) {
   try { const c = new BroadcastChannel(CANAL_AFFICHEUR); c.postMessage({ combat: cid }); c.close(); } catch { /* navigateur sans canal */ }
 }
-function ouvrirAfficheur(cid) {
-  const adresse = lien(`/afficheur.html?combat=${cid}`);
+/** Ouvre l'afficheur de table (ou le ramène devant) ; cid : le combat à y suivre (0 : il choisit seul). */
+export function ouvrirAfficheur(cid = 0) {
+  const adresse = lien(cid ? `/afficheur.html?combat=${cid}` : "/afficheur.html");
   const f = window.open(adresse, "cof-afficheur", "popup=yes,width=1280,height=720");
-  if (f) { f.focus?.(); annoncerAfficheur(cid); return; }
+  if (f) { f.focus?.(); if (cid) annoncerAfficheur(cid); return; }
   toast(`Cette fenêtre ne peut pas en ouvrir une autre : ouvrez ${location.origin}${adresse} dans un navigateur, sur cet ordinateur.`, true);
 }
 

@@ -831,3 +831,23 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
   body { box-sizing: border-box; padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 }
 .connexion .installer { align-self: flex-start; }
+
+/* « Montrer à la table » : le choix de l'image */
+.boite.montrer{max-width:min(640px,94vw)}
+.montrer-images{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
+.montrer-image{position:relative;cursor:pointer}
+.montrer-image input{position:absolute;opacity:0}
+.montrer-image img{width:110px;height:110px;object-fit:cover;border-radius:var(--r);border:3px solid transparent;display:block}
+.montrer-image input:checked + img{border-color:var(--gold)}
+.montrer-image input:focus-visible + img{outline:2px solid var(--accent);outline-offset:2px}
+
+/* page des joueurs : ce que le MJ montre à la table */
+.pj-montre{position:fixed;inset:0;z-index:60;background:rgb(6 7 10/.88);display:grid;place-items:center;padding:16px;overflow:auto}
+.pj-montre-boite{background:var(--surface);border:1px solid var(--line2);border-radius:calc(var(--r)*1.5);padding:14px;max-width:min(900px,100%);display:flex;flex-direction:column;gap:10px;box-shadow:var(--ombre)}
+.pj-montre-tete{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pj-montre-boite h2{margin:0}
+.pj-montre-boite img{width:100%;max-height:70vh;object-fit:contain;border-radius:var(--r);align-self:center}
+.pj-montre-texte{white-space:pre-wrap;background:#efe6cf;color:#2a2214;border-radius:var(--r);padding:14px 16px;font:1.05rem/1.55 var(--f-display)}
+.pastille-montre{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:55;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--gold);border-radius:999px;padding:4px 6px 4px 14px;box-shadow:var(--ombre);max-width:min(560px,calc(100vw - 100px));font-size:.9rem}
+.pastille-montre span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pastille-montre[hidden]{display:none}
