@@ -164,8 +164,16 @@ func (s *Serveur) bestiaireModifier(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ancien.Verrouillee() {
-		erreur(w, 409, "Fiche officielle verrouillée : dupliquez-la pour créer une version maison modifiable.")
-		return
+		// seule la case « disparaît en tombant » change sur une fiche officielle
+		x := *ancien
+		x.Sbire = m.Sbire
+		a, _ := json.Marshal(x)
+		b, _ := json.Marshal(m)
+		if string(a) != string(b) {
+			erreur(w, 409, "Fiche officielle verrouillée : dupliquez-la pour créer une version maison modifiable.")
+			return
+		}
+		m = &x
 	}
 	data, _ := json.Marshal(m)
 	d, err := s.store.MajDoc(collMonstres, id, data, m.Nom, auteurDe(r))
@@ -249,10 +257,12 @@ func (s *Serveur) importerMonstres(liste []json.RawMessage) (bilanMonstres, erro
 		return res, err
 	}
 	parRef := map[string]int64{}
+	sbires := map[string]bool{} // la case du MJ survit à la mise à jour de la fiche officielle
 	for _, d := range existants {
 		var m fiches.Monstre
 		if json.Unmarshal(d.Data, &m) == nil && m.Ref != "" {
 			parRef[m.Ref] = d.ID
+			sbires[m.Ref] = m.Sbire
 		}
 	}
 	for i, raw := range liste {
@@ -264,6 +274,9 @@ func (s *Serveur) importerMonstres(liste []json.RawMessage) (bilanMonstres, erro
 			_ = json.Unmarshal(raw, &nom)
 			res.Rejets = append(res.Rejets, rejetImport{i + 1, nom.Nom, err.Error()})
 			continue
+		}
+		if sbires[m.Ref] {
+			m.Sbire = true
 		}
 		data, _ := json.Marshal(m)
 		if id, ok := parRef[m.Ref]; ok && m.Ref != "" {

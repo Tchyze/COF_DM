@@ -153,6 +153,10 @@ type Monstre struct {
 	Habitat      string `json:"habitat,omitempty"`
 	Butin        string `json:"butin,omitempty"`
 	Langues      string `json:"langues,omitempty"`
+	// Sbire : un « petit » adversaire (invocation, sbire) qui disparaît de l'afficheur de table et de
+	// la page des joueurs dès qu'il tombe ; les autres y restent, grisés. Seule case modifiable sur une
+	// fiche officielle verrouillée, et gardée quand l'import officiel la met à jour.
+	Sbire bool `json:"sbire,omitempty"`
 	// Fiches officielles : identifiant fixe (mise à jour par import) et référence au livre.
 	Ref   string `json:"ref,omitempty"`
 	Livre string `json:"livre,omitempty"`

@@ -625,6 +625,9 @@ a.version-app[href]:hover{color:var(--muted)}
 .bst-car{display:flex;flex-wrap:wrap;gap:4px 14px}
 .bst-texte{white-space:pre-line}
 .bst-grille{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.bst-case{display:flex;align-items:flex-start;gap:8px;font-size:.9rem;margin:4px 0}
+.bst-case small{color:var(--faint)}
+.bst-case input{margin-top:3px}
 .bst-atk{display:grid;grid-template-columns:2fr 1fr 70px 1fr auto;gap:6px}
 .bst-voie{display:flex;justify-content:space-between;gap:10px;align-items:center}
 .bst-voie button[aria-pressed="true"]{border-color:var(--accent);color:var(--accent)}

@@ -262,6 +262,10 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     ${fenetre("fAjout", "Ajouter au combat", `<div class="col" id="addBox">
         <div class="seg" id="addSeg"><button data-t="monstre" aria-pressed="true">Monstre</button><button data-t="pj" aria-pressed="false">Personnage</button><button data-t="libre" aria-pressed="false">Libre</button></div>
         <div id="addBody"></div>
+        <div class="row add-table">
+          <label class="case"><input type="checkbox" id="adCache"> Caché aux joueurs <span class="hint">(embuscade : à révéler ensuite)</span></label>
+          <label class="s" style="flex:1">Nom vu par la table<input id="adAlias" placeholder="Le vrai nom"></label>
+        </div>
       </div>`)}
     ${fenetre("fJournal", "Journal du combat", `<div class="row"><button type="button" id="bCopy" class="icon">Copier pour Obsidian</button><button type="button" id="bClear" class="icon ghost">Vider</button></div>
       <div class="logwrap" id="log"></div>`)}
@@ -506,7 +510,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     return `<li class="cbt ${c.camp}${courant ? " current" : ""}${down ? " down" : ""}" data-pv>
       <div class="init num">${c.init}</div>
       <div class="main">
-        <div class="name"><button data-a="fiche" data-id="${id}" title="${esc(c.nom)} (${CAMP[c.camp]}) : attaques, capacités, états…"><span class="base">${esc(base)}</span>${numero ? `<span>${esc(numero)}</span>` : ""}</button>${courant ? `<span class="flag">Joue</span>` : ""}${down ? `<span class="tag">${c.camp === "pj" ? "Inconscient" : "Hors combat"}</span>` : ""}${chips}</div>
+        <div class="name"><button data-a="fiche" data-id="${id}" title="${esc(c.nom)} (${CAMP[c.camp]}) : attaques, capacités, états…"><span class="base">${esc(base)}</span>${numero ? `<span>${esc(numero)}</span>` : ""}</button>${courant ? `<span class="flag">Joue</span>` : ""}${down ? `<span class="tag">${c.camp === "pj" ? "Inconscient" : "Hors combat"}</span>` : ""}${vuTable(c, id)}${chips}</div>
         <div class="hp"><div class="bar"><i class="${cls}" style="width:${pct}%"></i></div><span class="val">${c.pv} / ${c.pvMax}</span><span class="stats">DEF ${c.defense}${c.rd ? " · RD " + c.rd : ""}${c.pmMax ? ` · <span class="pm">PM ${c.pm}/${c.pmMax}</span>` : ""}</span></div>
       </div>
       <span class="quick"><input type="number" min="1" inputmode="numeric" class="q" placeholder="PV" aria-label="Valeur pour ${esc(c.nom)}"><button class="icon" data-a="dmg" data-id="${id}" title="Infliger des dégâts" aria-label="Dégâts">−</button><button class="icon" data-a="heal" data-id="${id}" title="Soigner" aria-label="Soins">+</button></span>
@@ -614,7 +618,8 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     const by = st.ordre.map(i => st.cbts[i]).filter(o => o.cible === id && o.pv > 0).map(o => o.nom);
     const chips = etatsDe(c).map(e => `<span class="chip" title="${esc(ETATS[e]?.description || "")}">${esc(e)}${typeof c.etats[e] === "number" ? " " + c.etats[e] + "r" : ""}<button data-a="rmEtat" data-id="${id}" data-e="${esc(e)}" aria-label="Retirer ${esc(e)}">×</button></span>`).join("");
     $e("#fCbt h2").textContent = c.nom;
-    patch($e("#ficheCbt"), `<div class="stats">${CAMP[c.camp]} · Init ${c.init} · ${c.pv} / ${c.pvMax} PV · DEF ${c.defense}${c.rd ? " · RD " + c.rd : ""}${c.camp === "pj" ? " · PC " + c.pc : ""}${c.pmMax ? ` · <span class="pm">PM ${c.pm} / ${c.pmMax}</span>` : ""}${CRIT && c.crit >= 2 && c.crit < DE ? ` · critique sur ${c.crit}–${DE}` : ""}</div>
+    patch($e("#ficheCbt"), `<div class="table-vue">${c.cache ? `<button data-a="reveler" data-id="${id}" class="primary">👁 Révéler aux joueurs</button>` : `<button data-a="cacher" data-id="${id}" class="ghost">🙈 Cacher aux joueurs</button>`}${c.alias ? ` <span class="hint">À la table : « ${esc(c.alias)} »</span>` : ""}${c.sbire ? ` <span class="hint">· disparaît en tombant</span>` : ""}</div>
+      <div class="stats">${CAMP[c.camp]} · Init ${c.init} · ${c.pv} / ${c.pvMax} PV · DEF ${c.defense}${c.rd ? " · RD " + c.rd : ""}${c.camp === "pj" ? " · PC " + c.pc : ""}${c.pmMax ? ` · <span class="pm">PM ${c.pm} / ${c.pmMax}</span>` : ""}${CRIT && c.crit >= 2 && c.crit < DE ? ` · critique sur ${c.crit}–${DE}` : ""}</div>
       <div class="quick" data-pv><input type="number" min="1" inputmode="numeric" class="q" id="fichePv" placeholder="PV" aria-label="Valeur pour ${esc(c.nom)}"><button data-a="dmg" data-id="${id}">− Dégâts</button><button data-a="heal" data-id="${id}">+ Soins</button></div>
       ${c.pmMax ? `<div class="quick" data-pm><input type="number" min="1" inputmode="numeric" class="q" id="fichePm" placeholder="PM" aria-label="Points de mana pour ${esc(c.nom)}"><button data-a="pmMoins" data-id="${id}">− PM</button><button data-a="pmPlus" data-id="${id}">+ PM</button></div>` : ""}
       ${chips ? `<div class="chips">${chips}</div>` : ""}
@@ -836,6 +841,19 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
     $e("#logApercu").innerHTML = L.slice(-14).reverse().map(e => `<div class="loge ${e.k}">${md(e.t)}</div>`).join("");
   }
 
+  /* --- ce que la table voit (afficheur, page des joueurs) --- */
+  // Badge d'un combattant caché (un clic le révèle) et nom d'affichage, sur sa ligne.
+  function vuTable(c, id) {
+    return (c.cache ? `<button class="tag cache" data-a="reveler" data-id="${id}" title="Caché aux joueurs : touchez pour le révéler">🙈 Caché</button>` : "")
+      + (c.alias ? `<span class="tag alias" title="Nom vu par la table">« ${esc(c.alias)} »</span>` : "");
+  }
+  // Options de la fenêtre d'ajout ; le nom d'affichage ne sert qu'une fois.
+  function pourLaTable() {
+    const alias = $e("#adAlias").value.trim();
+    $e("#adAlias").value = "";
+    return { cache: $e("#adCache").checked, ...(alias ? { alias } : {}) };
+  }
+
   /* --- panneau d'ajout --- */
   function rendreAjout() {
     $$("#addSeg button", el).forEach(b => b.setAttribute("aria-pressed", b.dataset.t === ui.addTab));
@@ -882,7 +900,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       $e("#lGo").onclick = () => {
         const nom = $e("#lNom").value.trim();
         if (!nom) { toast("Donnez un nom au combattant.", true); return; }
-        send({ type: "ajouter", camp: $e("#lCamp").value, qte: +$e("#lQte").value || 1, fiche: {
+        send({ type: "ajouter", camp: $e("#lCamp").value, qte: +$e("#lQte").value || 1, ...pourLaTable(), fiche: {
           nom, init: +$e("#lInit").value || 0, defense: +$e("#lDef").value || 0, pv: Math.max(1, +$e("#lPv").value || 1),
           attaques: [{ nom: "Attaque", type: "C", bonus: +$e("#lAtt").value || 0, dm: $e("#lDm").value.trim() }] } });
         $e("#lNom").value = "";
@@ -907,6 +925,11 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
         <label>Pts chance<input name="pc" type="number" min="0" value="${c.pc}"></label>
         <label>PM<input name="pm" type="number" min="0" value="${c.pm || 0}"></label>
         <label>PM max<input name="pmMax" type="number" min="0" value="${c.pmMax || 0}"></label>
+        <label class="w2">Nom vu par la table<input name="alias" value="${esc(c.alias || "")}" placeholder="${esc(c.nom)}"></label>
+      </div>
+      <div class="row">
+        <label class="case"><input type="checkbox" name="cache"${c.cache ? " checked" : ""}> Caché aux joueurs</label>
+        <label class="case"><input type="checkbox" name="sbire"${c.sbire ? " checked" : ""}> Disparaît en tombant <span class="hint">(sbire, invocation)</span></label>
       </div>
       <label>Capacités<textarea name="capacites" rows="3">${esc(c.capacites)}</textarea></label>
       <p class="hint">Les modifications ne concernent que ce combat, pas la fiche du monstre ni la feuille du personnage (sauf les PV, les points de chance et les points de mana d'un PJ, reportés sur sa feuille).</p>
@@ -917,7 +940,8 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       if (dlg.returnValue !== "ok") return;
       const g = n => f.elements[n].value;
       send({ type: "modifier", id, champs: { nom: g("nom").trim() || c.nom, camp: g("camp"), init: +g("init"), defense: +g("defense"),
-        pv: +g("pv"), pvMax: +g("pvMax"), rd: +g("rd"), crit: +g("crit") || 0, pc: +g("pc"), pmMax: +g("pmMax") || 0, pm: +g("pm") || 0, capacites: g("capacites") } });
+        pv: +g("pv"), pvMax: +g("pvMax"), rd: +g("rd"), crit: +g("crit") || 0, pc: +g("pc"), pmMax: +g("pmMax") || 0, pm: +g("pm") || 0, capacites: g("capacites"),
+        alias: g("alias").trim(), cache: f.elements.cache.checked, sbire: f.elements.sbire.checked } });
     };
     dlg.returnValue = "";
     dlg.showModal();
@@ -956,6 +980,7 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
       q.value = "";
     } else if (a === "up" || a === "down") send({ type: "deplacer", id, sens: a === "up" ? "haut" : "bas" });
     else if (a === "edit") { fermerFenetres(); editer(id); }
+    else if (a === "reveler" || a === "cacher") send({ type: "modifier", id, champs: { cache: a === "cacher" } });
     else if (a === "fiche") { ouvrir("fCbt"); ui.fiche = id; rendreFiche(); }
     else if (a === "etatPour") { ouvrir("fEtat"); $e("#eWho").value = id; }
     else if (a === "viser") { fermerFenetres(); ui.tgt = id; ui.tgtAuto = false; ui.resFerme = st.resultat?.evt || 0; if (ui.att === id) ui.att = cur()?.id; rendreSelects(); rendreVs(); rendreResultat(); setPane("action"); toast(`Cible : ${st.cbts[id].nom}`); }
@@ -999,9 +1024,9 @@ export async function ecran(el, cid, { integre = false, auRetour = null } = {}) 
   };
   $e("#addBody").addEventListener("click", e => {
     const m = e.target.closest("[data-addm]"), p = e.target.closest("[data-addp]"), n = e.target.closest("[data-addn]");
-    if (m) send({ type: "ajouter", kind: "monstre", ref_id: +m.dataset.addm, qte: +$e("#adN").value || 1, camp: $e("#adC").value });
-    if (p) send({ type: "ajouter", kind: "pj", ref_id: +p.dataset.addp, camp: "pj" });
-    if (n) send({ type: "ajouter", kind: "pnj", ref_id: +n.dataset.addn, camp: $e("#adPnjC").value });
+    if (m) send({ type: "ajouter", kind: "monstre", ref_id: +m.dataset.addm, qte: +$e("#adN").value || 1, camp: $e("#adC").value, ...pourLaTable() });
+    if (p) send({ type: "ajouter", kind: "pj", ref_id: +p.dataset.addp, camp: "pj", ...pourLaTable() });
+    if (n) send({ type: "ajouter", kind: "pnj", ref_id: +n.dataset.addn, camp: $e("#adPnjC").value, ...pourLaTable() });
   });
   $e("#addSeg").onclick = e => { const b = e.target.closest("button"); if (b) { ui.addTab = b.dataset.t; rendreAjout(); } };
 

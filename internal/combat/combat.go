@@ -85,6 +85,19 @@ type Combattant struct {
 	Etats       map[string]Duree `json:"etats"`
 	Act         map[string]bool  `json:"act"`
 	Cible       *string          `json:"cible"`
+	// Ce que la table en voit (afficheur, page des joueurs) : le nom d'affichage (vide : son nom),
+	// caché tant que le MJ ne l'a pas révélé, sbire : disparaît dès qu'il tombe au lieu de rester grisé.
+	Alias string `json:"alias,omitempty"`
+	Cache bool   `json:"cache,omitempty"`
+	Sbire bool   `json:"sbire,omitempty"`
+}
+
+// NomVu : le nom que la table voit.
+func (c *Combattant) NomVu() string {
+	if a := strings.TrimSpace(c.Alias); a != "" {
+		return a
+	}
+	return c.Nom
 }
 
 type LigneLog struct {
@@ -168,6 +181,7 @@ type FicheCombat struct {
 		SAG int `json:"SAG"`
 	} `json:"valeurs"`
 	Actives []CapaciteActive `json:"actives"`
+	Sbire   bool             `json:"sbire,omitempty"` // monstre marqué « disparaît en tombant »
 }
 
 // CapaciteActive : une capacité de la bibliothèque, atteinte par un PJ, qui a une action en combat
@@ -277,7 +291,7 @@ func DepuisFiche(f FicheCombat, camp, nom, kind string) *Combattant {
 		Actives:  append([]CapaciteActive(nil), f.Actives...),
 		Attaques: atks, Capacites: f.Capacites, Sag: sagDe(f),
 		Carac: f.Carac, Superieures: append([]string{}, f.Superieures...),
-		Etats: map[string]Duree{}, Act: nouvellesActions(),
+		Etats: map[string]Duree{}, Act: nouvellesActions(), Sbire: f.Sbire,
 	}
 }
 
@@ -918,6 +932,8 @@ type Action struct {
 	Qte        int                        `json:"qte"`
 	Camp       string                     `json:"camp"`
 	Fiche      *FicheCombat               `json:"fiche"`
+	Alias      string                     `json:"alias"`    // ajouter : nom d'affichage (numéroté pour un groupe)
+	Cache      bool                       `json:"cache"`    // ajouter : caché aux joueurs (embuscade)
 	Act        string                     `json:"act"`      // attaque : "A", "L", "LS" (suite de la capacité) ou "G" (gratuite)
 	CoutPm     int                        `json:"cout_pm"`  // attaque : points de mana dépensés (sort)
 	Capacite   string                     `json:"capacite"` // attaque, capacite : la capacité utilisée (sa clé)
@@ -985,12 +1001,24 @@ func (st *Etat) appliquer(p Action) error {
 			}
 		}
 		vide := len(st.Ordre) == 0
-		for _, c := range InstancierGroupe(*p.Fiche, qte, camp, p.Kind, st.Cbts) {
+		groupe := InstancierGroupe(*p.Fiche, qte, camp, p.Kind, st.Cbts)
+		alias := strings.TrimSpace(p.Alias)
+		for i, c := range groupe {
+			if alias != "" {
+				c.Alias = alias
+				if len(groupe) > 1 {
+					c.Alias = fmt.Sprintf("%s %d", alias, i+1)
+				}
+			}
+			c.Cache = p.Cache
 			st.inserer(c)
 		}
 		txt := "Entrée en combat : " + gras(p.Fiche.Nom)
 		if qte > 1 {
 			txt += fmt.Sprintf(" ×%d", qte)
+		}
+		if p.Cache {
+			txt += ", caché aux joueurs"
 		}
 		st.log(fmt.Sprintf("%s (init %d)", txt, p.Fiche.Init), "")
 		if vide {
@@ -1026,7 +1054,16 @@ func (st *Etat) appliquer(p Action) error {
 		if err != nil {
 			return err
 		}
-		return modifier(c, p.Champs)
+		cache := c.Cache
+		if err := modifier(c, p.Champs); err != nil {
+			return err
+		}
+		if cache && !c.Cache {
+			st.log(gras(c.Nom)+" se révèle aux joueurs.", "")
+		} else if !cache && c.Cache {
+			st.log(gras(c.Nom)+" est caché aux joueurs.", "")
+		}
+		return nil
 	case "pv":
 		v := p.valeurInt()
 		if v <= 0 {
@@ -1186,6 +1223,20 @@ func modifier(c *Combattant, champs map[string]json.RawMessage) error {
 	}
 	if v, ok := champs["capacites"]; ok {
 		_ = json.Unmarshal(v, &c.Capacites)
+	}
+	if v, ok := champs["alias"]; ok {
+		var s string
+		if json.Unmarshal(v, &s) == nil {
+			c.Alias = strings.TrimSpace(s)
+		}
+	}
+	for k, dst := range map[string]*bool{"cache": &c.Cache, "sbire": &c.Sbire} {
+		if v, ok := champs[k]; ok {
+			var b bool
+			if json.Unmarshal(v, &b) == nil {
+				*dst = b
+			}
+		}
 	}
 	if v, ok := champs["attaques"]; ok {
 		var a []fiches.Attaque
