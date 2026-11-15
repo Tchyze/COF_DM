@@ -483,6 +483,31 @@ function rendreBandeau() {
 }
 
 /* ---------------------------------------------------------- temps réel */
+/* ---------------------------------------------------------- ce que le MJ montre à la table */
+// Une image (portrait, lieu…) ou une aide de jeu, par-dessus la page, jusqu'à ce que le MJ la retire
+// ou que le joueur la ferme sur son appareil (elle revient si le MJ montre autre chose).
+let montreFerme = 0;
+function montrer(m) {
+  let zone = $("#montre");
+  if (!m) { zone?.remove(); return; }
+  if (m.seq === montreFerme) return;
+  if (!zone) {
+    zone = document.createElement("section");
+    zone.id = "montre"; zone.className = "pj-montre"; zone.setAttribute("aria-live", "polite");
+    document.body.append(zone);
+  }
+  if (zone.dataset.seq === String(m.seq)) return;
+  zone.dataset.seq = m.seq;
+  zone.innerHTML = `<div class="pj-montre-boite">
+      <div class="pj-montre-tete"><span class="hint">Le MJ vous montre</span><button class="ghost petit" id="montre-fermer" aria-label="Fermer">✕ Fermer</button></div>
+      ${m.titre ? `<h2>${esc(m.titre)}</h2>` : ""}
+      ${m.image ? `<img src="${esc(lien("/api/joueur/montre/image?seq=" + m.seq))}" alt="${esc(m.legende || m.titre || "")}">` : ""}
+      ${m.legende ? `<p class="hint">${esc(m.legende)}</p>` : ""}
+      ${m.texte ? `<div class="pj-montre-texte">${esc(m.texte)}</div>` : ""}
+    </div>`;
+  $("#montre-fermer", zone).onclick = () => { montreFerme = m.seq; zone.remove(); };
+}
+
 let ws = null, essais = 0, dernier = Date.now(), arrete = false;
 function connecter() {
   if (arrete) return;
@@ -493,6 +518,7 @@ function connecter() {
     dernier = Date.now();
     const m = JSON.parse(e.data);
     if (m.type === "jet") { ajouterJets([m.jet]); return; }
+    if ("montre" in m) montrer(m.montre); // « etat » à la connexion, « montre » quand le MJ change
     if (m.type === "etat") { relireJets(); chargerDocs(); etat.combat = m.combat; if (etat.edition !== m.edition) { etat.edition = m.edition; rafraichirFiche(); } }
     else if (m.type === "combat") etat.combat = m.combat;
     else if (m.type === "edition") { etat.edition = m.active; toast(m.active ? "Le MJ a déverrouillé les feuilles : vous pouvez modifier la vôtre." : "Le MJ a verrouillé les feuilles."); if (etat.vue === "fiche" && etat.pj) vueFiche(); }
@@ -570,6 +596,7 @@ async function demarrer() {
     return;
   }
   Object.assign(etat, { serveur: e.serveur, edition: e.edition, combat: e.combat, de: e.de || 20, fonctions: e.fonctionnalites || {} });
+  montrer(e.montre);
   const permis = onglets();
   $$("[data-nav]").forEach(a => { a.hidden = !permis.includes(a.dataset.nav); });
   $("#pj-univers").textContent = e.univers || "";

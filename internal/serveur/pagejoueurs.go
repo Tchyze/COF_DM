@@ -42,6 +42,7 @@ func (s *Serveur) routesPageJoueurs() {
 		s.routesDesJoueurs(m)
 		s.routesDocumentsJoueurs(m)
 		s.routesPotJoueurs(m)
+		s.routesMontreJoueurs(m)
 	}
 	if s.acces.comptes != nil {
 		return
@@ -57,8 +58,9 @@ func (s *Serveur) routesPageJoueurs() {
 	l.HandleFunc("GET /api/joueur/direct", s.joueurDirect)
 	// les aides de jeu reçues par le PJ choisi
 	s.routesDocumentsJoueurs(l)
-	s.routesDesJoueurs(l) // un jet, qui ne touche pas à l'univers
-	s.routesPotJoueurs(l) // une proposition de partage du pot commun, que le MJ valide ou refuse
+	s.routesDesJoueurs(l)    // un jet, qui ne touche pas à l'univers
+	s.routesPotJoueurs(l)    // une proposition de partage du pot commun, que le MJ valide ou refuse
+	s.routesMontreJoueurs(l) // l'image que le MJ montre à la table
 	l.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireLibre)
 	l.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireLibre)
 	l.HandleFunc("POST /api/joueur/pj/{id}/niveau", s.monterNiveauJoueur(s.pjLibre)) // le niveau accordé par le MJ
@@ -275,7 +277,7 @@ func (s *Serveur) joueurDirect(w http.ResponseWriter, r *http.Request) {
 	defer s.surveiller(conn, r, droits)()
 	e := &ecran{conn: conn, envoi: make(chan []byte, 32)}
 	go e.ecrire()
-	debut, _ := json.Marshal(map[string]any{"type": "etat", "edition": s.editionJoueurs(), "combat": s.combatJoueurs(pj, restreint)})
+	debut, _ := json.Marshal(map[string]any{"type": "etat", "edition": s.editionJoueurs(), "combat": s.combatJoueurs(pj, restreint), "montre": s.pourJoueurs()})
 	s.joueurs.mu.Lock()
 	s.joueurs.ecrans[e] = filtre
 	e.envoyer(debut)
@@ -313,7 +315,7 @@ func (s *Serveur) joueurEtat(w http.ResponseWriter, r *http.Request) {
 	}
 	repondre(w, 200, map[string]any{"serveur": s.acces.comptes != nil, "pj": pj, "edition": s.editionJoueurs(),
 		"combat": s.combatJoueurs(pj, restreint), "univers": nomUnivers(s.store.Chemin()), "de": de,
-		"fonctionnalites": s.store.Fonctionnalites()})
+		"fonctionnalites": s.store.Fonctionnalites(), "montre": s.pourJoueurs()})
 }
 
 // pjJoueur : un PJ dans la liste de la page.

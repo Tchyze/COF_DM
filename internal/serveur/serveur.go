@@ -92,6 +92,7 @@ type Serveur struct {
 	joueurs *diffusion     // appareils qui suivent la page des joueurs
 	libre   *http.ServeMux // à la maison : les seules routes de la page des joueurs, sans mot de passe
 	jets    *tableJets     // lanceur de dés : les derniers jets de la partie
+	montre  *tableMontre   // afficheur de table : ce que le MJ montre à la table
 	debit   debitJets      // … et ce qu'il reste à chaque lanceur
 	potMu   sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
 	envoi   sync.Mutex     // un seul fichier reçu à la fois dans cet univers (limites sur un serveur)
@@ -281,6 +282,7 @@ func (s *Serveur) routes() {
 	s.routesClaude()
 	s.routesAcces()
 	s.routesDes()
+	s.routesAfficheur()
 	s.routesPageJoueurs() // après routesAcces, qui crée la liste blanche du rôle « joueur »
 
 	m.HandleFunc("POST /api/relations", s.relier)

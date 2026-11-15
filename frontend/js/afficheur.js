@@ -83,12 +83,7 @@ function ligne(p) {
 }
 
 function rendre() {
-  if (!st || st.termine || !st.ordre.length) {
-    scene.innerHTML = `<section class="aff-attente"><span class="sceau">DM</span>
-      <h1>${st?.termine ? "Combat terminé" : "Pas de combat en cours"}</h1>
-      <p class="hint">L'afficheur suivra le prochain combat dès que le MJ l'ouvrira.</p></section>`;
-    return;
-  }
+  if (!actif("combat") || !st || st.termine || !st.ordre.length) { rendreAttente(); return; }
   const { ordre, courant, suivant } = vueOrdre(st);
   scene.innerHTML = `<section class="aff-combat">
     <header class="aff-tete">
@@ -119,6 +114,52 @@ async function chargerPortraits(ordre) {
     } catch { /* fiche absente : l'initiale suffit */ }
   }));
   if (manquants.some(id => portraits.get(id))) rendre();
+}
+
+/* ------------------------------------------------------------ hors combat */
+
+// L'écran d'attente : la campagne, sa date en jeu et le lieu où se trouve le groupe (son image en
+// fond). Relu de temps en temps : le MJ avance la date ou déplace le groupe pendant la partie.
+let attente = null;
+async function relireAttente() {
+  try {
+    const a = await api("GET", "/api/afficheur/attente");
+    const avant = JSON.stringify(attente);
+    attente = a;
+    if (JSON.stringify(a) !== avant && !(st && !st.termine && st.ordre.length)) rendre();
+  } catch { /* l'application ne répond pas : on garde l'écran */ }
+}
+
+function rendreAttente() {
+  const a = attente || {}, fond = a.lieu?.image || a.campagne?.image;
+  scene.innerHTML = `<section class="aff-attente${fond ? " avec-fond" : ""}">
+    ${fond ? `<img class="aff-fond" src="${esc(lien("/medias/" + encodeURIComponent(fond)))}" alt="">` : ""}
+    <div class="aff-attente-texte">
+      ${a.campagne ? `<h1>${esc(a.campagne.nom)}</h1>` : `<span class="sceau">DM</span><h1>COF DM</h1>`}
+      ${a.date ? `<p class="aff-date">📅 ${esc(a.date)}</p>` : ""}
+      ${a.lieu ? `<p class="aff-lieu">📍 ${esc(a.lieu.nom)}</p>` : ""}
+      ${st?.termine && st.ordre.length ? `<p class="hint">Combat terminé : ${esc(st.nom)}</p>` : ""}
+    </div>
+  </section>`;
+}
+
+// Ce que le MJ montre à la table (image d'une fiche, aide de jeu), par-dessus tout le reste, jusqu'à
+// ce qu'il le retire. Relu toutes les deux secondes, et aussitôt quand l'écran du MJ prévient.
+const zoneMontre = $("#montre");
+let seqMontre = -1;
+async function relireMontre() {
+  try {
+    const m = (await api("GET", "/api/afficheur/montre")).montre;
+    const seq = m ? m.seq : 0;
+    if (seq === seqMontre) return;
+    seqMontre = seq;
+    zoneMontre.hidden = !m;
+    if (!m) { zoneMontre.innerHTML = ""; return; }
+    zoneMontre.innerHTML = `<figure class="aff-montre-boite${m.texte ? " avec-texte" : ""}">
+      ${m.image && m.fichier ? `<img src="${esc(lien("/medias/" + encodeURIComponent(m.fichier)))}" alt="${esc(m.legende || m.titre || "")}">` : ""}
+      ${m.titre || m.legende || m.texte ? `<figcaption>${m.titre ? `<h1>${esc(m.titre)}</h1>` : ""}${m.legende ? `<p class="hint">${esc(m.legende)}</p>` : ""}${m.texte ? `<div class="aff-montre-texte">${esc(m.texte)}</div>` : ""}</figcaption>` : ""}
+    </figure>`;
+  } catch { /* l'application ne répond pas : on garde l'écran */ }
 }
 
 /* ------------------------------------------------------------ suivi du combat */
@@ -218,17 +259,21 @@ document.addEventListener("mousemove", () => {
 
 try {
   const canal = new BroadcastChannel(CANAL);
-  canal.onmessage = e => { if (e.data?.combat) suivre(+e.data.combat); };
+  canal.onmessage = e => {
+    if (e.data?.combat && actif("combat")) suivre(+e.data.combat);
+    if (e.data?.montre) relireMontre();
+  };
 } catch { /* sans BroadcastChannel, l'afficheur suit le plus récent combat en cours */ }
 
 async function demarrer() {
   try { await chargerSchema(); } catch { /* sans schéma : tout est tenu pour activé */ }
-  if (!actif("combat")) {
-    scene.innerHTML = `<section class="aff-attente"><span class="sceau">DM</span><h1>Le combat est désactivé</h1><p class="hint">Activez-le dans Paramètres → Fonctionnalités.</p></section>`;
-    return;
-  }
-  if (cid) suivre(cid); else await choisirCombat();
+  await relireAttente();
+  setInterval(relireAttente, 15000);
+  relireMontre();
+  setInterval(relireMontre, 2000);
   rendre();
+  if (!actif("combat")) return;
+  if (cid) suivre(cid); else await choisirCombat();
   setInterval(choisirCombat, 5000);
   relireJets();
   setInterval(relireJets, 3000);

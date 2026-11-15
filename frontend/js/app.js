@@ -20,6 +20,7 @@ import * as synchro from "./views/synchro.js";
 import * as preparation from "./views/preparation.js";
 import * as apres from "./views/apres.js";
 import { initFichier } from "./fichier.js";
+import { initPastilleMontre } from "./montrer.js";
 import { initEtatLien } from "./connexion.js";
 import { clesPossibles, prouverCle, messageCle } from "./webauthn.js";
 import { boutonInstaller } from "./installer.js";
@@ -443,6 +444,7 @@ function ecranSecondFacteur(marque, facteurs) {
   catch (e) { $("#vue").innerHTML = `<div class="erreur">${esc(e.message)}</div>`; return; }
   await dessinerNav();
   if (fonctionActive("des")) initDes({ lecture: !!acces.lecture_seule });
+  if (!acces.lecture_seule) initPastilleMontre(); // ce qui est montré à la table, à retirer d'un clic
   route();
 })();
 export { schema };
