@@ -274,7 +274,7 @@ jobs:
           rm -f "$RUNNER_TEMP/cle.pem"
       - name: Version d'essai
         if: inputs.canal == 'test'
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           tag_name: v${{ needs.version.outputs.version }}
           target_commitish: ${{ github.sha }}
@@ -285,7 +285,7 @@ jobs:
             Version d'**essai** de la branche `${{ github.ref_name }}` (${{ github.sha }}), avant sa fusion. Elle est proposée par l'application à qui suit le canal **Test** (Paramètres → Mises à jour).
       - name: Version stable
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
         with:
           files: dist/*
           generate_release_notes: true
