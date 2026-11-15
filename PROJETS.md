@@ -1,6 +1,6 @@
 # Projets — COF DM
 
-Les chantiers possibles pour faire de COF DM le meilleur outil de MJ pour Chroniques Oubliées Fantasy, classés par priorité. Liste établie le 16 octobre 2026, remise à jour le 22 octobre 2026 (version 1.2.3, `main` en 1.2.4 d'essai).
+Les chantiers possibles pour faire de COF DM le meilleur outil de MJ pour Chroniques Oubliées Fantasy, classés par priorité. Liste établie le 16 octobre 2026, remise à jour le 15 novembre 2026 (version 1.3.2).
 
 Rappel des règles qui s'appliquent à chaque projet (voir `CLAUDE.md`) : aucune donnée des livres dans le dépôt (les tables viennent du fichier de règles ou du MJ), un univers = un fichier, rien de secret vers les joueurs (liste blanche + test de non-fuite), tout nouvel objet pris en compte par la synchronisation (`aplatir` / `appliquer`) et par `VersionModele`.
 
@@ -14,8 +14,9 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 ## Où on en est
 
-- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités utilisables), projet 12 (montée de niveau guidée, version 1.2.4), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public). Le détail, PR par PR, est dans `SUIVI.md`.
-- **Chantier en cours** : projet 11, inventaire structuré (lots 1 et 2 en PR), puis 14, le butin.
+- **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités), projet 11 (inventaire structuré, 1.2.5), projet 12 (montée de niveau guidée, 1.2.4), projet 14 (butin et pot commun, 1.2.5), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public), et l'installation sur tablette du projet 29 (1.3.1). Le détail, PR par PR, est dans `SUIVI.md`.
+- **Hors de cette liste, aussi fait** : image Docker Hub, menu repliable, installation Windows, rôles du serveur et page d'administration, combat et dés en direct (1.3.0) ; durcissement de sécurité et double authentification des administrateurs (1.3.1) ; fenêtre « Mes univers » du bureau (1.3.2).
+- **Chantier en cours** : aucun. Le projet 41 (ambiance sonore) est conçu, puis mis de côté par le MJ (15 novembre 2026).
 - **Au fil de l'eau** : projet 6, les essais qui ne se font qu'à la main.
 
 ## Vue d'ensemble
@@ -30,10 +31,10 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 6 | Restes à vérifier à la main | P1 | S | ★★ | — | en cours |
 | 9 | Aides de jeu poussées aux joueurs | P2 | M | ★★★ | — | lot 1 fait |
 | 10 | Voies et capacités utilisables | P2 | L | ★★★ | 5 | fait |
-| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | **en cours** (lots 1 et 2 en PR) |
+| 11 | Inventaire structuré relié aux objets | P2 | M | ★★ | — | fait |
 | 12 | Montée de niveau guidée | P2 | M | ★★ | 10 | fait |
 | 13 | Impression et export PDF | P2 | M | ★★ | — | |
-| 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | |
+| 14 | Butin et récompenses de fin de combat | P2 | S | ★★ | 11 | fait |
 | 15 | Afficheur de table (télé) | P2 | S | ★★ | — | |
 | 16 | Générateurs et tables aléatoires du MJ | P2 | M | ★★ | — | |
 | 17 | PNJ express en jeu | P2 | S | ★★ | 16 (conseillé) | |
@@ -48,7 +49,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 26 | Réputation des factions par PJ | P3 | S | ★★ | — | |
 | 27 | Assistant de création de PJ | P3 | M | ★★ | 12 | |
 | 28 | Annuler / rétablir depuis le journal | P3 | M | ★★ | — | |
-| 29 | Notifications et page des joueurs installable (PWA) | P3 | S | ★★ | — | |
+| 29 | Notifications et page des joueurs installable (PWA) | P3 | S | ★★ | — | installation faite |
 | 30 | Journal de campagne côté joueurs | P3 | M | ★★ | 3 | |
 | 31 | Aller-retour Obsidian complet | P3 | M | ★ | — | |
 | 32 | Tests automatisés de l'interface (CDP en CI) | P3 | M | ★★ | — | |
@@ -60,18 +61,17 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 38 | Champs personnalisés et modèles de fiche | P4 | L | ★★ | — | |
 | 39 | Fil de campagne (frise séances et quêtes) | P4 | S | ★ | — | |
 | 40 | Défis de compétences et poursuites | P4 | M | ★ | — | |
-| 41 | Ambiance sonore par scène | P4 | M | ★ | — | |
+| 41 | Ambiance sonore par scène | P4 | M | ★ | — | conçu, mis de côté |
 | 42 | Accessibilité (clavier, contrastes, lecteurs d'écran) | P4 | M | ★ | — | |
 | 43 | Version macOS, installeur Windows signé | P4 | M | ★ | — | |
 | 44 | Paquets communautaires (bestiaires, aventures maison) | P4 | M | ★ | 38 (conseillé) | |
 
 ## Ordre conseillé
 
-1. **Projets 11 puis 14** (inventaire, puis butin) : l'arme et l'armure portées comptent dans la feuille ; le butin se répartit à la fin du combat.
-2. Les petits lots visibles à la table, au choix : **15** (afficheur), **18** (notes rapides), **9** (suite des aides de jeu).
-3. **13** (impression), puis **16** et **17** (tables aléatoires, PNJ express).
-4. Le P3 par valeur, puis le P4 à la demande.
-5. **Projet 6** au fil de l'eau, avant chaque version stable.
+1. Les petits lots visibles à la table, au choix : **15** (afficheur), **18** (notes rapides), **9** (suite des aides de jeu).
+2. **13** (impression), puis **16** et **17** (tables aléatoires, PNJ express).
+3. Le P3 par valeur, puis le P4 à la demande. Le **41** (ambiance sonore) attend que le MJ le reprenne.
+4. **Projet 6** au fil de l'eau, avant chaque version stable.
 
 ---
 
@@ -108,7 +108,7 @@ Lettre, image, indice : envoyés en direct depuis la fiche ou l'écran du MJ, ra
 ### 10. Voies et capacités utilisables — fait
 Voies, capacités, profils et peuples saisis ou importés par le MJ, un par un ; bonus des capacités sur la feuille (« A + b ») ; capacités en combat et leurs utilisations (par combat, jour, repos) ; arbre des voies sur la page des joueurs. Aucune donnée des livres : le code n'a que le modèle.
 
-### 11. Inventaire structuré — en cours
+### 11. Inventaire structuré — fait (1.2.5)
 Une liste d'objets (quantité, porté ou non, emplacement) au lieu du texte `Équipement`. Lot 1 : l'inventaire sur la feuille, un objet par emplacement, bonus et armes des objets portés comptés (en bleu, formule au survol), reprise de l'ancien équipement. Lot 2 : une ligne pointe vers une fiche « Objet », dont elle prend les chiffres, et le « Détenteur » suit dans les deux sens. Décisions dans `SUIVI.md`.
 
 ### 12. Montée de niveau guidée — fait
@@ -164,7 +164,7 @@ Peuple, profil, caractéristiques, voies de départ, équipement, tirés du fich
 ### 28. Annuler / rétablir
 Revenir sur une modification depuis le journal (qui garde déjà l'avant/après) ; Ctrl+Z dans la fiche ouverte.
 
-### 29. Notifications et PWA joueurs
+### 29. Notifications et PWA joueurs — installation faite (1.3.1)
 Page des joueurs installable, notifications « C'est à vous ! » et « nouvelle aide de jeu » quand le téléphone est en veille. L'installation est faite (toute l'application, en HTTPS) ; restent les notifications.
 
 ### 30. Journal de campagne côté joueurs
@@ -202,8 +202,8 @@ Frise des séances, quêtes et arcs, à côté de la chronologie en jeu.
 ### 40. Défis de compétences et poursuites
 Suivi de réussites et d'échecs sur plusieurs tests, hors combat.
 
-### 41. Ambiance sonore
-Sons et musiques rangés dans l'univers, liés à un lieu ou une rencontre, lancés depuis l'écran du MJ.
+### 41. Ambiance sonore — conçu, mis de côté
+Ambiances toutes prêtes liées à un lieu ou une rencontre, en trois couches (musique, fond, bruitages) pilotées au clavier, sons générés par calcul, fichiers hors univers, sons libres (CC0, CC-BY) partageables. Conçu avec le MJ le 15 novembre 2026, puis mis de côté : son application actuelle lui suffit. Décisions et lots prévus dans `SUIVI.md` (« Ambiance sonore »).
 
 ### 42. Accessibilité
 Navigation au clavier, contrastes, rôles ARIA des dialogues et de l'écran de combat.
