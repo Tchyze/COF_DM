@@ -1,0 +1,89 @@
+/* Afficheur de table : une télé, lue de loin. Thème sombre seulement, tailles relatives à la fenêtre
+   (vmin) pour qu'un même écran se lise sur une télé comme dans une petite fenêtre. */
+body.afficheur{margin:0;min-height:100vh;display:grid;grid-template-columns:1fr auto;background:var(--side);font-size:clamp(14px,2.2vmin,40px);overflow:hidden;cursor:none}
+body.afficheur.souris{cursor:auto}
+#scene{min-width:0;max-width:none;width:auto;padding:2.5vmin 3vmin!important;display:flex;flex-direction:column;overflow:hidden}
+
+.aff-outils{position:fixed;right:1.5vmin;bottom:1.5vmin;display:flex;gap:8px;align-items:center;opacity:0;transition:opacity .3s}
+body.souris .aff-outils,.aff-outils:has(.conn:not([hidden])){opacity:1}
+.aff-outils .conn{background:var(--surface);border:1px solid var(--warn);color:var(--warn);border-radius:var(--r);padding:.3rem .7rem;font-size:.8rem}
+
+.aff-attente{margin:auto;text-align:center;display:grid;gap:1.2vmin;justify-items:center}
+.aff-attente .sceau{width:12vmin;height:12vmin;font-size:4vmin}
+.aff-attente h1{font-size:2.2em}
+.aff-attente .hint{font-size:1em}
+
+.aff-combat{display:flex;flex-direction:column;gap:2vmin;min-height:0;height:100%}
+.aff-tete{display:flex;align-items:baseline;gap:2vmin}
+.aff-tete h1{font-size:1.9em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aff-round{display:flex;align-items:baseline;gap:.6vmin}
+.aff-round .lbl,.aff-tour .lbl{color:var(--muted);font-size:.75em;text-transform:uppercase;letter-spacing:.08em}
+.aff-round .n{font:700 2.4em var(--f-display);color:var(--gold)}
+
+.aff-tour{display:flex;align-items:center;gap:2.5vmin;background:var(--surface);border:2px solid var(--gold);border-radius:calc(var(--r)*2);padding:1.8vmin 2.5vmin}
+.aff-tour.ennemi{border-color:var(--t-rencontre)}
+.aff-tour-texte{display:flex;flex-direction:column;min-width:0}
+.aff-tour-nom{font:700 2.6em/1.1 var(--f-display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aff-ensuite{color:var(--muted);margin-top:.4vmin}
+.aff-ensuite b{color:var(--ink)}
+
+.aff-ordre{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1vmin;overflow:hidden;min-height:0}
+.aff-ligne{display:flex;align-items:center;gap:1.8vmin;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--line2);border-radius:var(--r);padding:1vmin 1.6vmin;min-height:0}
+.aff-ligne.pj{border-left-color:var(--t-pj)}
+.aff-ligne.allie{border-left-color:var(--ok)}
+.aff-ligne.ennemi{border-left-color:var(--t-rencontre)}
+.aff-ligne.courant{background:var(--surface2);border-color:var(--gold);box-shadow:0 0 0 2px var(--gold) inset}
+.aff-ligne.tombe{opacity:.4;filter:grayscale(1)}
+.aff-ligne.tombe .aff-nom{text-decoration:line-through}
+.aff-qui{flex:1;min-width:0;display:flex;flex-direction:column;gap:.4vmin}
+.aff-nom{font-weight:600;font-size:1.15em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aff-etiquettes{display:flex;flex-wrap:wrap;gap:.6vmin;align-items:center}
+.aff-etiquettes .tag,.aff-etiquettes .chip{font-size:.7em}
+.aff-etiquettes .chip{background:color-mix(in srgb,var(--warn) 18%,transparent);border:1px solid var(--warn);color:var(--ink);border-radius:999px;padding:.05em .6em}
+.aff-tombe{color:var(--mort)}
+
+.aff-portrait{flex:none;width:5.5vmin;height:5.5vmin;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--surface2);border:2px solid var(--line2);font:700 1.1em var(--f-display);color:var(--muted)}
+.aff-portrait.grand{width:11vmin;height:11vmin;font-size:2.2em}
+.aff-portrait.pj{border-color:var(--t-pj)}
+.aff-portrait.ennemi{border-color:var(--t-rencontre)}
+.aff-portrait.allie{border-color:var(--ok)}
+.aff-portrait img{width:100%;height:100%;object-fit:cover}
+
+.aff-chiffres{display:flex;gap:1.6vmin;flex:none}
+.aff-jauge{display:flex;flex-direction:column;align-items:flex-end;gap:.3vmin;min-width:9em}
+.aff-jauge-val{font-weight:700;font-size:1.1em}
+.aff-jauge.pv .aff-jauge-val::before{content:"PV ";color:var(--muted);font-weight:400;font-size:.75em}
+.aff-jauge.pm .aff-jauge-val::before{content:"PM ";color:var(--muted);font-weight:400;font-size:.75em}
+.aff-jauge-barre{width:100%;height:.45em;background:var(--sunk);border-radius:999px;overflow:hidden}
+.aff-jauge-barre span{display:block;height:100%;background:var(--ok)}
+.aff-jauge.pm .aff-jauge-barre span{background:var(--accent)}
+
+#jets{width:clamp(220px,24vw,520px);background:var(--bg);border-left:1px solid var(--line);padding:2.5vmin 2vmin;overflow:hidden}
+#jets h2{font-size:1.2em;margin-bottom:1.2vmin;color:var(--muted)}
+#jets ol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:1vmin}
+.aff-jet{display:flex;gap:1.4vmin;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:1vmin 1.2vmin;font-size:.85em}
+.aff-jet-total{font:700 1.8em var(--f-display);color:var(--gold);min-width:2ch;text-align:center}
+.aff-jet.neuf{border-color:var(--gold);animation:aff-neuf 1.2s ease-out}
+@keyframes aff-neuf{from{transform:scale(1.06);box-shadow:0 0 0 4px color-mix(in srgb,var(--gold) 45%,transparent)}to{transform:none;box-shadow:none}}
+@media (prefers-reduced-motion:reduce){.aff-jet.neuf{animation:none}}
+
+/* beaucoup de combattants : les lignes se resserrent pour tenir sur l'écran de la télé */
+.aff-ordre.serre{gap:.6vmin}
+.aff-ordre.serre .aff-ligne{padding:.5vmin 1.4vmin}
+.aff-ordre.serre .aff-portrait:not(.grand){width:max(28px,4vmin);height:max(28px,4vmin);font-size:.9em}
+.aff-ordre.serre .aff-qui{flex-direction:row;align-items:center;gap:1.2vmin}
+.aff-ordre.tres-serre{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:repeat(var(--lignes),auto);grid-auto-flow:column;gap:.5vmin 1vmin;align-content:start}
+.aff-ordre.tres-serre .aff-ligne{padding:.4vmin 1vmin;font-size:.85em}
+.aff-ordre.tres-serre .aff-portrait:not(.grand){width:max(26px,3.4vmin);height:max(26px,3.4vmin);font-size:.8em}
+.aff-ordre.tres-serre .aff-qui{flex-direction:row;align-items:center;gap:1vmin}
+.aff-ordre.tres-serre .aff-jauge{min-width:6em}
+
+/* fenêtre étroite (portrait, petite fenêtre) : les dés passent dessous, les jauges sous le nom */
+@media (max-aspect-ratio:1/1){
+  body.afficheur{grid-template-columns:1fr;grid-template-rows:1fr auto;overflow:auto}
+  #jets{width:auto;border-left:0;border-top:1px solid var(--line)}
+  .aff-ligne{flex-wrap:wrap}
+  .aff-chiffres{width:100%;justify-content:flex-end}
+  .aff-ordre.tres-serre{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row}
+  .aff-ordre.serre .aff-qui,.aff-ordre.tres-serre .aff-qui{flex-direction:column;align-items:flex-start}
+}
