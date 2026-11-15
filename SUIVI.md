@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49 ; projet 41, ambiance sonore, conçu avec le MJ puis mis de côté).
+Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49 ; projet 41, ambiance sonore, conçu avec le MJ puis mis de côté ; projet 15, afficheur de table, conçu et commencé).
 
 ## Où on en est
 
 - **Version stable : 1.3.2** (2 novembre 2026) : PR 47 (fenêtre « Mes univers » du bureau). Image sur Docker Hub (`1.3.2`, `latest`). Avant elle : 1.3.1 (2 novembre 2026), PR 41 à 43 (durcissement de sécurité, double authentification des administrateurs, installation sur tablette) ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.2, comme dans la 1.2.5, la 1.3.0 et la 1.3.1), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
+- **Chantier en cours** : projet 15, afficheur de table (voir « Afficheur de table » dans les décisions), lot 1 sur la branche `afficheur-combat`. Avant lui : F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Les secrets ne sont plus que dans l'environnement `publication` (copies du dépôt retirées le 15 novembre 2026). Le jeton Docker Hub, recollé ce jour-là, sera vérifié à la prochaine version stable. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -164,6 +164,19 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Partage par les joueurs, validé par le MJ** : depuis leur page, les joueurs proposent un partage (pièces, objets) ; le MJ valide ou refuse ; validé, les pièces vont dans la bourse et les objets dans l'inventaire. C'est compatible avec « les joueurs n'agissent jamais sur un combat » : ils ne touchent qu'au pot, après le combat.
 - **Partage annulable par le MJ** : pièces et objets reviennent au pot, tant que le PJ les a encore.
 - **Trace** : le champ « Butin & récompenses » de la séance se remplit, le journal note ce que chaque PJ reçoit, et la rencontre passe à « jouée », avec son butin marqué versé (il ne se verse pas deux fois).
+
+### Afficheur de table (15 novembre 2026, projet 15, avant le code)
+
+- **Une seconde fenêtre de COF DM**, que le MJ place sur une télé branchée en HDMI à l'ordinateur et met en plein écran. **Rien ne passe par le réseau** : ni lien, ni compte, ni appareil à part.
+- **En combat** : ordre d'initiative, round, qui joue et qui joue ensuite, portraits quand la fiche en a une ; gros caractères, thème sombre, lisible de loin.
+  - **PJ** : PV et PM en chiffres (« 12 / 20 »), et leurs états.
+  - **Adversaires** : seulement vivant ou hors de combat, et leurs états (renversé, gelé…). **Aucun indice sur leur santé.**
+  - **Un adversaire tombé** reste grisé, sauf les « petits » (invocations, sbires) : une case « disparaît en tombant » sur la fiche du monstre du bestiaire, reprise d'office au combat et modifiable pendant le combat.
+  - **Nom d'affichage** d'un combattant, et **combattant caché** tant que le MJ ne l'a pas révélé (embuscade, PJ surpris). Les deux valent aussi pour la page des joueurs (téléphones).
+  - Ajouter des combattants en plein combat existe déjà (un nécromancien qui invoque des squelettes).
+- **Dés** : les jets publics de la table, seulement si la fonctionnalité des dés virtuels est activée.
+- **Hors combat** : un écran d'attente (campagne, date en jeu, lieu du groupe), et « Montrer à la table » (image d'une fiche, portrait, aide de jeu), sur la télé et aussi sur les téléphones des joueurs.
+- **Lots** : 1. l'afficheur de combat (fenêtre, ordre, PJ, adversaires grisés, portraits, dés) ; 2. nom d'affichage, combattants cachés et « disparaît en tombant », télé et téléphones ; 3. écran d'attente et « Montrer à la table ».
 
 ### Ambiance sonore (15 novembre 2026, projet 41, avant le code)
 
