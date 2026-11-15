@@ -225,7 +225,9 @@ var iterationsMdp = 600000
 // CoutReduitPourTests : les tests créent des centaines de comptes. Rien d'autre ne l'appelle.
 func CoutReduitPourTests() { iterationsMdp = 1000 }
 
-func deriver(mdp string, sel []byte, iterations int) []byte {
+// deriver : une variable pour que les tests comptent le calcul fait (TestEchecMemeCout), sans
+// chronomètre.
+var deriver = func(mdp string, sel []byte, iterations int) []byte {
 	k, _ := pbkdf2.Key(sha256.New, mdp, sel, iterations, 32)
 	return k
 }

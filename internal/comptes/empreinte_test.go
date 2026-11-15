@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 // ancienneEmpreinte : la forme d'avant, « sel:empreinte », à 210 000 itérations.
@@ -75,6 +74,8 @@ func TestMigrationEmpreinte(t *testing.T) {
 }
 
 // Un compte inconnu, ancien ou récent coûte le même calcul à un échec : le temps ne dit pas lequel existe.
+// Les itérations de PBKDF2 sont comptées plutôt que chronométrées : une mesure du temps échouait parfois
+// sur une machine de CI chargée.
 func TestEchecMemeCout(t *testing.T) {
 	r, err := Ouvrir(filepath.Join(t.TempDir(), "comptes.json"))
 	if err != nil {
@@ -82,21 +83,26 @@ func TestEchecMemeCout(t *testing.T) {
 	}
 	r.Creer("recent", "une-phrase-bien-longue", false)
 	r.Creer("ancien", "une-phrase-bien-longue", false)
+	r.Creer("inactif", "une-phrase-bien-longue", false)
+	r.Creer("illisible", "une-phrase-bien-longue", false)
 	r.Modifier("ancien", func(c *Compte) error { c.Mdp = ancienneEmpreinte("une-phrase-bien-longue"); return nil })
-	mesure := func(nom string) time.Duration {
-		d := time.Hour
-		for i := 0; i < 3; i++ {
-			t0 := time.Now()
-			r.Verifier(nom, "mauvais-mot-de-passe")
-			d = min(d, time.Since(t0))
-		}
-		return d
+	r.Modifier("inactif", func(c *Compte) error { c.Inactif = true; return nil })
+	r.Modifier("illisible", func(c *Compte) error { c.Mdp = "abimee"; return nil })
+
+	vrai := deriver
+	t.Cleanup(func() { deriver = vrai })
+	compte := 0
+	deriver = func(mdp string, sel []byte, iterations int) []byte {
+		compte += iterations
+		return vrai(mdp, sel, 1)
 	}
-	inconnu, recent, ancien := mesure("personne"), mesure("recent"), mesure("ancien")
-	t.Logf("inconnu %v, récent %v, ancien %v", inconnu, recent, ancien)
-	for _, d := range []time.Duration{recent, ancien} {
-		if d < inconnu*7/10 || d > inconnu*14/10 {
-			t.Errorf("écart de temps : inconnu %v, récent %v, ancien %v", inconnu, recent, ancien)
+	for _, nom := range []string{"personne", "recent", "ancien", "inactif", "illisible"} {
+		compte = 0
+		if _, ok := r.Verifier(nom, "mauvais-mot-de-passe"); ok {
+			t.Fatalf("%s : mauvais mot de passe accepté", nom)
+		}
+		if compte != iterationsMdp {
+			t.Errorf("%s : %d itérations pour un échec, %d attendues", nom, compte, iterationsMdp)
 		}
 	}
 }
