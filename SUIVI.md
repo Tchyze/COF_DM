@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 15 novembre 2026 (F-12 fusionné, PR 50 ; dépendances à jour, PR 48 et 49).
+Dernière mise à jour : 15 novembre 2026 (F-12 terminé, PR 50 et 52 ; test stabilisé, PR 51 ; dépendances à jour, PR 48 et 49).
 
 ## Où on en est
 
 - **Version stable : 1.3.2** (2 novembre 2026) : PR 47 (fenêtre « Mes univers » du bureau). Image sur Docker Hub (`1.3.2`, `latest`). Avant elle : 1.3.1 (2 novembre 2026), PR 41 à 43 (durcissement de sécurité, double authentification des administrateurs, installation sur tablette) ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 8 (dans la 1.3.2, comme dans la 1.2.5, la 1.3.0 et la 1.3.1), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. Reste à rendre stable `TestEchecMemeCout`, qui échoue parfois en CI sur un écart de durée (relancer le job).
+- **Chantier en cours** : aucun. F-12 terminé (PR 50 et 52) ; `TestEchecMemeCout` ne chronomètre plus (PR 51). Reste à retirer les copies des secrets au niveau du dépôt (`COF_DM_SIGNATURE`, `DOCKERHUB_*`), après accord du MJ.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
