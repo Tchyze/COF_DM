@@ -1,6 +1,6 @@
 // Page des joueurs : la feuille de son personnage, le combat en cours (l'ordre d'initiative et les
 // états, sans aucun chiffre), les documents (aides de jeu envoyées par le MJ), les dés (ses jets et
-// ceux de la table), le pot commun de sa campagne (il y propose un partage) et les hauts faits. À la maison, la page est libre quand le MJ l'a
+// ceux de la table), les prochaines séances de ses campagnes (agenda), le pot commun de sa campagne (il y propose un partage) et les hauts faits. À la maison, la page est libre quand le MJ l'a
 // ouverte et chacun y choisit son PJ ; sur un serveur, on y entre par son compte, avec son PJ : c'est
 // alors tout ce qu'un compte joueur a de l'application (son compte, et le choix de l'univers).
 import { $, $$, esc, api, toast, lien, universOnglet, choisirUniversOnglet } from "./ui.js";
@@ -12,11 +12,12 @@ import { lignesEffets, libellePar, voieLiee } from "./capacites.js";
 import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
 import { ligneJet, DES_RAPIDES } from "./des.js";
 import { rendu } from "./md.js";
+import { horaires, texteJour } from "./views/agenda.js";
 
 const CLE = "cof-joueur-pj";
 const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0, fonctions: {} };
 // les onglets et la fonctionnalité de l'univers dont chacun dépend (Paramètres → Fonctionnalités)
-const ONGLETS = [["fiche", "feuilles"], ["voies", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["pot", "butin"], ["des", "des"], ["hauts-faits", "combat"]];
+const ONGLETS = [["fiche", "feuilles"], ["voies", "feuilles"], ["combat", "combat"], ["documents", "aides"], ["agenda", "agenda"], ["pot", "butin"], ["des", "des"], ["hauts-faits", "combat"]];
 const fonction = cle => etat.fonctions[cle] !== false;
 const onglets = () => ONGLETS.filter(([, f]) => fonction(f)).map(([v]) => v).concat(etat.serveur ? ["compte"] : []);
 const vue = $("#vue");
@@ -345,6 +346,35 @@ async function vuePot() {
   });
 }
 
+/* ---------------------------------------------------------- agenda */
+// Les prochaines séances de ses campagnes (dates réelles), en lecture ; un fichier .ics les ajoute à
+// son propre agenda (Google, Apple, Proton, Outlook…).
+async function vueAgenda() {
+  vue.className = "combat";
+  if (!vue.querySelector(".agenda-joueur")) vue.innerHTML = `<section class="panel agenda-joueur"><h1>Prochaines séances</h1><p class="hint">Chargement…</p></section>`;
+  let r;
+  try { r = await api("GET", avecPJ("/api/joueur/agenda")); }
+  catch (e) { if (etat.vue === "agenda") vue.innerHTML = `<section class="panel agenda-joueur"><h1>Prochaines séances</h1><p class="empty">${esc(e.message)}</p></section>`; return; }
+  if (etat.vue !== "agenda") return;
+  const lien = s => /^https?:\/\//.test(s) ? `<a href="${esc(s)}" target="_blank" rel="noopener noreferrer">${esc(s)}</a>` : esc(s);
+  vue.innerHTML = `<section class="panel agenda-joueur">
+      <h1>Prochaines séances</h1>
+      ${r.seances.length ? r.seances.map(s => `<article class="agenda-carte${s.statut === "annulée" ? " annulee" : ""}">
+          <div class="agenda-quand"><b>${esc(texteJour(s.date))}</b><span>${esc(horaires(s))}</span></div>
+          <div class="agenda-quoi">
+            <div class="ligne"><span class="agenda-nom">${esc(s.nom)}</span>${s.campagne ? `<span class="badge">${esc(s.campagne)}</span>` : ""}
+              ${s.nature && s.nature !== "séance" ? `<span class="badge tag">${esc(s.nature)}</span>` : ""}${s.statut === "annulée" ? `<span class="badge archive">annulée</span>` : ""}</div>
+            ${s.lieu ? `<div class="hint">📍 ${esc(s.lieu)}</div>` : ""}
+            ${s.visio ? `<div class="hint">🔗 ${lien(s.visio)}</div>` : ""}
+            ${s.participants.length ? `<div class="hint">👥 ${s.participants.map(p => esc(p.joueur ? `${p.joueur} (${p.nom})` : p.nom)).join(", ")}</div>` : ""}
+            ${s.infos ? `<div class="md agenda-infos">${rendu(s.infos)}</div>` : ""}
+          </div></article>`).join("")
+        : `<p class="empty">Aucune séance prévue pour l'instant.</p>`}
+      ${r.seances.length ? `<div class="row"><a href="${esc(avecPJ("/api/joueur/agenda/ics"))}" download><button type="button">📅 Ajouter à mon agenda (.ics)</button></a></div>
+      <p class="hint">Le fichier s'ouvre dans Google Agenda, Apple Calendrier, Proton Calendar, Outlook… Si le MJ change une date, téléchargez-le à nouveau. Heures dans le fuseau ${esc(r.fuseau)}.</p>` : ""}
+    </section>`;
+}
+
 /* ---------------------------------------------------------- dés */
 const signe = n => n > 0 ? "+" + n : n < 0 ? String(n) : "";
 let modeDe = "normal"; // dé bonus : garder le meilleur de deux ; dé malus : le pire
@@ -564,6 +594,7 @@ async function route() {
   else if (etat.vue === "combat") vueCombat();
   else if (etat.vue === "documents") vueDocuments();
   else if (etat.vue === "pot") await vuePot();
+  else if (etat.vue === "agenda") await vueAgenda();
   else if (etat.vue === "des") await vueDes();
   else if (etat.vue === "hauts-faits") await vueHautsFaits();
   else if (etat.vue === "compte") vueCompte();

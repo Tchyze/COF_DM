@@ -75,6 +75,9 @@ func fonctionsDeRoute(r *http.Request) []string {
 	if debut("/api/campagnes") && strings.Contains(p, "/pot") || fiche("verser-butin") || debut("/api/joueur/pot") {
 		f = append(f, "butin")
 	}
+	if debut("/api/agenda", "/api/joueur/agenda") {
+		f = append(f, "agenda")
+	}
 	switch {
 	case debut("/api/des", "/api/joueur/des"):
 		f = append(f, "des")
@@ -94,8 +97,6 @@ func fonctionsDeRoute(r *http.Request) []string {
 		f = append(f, "seances")
 	case debut("/api/graphe"):
 		f = append(f, "graphe")
-	case debut("/api/agenda"):
-		f = append(f, "agenda")
 	case debut("/api/chronologie"):
 		f = append(f, "chronologie")
 	case fiche("organigramme"):

@@ -52,7 +52,7 @@ func TestAdminNeLitAucuneFiche(t *testing.T) {
 		"/api/combats", "/api/liens-morts", "/api/bestiaire", "/api/regles", "/api/reference", "/api/fonctionnalites",
 		"/api/joueurs/comptes", "/api/joueur/pj", "/api/joueur/etat", "/api/sync/copies", "/api/conflits", "/api/univers",
 		"/api/bibliotheque", "/api/reference/export", "/api/afficheur/attente", "/api/afficheur/montre", "/api/joueur/montre/image",
-		"/api/agenda", "/api/agenda/ics", "/api/agenda/conflits?date=2027-01-01", "/api/agenda/reglages"}
+		"/api/agenda", "/api/agenda/ics", "/api/agenda/conflits?date=2027-01-01", "/api/agenda/reglages", "/api/joueur/agenda", "/api/joueur/agenda/ics"}
 	for _, u := range lectures {
 		for _, x := range [][]string{nil, {enTeteUnivers, id}} {
 			w := chef.brut("GET", u, nil, x...)
