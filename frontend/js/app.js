@@ -1,7 +1,7 @@
 // Routeur et cadre de l'application.
 // Routes : #/  #/t/<type>  #/f/<id>  #/f/<id>/modifier  #/nouveau/<type>?nom=…  #/nouveau?nom=…
 //          #/bestiaire[/<id>|/nouveau]  #/createur
-//          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/liens  #/journal  #/parametres[/<bloc>]
+//          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/agenda  #/liens  #/journal  #/parametres[/<bloc>]
 import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers } from "./ui.js";
 import { chargerSchema, schema, typeDe, vignette, badgeType, actif as fonctionActive } from "./schema.js";
 import * as tableau from "./views/tableau.js";
@@ -10,6 +10,7 @@ import * as liste from "./views/liste.js";
 import * as fiche from "./views/fiche.js";
 import * as graphe from "./views/graphe.js";
 import * as chronologie from "./views/chronologie.js";
+import * as agenda from "./views/agenda.js";
 import * as outils from "./views/outils.js";
 import * as secrets from "./views/secrets.js";
 import * as bestiaire from "./views/bestiaire.js";
@@ -59,7 +60,7 @@ async function route() {
     return;
   }
   // écrans d'une fonctionnalité coupée dans cet univers
-  const ecrans = { table: "ecran_mj", preparer: "seances", apres: "seances", graphe: "graphe", combat: "combat", secrets: "secrets", chronologie: "chronologie" };
+  const ecrans = { table: "ecran_mj", preparer: "seances", apres: "seances", graphe: "graphe", combat: "combat", secrets: "secrets", chronologie: "chronologie", agenda: "agenda" };
   if (ecrans[nom] && !fonctionActive(ecrans[nom])) {
     toast("Cette fonctionnalité est désactivée dans cet univers (Paramètres → Fonctionnalités).", true);
     location.replace("#/");
@@ -90,6 +91,7 @@ async function route() {
     else if (nom === "combat") { actif = "combat"; nettoyage = await combat.mount(el, a); }
     else if (nom === "secrets") { actif = "secrets"; nettoyage = await secrets.mount(el, params); }
     else if (nom === "chronologie") { actif = "chronologie"; nettoyage = await chronologie.mount(el, params); }
+    else if (nom === "agenda") { actif = "agenda"; nettoyage = await agenda.mount(el, params); }
     else if (nom === "synchro" && !window.cofAcces?.serveur) { nettoyage = await synchro.mount(el); }
     else if (["liens", "journal", "parametres"].includes(nom)) { actif = nom; nettoyage = await outils[nom](el, a); }
     else { location.replace("#/"); return; }
@@ -148,7 +150,7 @@ async function dessinerNav() {
       return groupe(cleGroupe(g), g, connus.map(c => {
         const t = typeDe(c);
         return lien(c, `#/t/${c}`, t.icone, t.pluriel, compte[c]);
-      }).join("") + voies + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : ""));
+      }).join("") + voies + (g === "Campagnes" && fonctionActive("agenda") ? lien("agenda", "#/agenda", "🗓", "Agenda des séances") : "") + (g === "Secrets" && fonctionActive("secrets") ? lien("secrets", "#/secrets", "👁", "Qui sait quoi") : ""));
     }).join("") +
     groupe("combat", fonctionActive("combat") ? "Combat" : "Bestiaire",
       (fonctionActive("combat") ? lien("combat", "#/combat", "⚔", "Combats") : "") + lien("bestiaire", "#/bestiaire", "🐉", "Bestiaire")) +

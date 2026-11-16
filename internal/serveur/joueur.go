@@ -18,7 +18,7 @@ import (
 // créatures d'une rencontre n'en font pas partie.
 var genresJoueur = map[string]bool{
 	modele.Texte: true, modele.Long: true, modele.Choix: true, modele.Nombre: true, modele.Booleen: true,
-	modele.Ref: true, modele.Refs: true, modele.DateMonde: true, modele.DateReelle: true, modele.Etapes: true,
+	modele.Ref: true, modele.Refs: true, modele.DateMonde: true, modele.DateReelle: true, modele.Heure: true, modele.Etapes: true,
 }
 
 func champJoueur(c modele.Champ) bool { return !c.Secret && genresJoueur[c.Genre] }

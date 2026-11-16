@@ -612,6 +612,9 @@ func (s *Store) Creer(typ, nom string, data map[string]any, tags []string, auteu
 		return Entite{}, erreurChamps(err)
 	}
 	e := Entite{Type: typ, Nom: nom, Data: norm, Tags: nettoyerTags(tags)}
+	if err := noterPrevus(tx, "", &e); err != nil {
+		return Entite{}, err
+	}
 	dj, _ := json.Marshal(e.Data)
 	tj, _ := json.Marshal(e.Tags)
 	now := maintenant()
@@ -687,6 +690,7 @@ func (s *Store) Modifier(id int64, m Maj, auteur string) (Entite, error) {
 	}
 	t, _ := modele.TypeDe(e.Type)
 	ancienNom := e.Nom
+	ancienStatut, _ := e.Data["statut"].(string)
 	if m.Nom != nil {
 		if e.Nom, err = nettoyerNom(*m.Nom); err != nil {
 			return Entite{}, err
@@ -708,6 +712,9 @@ func (s *Store) Modifier(id int64, m Maj, auteur string) (Entite, error) {
 		}
 		if e.Data, err = modele.Normaliser(t, data, s.cal, accesFiches{tx}); err != nil {
 			return Entite{}, erreurChamps(err)
+		}
+		if err := noterPrevus(tx, ancienStatut, &e); err != nil {
+			return Entite{}, err
 		}
 	}
 	if m.Tags != nil {

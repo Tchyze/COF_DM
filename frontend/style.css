@@ -851,3 +851,61 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
 .pastille-montre{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:55;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--gold);border-radius:999px;padding:4px 6px 4px 14px;box-shadow:var(--ombre);max-width:min(560px,calc(100vw - 100px));font-size:.9rem}
 .pastille-montre span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pastille-montre[hidden]{display:none}
+
+/* ---------------------------------------------------------------- agenda des séances (dates réelles) */
+.agenda{max-width:1000px}
+.agenda .entete{flex-wrap:wrap;gap:8px}
+.agenda-aide{margin:-4px 0 14px}
+.lien-bouton{background:none;border:0;padding:0;min-height:0;color:var(--accent);text-decoration:underline;cursor:pointer;font:inherit}
+.agenda-bascule{display:inline-flex}
+.agenda-bascule button{border-radius:0}
+.agenda-bascule button:first-child{border-radius:var(--r) 0 0 var(--r)}
+.agenda-bascule button:last-child{border-radius:0 var(--r) var(--r) 0;margin-left:-1px}
+.agenda-bascule button.on{border-color:var(--gold);color:var(--gold);font-weight:600}
+.agenda-mois{font:600 1.15rem var(--f-display);color:var(--gold);margin:18px 0 8px}
+.agenda-mois::first-letter,.agenda-nav h3::first-letter{text-transform:uppercase}
+.agenda-carte{display:grid;grid-template-columns:180px 1fr auto;gap:6px 16px;align-items:start;padding:12px 14px;margin-bottom:8px;background:var(--surface);border:1px solid var(--line);border-left:3px solid var(--t-seance);border-radius:10px}
+.agenda-carte.conflit,.agenda-carte.proche{border-left-color:var(--warn)}
+.agenda-carte.annulee{border-left-color:var(--line2);opacity:.75}
+.agenda-carte.annulee .agenda-quand,.agenda-carte.annulee .agenda-nom{text-decoration:line-through}
+.agenda-quand{display:flex;flex-direction:column;gap:2px}
+.agenda-quand b::first-letter{text-transform:uppercase}
+.agenda-quand span{color:var(--muted);font-variant-numeric:tabular-nums}
+.agenda-quoi{min-width:0;display:flex;flex-direction:column;gap:4px}
+.agenda-quoi .ligne{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.agenda-quoi .hint{overflow-wrap:anywhere}
+.agenda-nom{font-weight:600;color:var(--ink)}
+.agenda-actions{display:flex;flex-direction:column;gap:6px;align-items:stretch}
+.agenda-conflits{display:flex;flex-direction:column;gap:4px}
+.agenda-conflit{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 16%,transparent);color:var(--ink);padding:5px 10px;border-radius:0 8px 8px 0;font-size:.88rem}
+.agenda-conflit.proche{background:color-mix(in srgb,var(--warn) 7%,transparent)}
+.agenda-conflit a{color:inherit;font-weight:600}
+.agenda-verif:empty{display:none}
+.agenda-form .grille2{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px 16px}
+.agenda-form{gap:12px}
+.agenda-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.agenda-nav h3{margin:0;min-width:11em;text-align:center;font-family:var(--f-display)}
+.agenda-grille{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.agenda-tete{font-size:.75rem;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.06em}
+.agenda-jour{position:relative;min-height:92px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.agenda-jour.hors{opacity:.45}
+.agenda-jour.auj{border-color:var(--gold)}
+.agenda-jour .n{font-size:.78rem;color:var(--muted)}
+.agenda-puce{display:block;width:100%;text-align:left;font-size:.75rem;padding:2px 5px;min-height:0;border-radius:5px;border:0;border-left:3px solid var(--t-seance);background:var(--surface2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
+.agenda-puce.conflit,.agenda-puce.proche{border-left-color:var(--warn);background:color-mix(in srgb,var(--warn) 16%,var(--surface2))}
+.agenda-puce.annulee{text-decoration:line-through;opacity:.6}
+.agenda-ajout{position:absolute;top:2px;right:2px;min-height:0;padding:0 6px;opacity:0}
+.agenda-jour:hover .agenda-ajout,.agenda-ajout:focus{opacity:1}
+.agenda-fiche p{margin:4px 0}
+.boite.agenda .boite-corps{position:relative}
+.boite.agenda .agenda-carte{grid-template-columns:1fr;border-left-width:3px}
+.boite.agenda .agenda-actions{flex-direction:row;flex-wrap:wrap}
+@media (max-width:700px){
+  .agenda-carte{grid-template-columns:1fr}
+  .agenda-actions{flex-direction:row;flex-wrap:wrap}
+  .agenda-jour{min-height:64px;padding:2px}
+  .agenda-puce b{display:none}
+  .agenda-puce{font-size:.68rem;padding:1px 3px}
+  .agenda-ajout{display:none}
+  .agenda-nav h3{min-width:0;flex:1}
+}

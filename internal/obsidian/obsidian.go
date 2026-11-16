@@ -422,7 +422,7 @@ func (x *exporteur) propriete(n *note, c modele.Champ) string {
 		return ""
 	}
 	switch c.Genre {
-	case modele.Texte, modele.Choix, modele.DateReelle:
+	case modele.Texte, modele.Choix, modele.DateReelle, modele.Heure:
 		if s := texte(v); s != "" {
 			return yaml(s)
 		}

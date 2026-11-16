@@ -178,6 +178,7 @@ Une fiche :
 | `refs` | liste d'identifiants |
 | `date_jeu` | `{"an": 1216, "mois": 1, "jour": 1}`, contrôlée par le calendrier du monde |
 | `date` | `"AAAA-MM-JJ"` |
+| `heure` | `"HH:MM"` (heure réelle, dans le fuseau de l'univers ; « 20h30 » accepté) |
 | `etapes` | `[{"texte": "…", "fait": false}]` (une simple chaîne est acceptée) |
 | `monstre` | identifiant d'un monstre du bestiaire de l'univers (`profil_combat` d'un PNJ) |
 | `adversaires` | `[{"monstre": 3, "nom": "Brigand", "qte": 4, "camp": "ennemi"}]` : monstres du bestiaire de l'univers (`monstre` : leur identifiant ; `nom` : gardé pour l'affichage) ; `qte` de 1 à 99, `camp` `ennemi` ou `allie` |
@@ -462,6 +463,22 @@ La seconde fenêtre du MJ (`/afficheur.html`), pour une télé. En combat, elle 
 
 Quand le bureau est relié à un serveur et connecté, `montre`, `montrer` et `retirer` passent au serveur, qui tient ce qui est montré pour ses joueurs (comme les dés).
 
+## Agenda des séances
+
+Les dates **réelles** où la table se retrouve (fonctionnalité `agenda`), à ne pas confondre avec le calendrier du monde (`/api/calendrier`). Une séance de l'agenda est une fiche `seance` qui a une date réelle (`date_reelle`) ; elle s'écrit comme toute fiche (`POST /api/entites`, `PATCH /api/entites/{id}`) avec ses champs `nature` (`séance`, `séance zéro`, `création de personnages`, `autre` ; vide : une séance de jeu), `statut` (`prévue`, `jouée`, `annulée`), `heure` (genre `heure`, `"HH:MM"`, « 20h30 » accepté), `duree` (`"30 min"`, `"1 h"`, `"1 h 30"`… jusqu'à `"12 h"`), `lieu_reel`, `visio`, `infos_joueurs` (montré aux joueurs). Une séance sans heure dure toute la journée ; sans durée, 4 h. Quand une séance passe `jouée`, elle garde dans `prevus` (champ rempli par l'application) les PJ actifs de sa campagne à ce moment.
+
+Qui est attendu : les PJ actifs (statut `actif` ou vide, non archivés) de la campagne, et le MJ ; une séance jouée cite ses `presents`, sinon ses `prevus`. Une personne se reconnaît à son compte sur un serveur (le compte dont c'est le PJ), sinon au champ `joueur` du PJ, à la casse près. Deux séances de la même personne qui se chevauchent : conflit `chevauchement` (alerte) ; à moins d'une heure l'une de l'autre : `rapproche` (message). Une séance annulée ne gêne personne. Les heures sont écrites dans le fuseau horaire de l'univers (réglage synchronisé, `Europe/Paris` par défaut).
+
+Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la liste blanche du rôle `joueur`.
+
+| Requête | Effet |
+|---|---|
+| `GET /api/agenda?campagne=&depuis=AAAA-MM-JJ` | `{"fuseau", "seances": [{"id", "nom", "campagne": {"id", "nom"} \| null, "numero"?, "nature"?, "statut"?, "date", "heure"?, "duree"?, "debut", "fin", "jour_entier"?, "lieu"?, "visio"?, "infos"?, "participants": [{"pj", "nom", "joueur"?}], "conflits": [{"seance", "nom", "campagne"?, "debut", "genre", "personnes"}], "modifie"}], "numero_suivant"?}` : les séances datées, de la plus ancienne à la plus lointaine. `debut` et `fin` : RFC 3339, avec le décalage du fuseau de l'univers. `personnes` : les noms affichés (joueur ou compte, « le MJ »). `numero_suivant` (avec `campagne`) : le numéro qui suit la plus haute séance de la campagne. |
+| `GET /api/agenda/conflits?date=&heure=&duree=&campagne=&seance=` | Les conflits qu'aurait une séance placée là, avant de l'enregistrer : `[{"seance", "nom", "campagne"?, "debut", "genre", "personnes"}]`. `seance` : celle qu'on déplace, mise de côté. `400` sans date. |
+| `GET /api/agenda/ics?campagne=` | L'agenda en fichier iCalendar (`text/calendar`, en pièce jointe), à importer dans Google Agenda, Apple Calendrier, Proton Calendar, Outlook… Chaque séance : titre (« nom · campagne », « ANNULÉE — » devant une séance annulée, `STATUS:CANCELLED`), début et fin en UTC (une journée entière sans heure), lieu réel ou lien de visio, participants, nature et texte pour les joueurs. Jamais une note, une préparation ni un résumé du MJ. |
+| `GET /api/agenda/reglages` | `{"fuseau", "defaut", "durees", "duree_defaut"}`. |
+| `PUT /api/agenda/reglages` `{"fuseau": "Europe/Paris"}` | Change le fuseau horaire de l'univers (nom IANA ; `422` s'il est inconnu). Noté au journal. |
+
 ## Écran du MJ
 
 Ce que l'écran du MJ (`#/table`) affiche. Ces réponses contiennent les champs réservés au MJ.
@@ -501,7 +518,7 @@ Inscrire le serveur MCP de cette application (`<programme> -mcp`) dans Claude De
 
 ## Fonctionnalités
 
-Certaines parties de l'application sont optionnelles, réglées **univers par univers** (le réglage est rangé dans l'univers et se synchronise) : `ecran_mj`, `seances` (préparation et après-séance), `combat`, `rencontres`, `butin` (butin et pot commun), `secrets`, `feuilles`, `page_joueurs`, `des`, `aides`, `regles`, `graphe`, `chronologie`, `organigramme`, `obsidian`. Coupées par défaut dans un univers neuf : `des`, `aides`, `feuilles`, `page_joueurs`. Un univers d'avant cette version garde ce dont il se sert (des feuilles de personnage : `feuilles` et `page_joueurs` ; des aides de jeu : `aides`).
+Certaines parties de l'application sont optionnelles, réglées **univers par univers** (le réglage est rangé dans l'univers et se synchronise) : `ecran_mj`, `seances` (préparation et après-séance), `agenda` (agenda des séances), `combat`, `rencontres`, `butin` (butin et pot commun), `secrets`, `feuilles`, `page_joueurs`, `des`, `aides`, `regles`, `graphe`, `chronologie`, `organigramme`, `obsidian`. Coupées par défaut dans un univers neuf : `des`, `aides`, `feuilles`, `page_joueurs`. Un univers d'avant cette version garde ce dont il se sert (des feuilles de personnage : `feuilles` et `page_joueurs` ; des aides de jeu : `aides`).
 
 | Requête | Effet |
 |---|---|
@@ -510,7 +527,7 @@ Certaines parties de l'application sont optionnelles, réglées **univers par un
 
 Une fonctionnalité coupée :
 
-- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/campagnes/{id}/pot…`, `/api/entites/{id}/verser-butin` et `/api/joueur/pot…` (`butin`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
+- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/campagnes/{id}/pot…`, `/api/entites/{id}/verser-butin` et `/api/joueur/pot…` (`butin`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/agenda` (`agenda`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
 - ses types de fiches (`rencontre`, `secret`, `aide`, `regle`) quittent le schéma, et avec eux les champs qui ne désignent qu'eux ; ils sortent de `GET /api/entites` et ne se créent plus (`422`, import compris). Une fiche existante reste lisible par `GET /api/entites/{id}` ;
 - la préparation d'une séance ne remonte plus ses secrets (`secrets`) ni ses rencontres (`rencontres`) ;
 - rien n'est effacé : ses données restent dans l'univers, voyagent avec la synchronisation et l'export, et reviennent à la réactivation.
@@ -576,7 +593,7 @@ Pour archiver ou supprimer : `suivant` est la clé de l'univers à ouvrir à la 
 
 Une application de bureau garde une **copie** d'un univers du serveur et la tient à jour, y compris après un travail hors ligne. Ces routes n'existent qu'en mode serveur, pour les comptes qui écrivent dans l'univers (MJ) ; l'auditeur, le joueur et l'administrateur en sont exclus.
 
-L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}`. `objet` vaut `entite` (fiche), `relation`, `media` (image), `document` (bestiaire, profil, peuple, voie, combat terminé), `feuille`, `meta` (`calendrier`, `regles`, `fonctionnalites`, `edition_joueurs` ; `reference` : l'ancien réglage des profils et voies, envoyé par un serveur d'avant le modèle 2, que la copie range aussitôt un par un) ou `journal`. `champ` vaut `nom`, `type`, `tags`, `archive`, `partage`, `cree`, `data.<clé>` pour une fiche ou une feuille, le nom de la colonne pour une relation ou une image, `data` pour un document, `valeur` pour un réglage, `ligne` pour le journal. Le champ `*` dit qu'un objet existe ; `null`, qu'il est supprimé. Un combat en cours ne se synchronise pas. Chaque copie a un numéro et tire les identifiants de ce qu'elle crée dans sa propre plage (2^40 par copie) : une fiche créée hors ligne garde son identifiant partout. La dernière plage (numéro 8191) n'est donnée à aucune copie : elle reçoit les profils, peuples et voies repris de l'ancien réglage, sous un identifiant tiré de leur `ref` ou de leur nom, le même sur toutes les copies.
+L'univers y est vu champ par champ : `{"objet", "cle", "champ", "valeur", "seq"}`. `objet` vaut `entite` (fiche), `relation`, `media` (image), `document` (bestiaire, profil, peuple, voie, combat terminé), `feuille`, `meta` (`calendrier`, `regles`, `fonctionnalites`, `edition_joueurs`, `fuseau` (le fuseau horaire de l'agenda, absent quand c'est celui par défaut) ; `reference` : l'ancien réglage des profils et voies, envoyé par un serveur d'avant le modèle 2, que la copie range aussitôt un par un) ou `journal`. `champ` vaut `nom`, `type`, `tags`, `archive`, `partage`, `cree`, `data.<clé>` pour une fiche ou une feuille, le nom de la colonne pour une relation ou une image, `data` pour un document, `valeur` pour un réglage, `ligne` pour le journal. Le champ `*` dit qu'un objet existe ; `null`, qu'il est supprimé. Un combat en cours ne se synchronise pas. Chaque copie a un numéro et tire les identifiants de ce qu'elle crée dans sa propre plage (2^40 par copie) : une fiche créée hors ligne garde son identifiant partout. La dernière plage (numéro 8191) n'est donnée à aucune copie : elle reçoit les profils, peuples et voies repris de l'ancien réglage, sous un identifiant tiré de leur `ref` ou de leur nom, le même sur toutes les copies.
 
 | Route | Rôle |
 |---|---|

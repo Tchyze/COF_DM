@@ -241,6 +241,13 @@ func normaliserValeur(ch *Champ, v any, cal Calendrier, f Fiches) (any, error) {
 			}
 		}
 		return nil, fmt.Errorf("date AAAA-MM-JJ attendue")
+	case Heure:
+		if s, ok := v.(string); ok {
+			if h, ok := LireHeure(s); ok {
+				return h, nil
+			}
+		}
+		return nil, fmt.Errorf("heure HH:MM attendue")
 	case Monstre:
 		n, err := nombre(v)
 		if err != nil || n != math.Trunc(n) || n <= 0 {

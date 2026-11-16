@@ -16,7 +16,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 
 - **Fait** : P1 entier (projets 1 à 5), projet 10 (voies et capacités), projet 11 (inventaire structuré, 1.2.5), projet 12 (montée de niveau guidée, 1.2.4), projet 14 (butin et pot commun, 1.2.5), projet 15 (afficheur de table, 1.4.0), lot 1 du projet 9 (aides de jeu), projet 33 (dépôt public), et l'installation sur tablette du projet 29 (1.3.1). Le détail, PR par PR, est dans `SUIVI.md`.
 - **Hors de cette liste, aussi fait** : image Docker Hub, menu repliable, installation Windows, rôles du serveur et page d'administration, combat et dés en direct (1.3.0) ; durcissement de sécurité et double authentification des administrateurs (1.3.1) ; fenêtre « Mes univers » du bureau (1.3.2).
-- **Chantier en cours** : aucun. Le projet 41 (ambiance sonore) est conçu, puis mis de côté par le MJ (15 novembre 2026).
+- **Chantier en cours** : projet 45, agenda des séances (16 novembre 2026). Le projet 41 (ambiance sonore) est conçu, puis mis de côté par le MJ (15 novembre 2026).
 - **Au fil de l'eau** : projet 6, les essais qui ne se font qu'à la main.
 
 ## Vue d'ensemble
@@ -65,6 +65,7 @@ Les numéros des projets ne changent pas (`SUIVI.md` et les PR y renvoient) ; le
 | 42 | Accessibilité (clavier, contrastes, lecteurs d'écran) | P4 | M | ★ | — | |
 | 43 | Version macOS, installeur Windows signé | P4 | M | ★ | — | |
 | 44 | Paquets communautaires (bestiaires, aventures maison) | P4 | M | ★ | 38 (conseillé) | |
+| 45 | Agenda des séances (dates réelles, abonnement iCal, conflits) | P2 | L | ★★★ | — | **en cours** (lot 1) |
 
 ## Ordre conseillé
 
@@ -113,6 +114,9 @@ Une liste d'objets (quantité, porté ou non, emplacement) au lieu du texte `Éq
 
 ### 12. Montée de niveau guidée — fait
 Le MJ lance la montée (feuille du PJ, onglet Joueurs de l'écran du MJ) : il l'accorde et un assistant s'ouvre sur la page du joueur, ou il la fait lui-même. Fenêtres : dés de vie saisis, rangs dans le tableau des voies (coût et niveau minimal des règles), PM du profil, étapes en plus, récapitulatif. Historique des niveaux sur la feuille, annulation de la dernière montée. Tout vient de la partie `personnage.montee` du fichier de règles ; sans elle, saisie libre.
+
+### 45. Agenda des séances — en cours
+Les dates réelles des séances (heure, durée, lieu, visio), gérées par le MJ et vues des joueurs ; abonnement iCal pour Google, Apple, Proton, Outlook (serveur), fichier `.ics` à la maison ; alerte quand une même personne a deux séances qui se chevauchent ou sont à moins d'une heure. Décisions et lots dans `SUIVI.md` (« Agenda des séances »).
 
 ### 13. Impression et export PDF
 Mise en page imprimable (feuille de style `@media print`, sans dépendance) : feuille de personnage, fiche, préparation de séance, rencontre, bloc d'un monstre, aide de jeu.

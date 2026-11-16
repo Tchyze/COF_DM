@@ -14,6 +14,7 @@ const (
 	Refs        = "refs"        // plusieurs fiches (ids)
 	DateMonde   = "date_jeu"    // date du calendrier du monde : {an, mois, jour}
 	DateReelle  = "date"        // date réelle AAAA-MM-JJ
+	Heure       = "heure"       // heure réelle HH:MM (agenda des séances)
 	Etapes      = "etapes"      // liste de cases à cocher : [{texte, fait}]
 	Adversaires = "adversaires" // [{monstre, nom, qte, camp}] : monstres du bestiaire de l'univers
 	Monstre     = "monstre"     // identifiant d'un monstre du bestiaire de l'univers
@@ -209,11 +210,18 @@ var Types = []Type{
 		Champs: []Champ{
 			{Cle: "campagne", Nom: "Campagne", Genre: Ref, Cibles: []string{"campagne"}},
 			{Cle: "numero", Nom: "Numéro", Genre: Nombre},
-			{Cle: "statut", Nom: "Statut", Genre: Choix, Options: []string{"prévue", "jouée"}},
-			{Cle: "date_reelle", Nom: "Date réelle", Genre: DateReelle},
+			{Cle: "nature", Nom: "Nature", Genre: Choix, Options: NaturesSeance, Aide: "Vide : une séance de jeu"},
+			{Cle: "statut", Nom: "Statut", Genre: Choix, Options: []string{"prévue", "jouée", "annulée"}},
+			{Cle: "date_reelle", Nom: "Date réelle", Genre: DateReelle, Groupe: "Agenda"},
+			{Cle: "heure", Nom: "Heure de début", Genre: Heure, Groupe: "Agenda", Fonction: "agenda"},
+			{Cle: "duree", Nom: "Durée", Genre: Choix, Options: DureesSeance, Groupe: "Agenda", Fonction: "agenda"},
+			{Cle: "lieu_reel", Nom: "Lieu (réel)", Genre: Texte, Groupe: "Agenda", Fonction: "agenda", Aide: "Facultatif : où se retrouve la table"},
+			{Cle: "visio", Nom: "Lien de visio", Genre: Texte, Groupe: "Agenda", Fonction: "agenda", Aide: "Facultatif"},
+			{Cle: "infos_joueurs", Nom: "Pour les joueurs", Genre: Long, Groupe: "Agenda", Fonction: "agenda", Aide: "Montré aux joueurs dans leur agenda"},
 			{Cle: "date_jeu", Nom: "Date en jeu", Genre: DateMonde},
 			{Cle: "date_jeu_fin", Nom: "Jusqu'au (en jeu)", Genre: DateMonde, Aide: "Quand la séance couvre plusieurs jours"},
 			{Cle: "presents", Nom: "PJ présents", Genre: Refs, Cibles: []string{"pj"}},
+			{Cle: "prevus", Nom: "PJ prévus", Genre: Refs, Cibles: []string{"pj"}, Auto: true, Aide: "Les PJ actifs de la campagne quand la séance a été jouée"},
 			{Cle: "quetes", Nom: "Quêtes avancées", Genre: Refs, Cibles: []string{"quete"}},
 			{Cle: "lieux", Nom: "Lieux visités", Genre: Refs, Cibles: []string{"lieu"}},
 			{Cle: "pnj", Nom: "PNJ rencontrés", Genre: Refs, Cibles: []string{"pnj"}},
