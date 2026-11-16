@@ -52,9 +52,13 @@ import "strconv"
 // Modèle 9 : l'afficheur de table. Un monstre du bestiaire peut être « sbire » (il disparaît en
 // tombant) ; un combattant a un nom d'affichage (« alias »), peut être caché aux joueurs (« cache »)
 // et être « sbire ». Un serveur plus ancien les perdrait, et montrerait aux joueurs un combattant caché.
+//
+// Modèle 10 : l'agenda des séances. Une séance a sa nature, le statut « annulée », son heure de
+// début (genre « heure »), sa durée, son lieu réel, son lien de visio, ce qui est dit aux joueurs et
+// les PJ prévus ; l'univers a son fuseau horaire (réglage « fuseau ») et la fonctionnalité « agenda ».
 const (
 	VersionProtocole = 1
-	VersionModele    = 9
+	VersionModele    = 10
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

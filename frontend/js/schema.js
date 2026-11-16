@@ -54,6 +54,7 @@ export function valeurCourte(type, cle, v, refs = {}) {
     case "refs": return (v || []).map(x => refs[x] ? lienFiche(refs[x]) : "").filter(Boolean).join(", ");
     case "date_jeu": return esc(texteDate(v));
     case "date": return esc(new Date(v + "T12:00:00").toLocaleDateString("fr-FR"));
+    case "heure": return esc(v.replace(/^0?(\d+):(\d\d)$/, (_, h, m) => m === "00" ? `${h} h` : `${h} h ${m}`));
     case "booleen": return v ? "oui" : "non";
     case "nombre": return esc(String(v).replace(".", ","));
     case "choix": return `<span class="statut-${esc(String(v).replace(/ /g, "."))}">${esc(v)}</span>`;

@@ -28,6 +28,8 @@ var Fonctionnalites = []Fonctionnalite{
 		Description: "Le butin chiffré des rencontres, versé au pot commun de la campagne, puis partagé entre les PJ."},
 	{Cle: "secrets", Nom: "Secrets", Groupe: "Partie", Defaut: true, Types: []string{"secret"},
 		Description: "Fiches de secret, « qui sait quoi » et révélations aux PJ."},
+	{Cle: "agenda", Nom: "Agenda des séances", Groupe: "Partie", Defaut: true,
+		Description: "Les dates réelles des séances (heure, durée, lieu), les conflits d'horaires, et l'agenda des joueurs à importer dans le leur."},
 	{Cle: "feuilles", Nom: "Feuilles de personnage", Groupe: "Joueurs", Defaut: false,
 		Description: "La feuille de chaque PJ (caractéristiques, PV, voies, équipement), ses repos et ses profils."},
 	{Cle: "page_joueurs", Nom: "Page des joueurs", Groupe: "Joueurs", Defaut: false,

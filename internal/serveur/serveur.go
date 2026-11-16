@@ -283,6 +283,7 @@ func (s *Serveur) routes() {
 	s.routesAcces()
 	s.routesDes()
 	s.routesAfficheur()
+	s.routesAgenda()
 	s.routesPageJoueurs() // après routesAcces, qui crée la liste blanche du rôle « joueur »
 
 	m.HandleFunc("POST /api/relations", s.relier)
@@ -424,7 +425,7 @@ func (s *Serveur) schema(w http.ResponseWriter, r *http.Request) {
 			modele.Texte: "chaîne d'une ligne", modele.Long: "Markdown ; [[Nom]] crée un lien vers la fiche de ce nom",
 			modele.Choix: "une des options", modele.Nombre: "nombre", modele.Booleen: "true / false",
 			modele.Ref: "identifiant (id) d'une fiche d'un des types « cibles »", modele.Refs: "liste d'identifiants",
-			modele.DateMonde: "{\"an\":1216,\"mois\":1,\"jour\":1} selon le calendrier", modele.DateReelle: "\"AAAA-MM-JJ\"",
+			modele.DateMonde: "{\"an\":1216,\"mois\":1,\"jour\":1} selon le calendrier", modele.DateReelle: "\"AAAA-MM-JJ\"", modele.Heure: "\"HH:MM\" (heure réelle, dans le fuseau de l'univers)",
 			modele.Etapes: "[{\"texte\":\"…\",\"fait\":false}]",
 			modele.Butin:  "{\"pieces\":{\"po\":30,\"pa\":0,\"pc\":0},\"objets\":[{\"fiche\":12},{\"nom\":\"Torche\",\"quantite\":4}]}",
 		},

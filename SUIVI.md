@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 15 novembre 2026 (version 1.4.0 : afficheur de table, PR 53 à 55, modèle 9).
+Dernière mise à jour : 16 novembre 2026 (projet 45, agenda des séances : lot 1 en cours, modèle 10).
 
 ## Où on en est
 
 - **Version stable : 1.4.0** (15 novembre 2026) : PR 53 à 55 (afficheur de table), avec F-12 (PR 50, 52), le test stabilisé (PR 51) et les dépendances (PR 48, 49). Image sur Docker Hub (`1.4.0`, `latest`). Avant elle : 1.3.2 (2 novembre 2026), PR 47 (fenêtre « Mes univers » du bureau) ; 1.3.1 (2 novembre 2026), PR 41 à 43 ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 9 (dans la 1.4.0 : `sbire` du bestiaire, `alias`, `cache` et `sbire` d'un combattant ; 8 de la 1.2.5 à la 1.3.2), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. Le projet 15, afficheur de table, est publié dans la 1.4.0 (voir « Afficheur de table » dans « Ce qui a été fait »). Le jeton Docker Hub recollé le 15 novembre 2026 a servi à l'envoi de la 1.4.0 : il marche. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
+- **Chantier en cours** (16 novembre 2026) : projet 45, **agenda des séances** (voir « Agenda des séances » dans les décisions). Lot 1, l'agenda du MJ : branche `agenda-mj`, modèle 10 (à essayer par le MJ). Le projet 15, afficheur de table, est publié dans la 1.4.0 (voir « Afficheur de table » dans « Ce qui a été fait »). Le jeton Docker Hub recollé le 15 novembre 2026 a servi à l'envoi de la 1.4.0 : il marche. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -177,6 +177,22 @@ Les cartes (plans, marqueurs, carte montrée aux joueurs) sont retirées du proj
 - **Dés** : les jets publics de la table, seulement si la fonctionnalité des dés virtuels est activée.
 - **Hors combat** : un écran d'attente (campagne, date en jeu, lieu du groupe), et « Montrer à la table » (image d'une fiche, portrait, aide de jeu), sur la télé et aussi sur les téléphones des joueurs.
 - **Lots** : 1. l'afficheur de combat (fenêtre, ordre, PJ, adversaires grisés, portraits, dés) ; 2. nom d'affichage, combattants cachés et « disparaît en tombant », télé et téléphones ; 3. écran d'attente et « Montrer à la table ».
+
+### Agenda des séances (16 novembre 2026, projet 45, avant le code)
+
+Les dates **réelles** où la table se retrouve. Le mot « calendrier » reste au monde du jeu : partout ailleurs (code, écran, API), c'est l'**agenda**.
+
+- **Ce qu'on planifie** : des fiches « séance » (pas d'objet à part), avec une **nature** au menu déroulant (séance, séance zéro, création de personnages, autre), une date, une heure de début, une **durée** au menu (de 30 min en 30 min, jusqu'à 12 h), un lieu réel et un lien de visio (facultatifs), un texte pour les joueurs. Pas de « pause » : sans séance, il n'y a rien à dire. Pas de répétition automatique : un bouton **Dupliquer** (dans 1 ou 2 semaines, ou à une date choisie, numéro suivant).
+- **Annuler** : la séance reste visible, **barrée** (« ANNULÉE — » dans les agendas des joueurs). Modifier et déplacer : par l'agenda ou la fiche.
+- **Qui voit quoi** : le MJ gère (chaque MJ d'un univers peut modifier) ; l'auditeur voit l'agenda mais **ne s'y abonne pas** ; un joueur ne voit **que les séances de ses campagnes**, sans pouvoir les modifier. Le fichier importé dans Google, Apple, Proton… ne porte que le nécessaire : nom, date, heures, participants, lieu, visio, texte pour les joueurs ; jamais une note du MJ.
+- **Abonnement** : une adresse par compte (tous ses univers et campagnes), serveur seulement ; le MJ ne la coupe pas, l'administrateur oui. Le retard de Google à relire un abonnement et la présence de l'adresse dans le journal du proxy sont acceptés. **À la maison**, sans serveur : un fichier `.ics` à télécharger (à réimporter à chaque changement).
+- **Conflits** : qui est attendu = les **PJ actifs** de la campagne (un PJ mort remplacé ne change rien) et le MJ. La personne se reconnaît à son compte sur un serveur, sinon au champ « Joueur » du PJ. Deux séances qui se chevauchent : **alerte** ; à **moins d'une heure** l'une de l'autre : **message**. Jamais de blocage. L'alerte s'affiche pendant la planification (fenêtre de l'agenda, formulaire de la fiche), puis **en orange** dans l'agenda du MJ et sur la fiche. **Entre deux univers** d'un serveur, le MJ voit seulement qu'il y a un conflit, rien de sa nature.
+- **Fuseau horaire** : un réglage de l'univers (synchronisé), Europe/Paris par défaut ; le fichier `.ics` donne les heures en UTC, justes chez chacun, heure d'été comprise.
+- **Fonctionnalité** « Agenda des séances », activée par défaut. Pas d'outil pour Claude : c'est un humain qui gère l'agenda.
+- **Rappels** : aucun par défaut, chacun règle les siens dans son agenda ; pas de rappel envoyé par COF DM pour l'instant.
+- **Trace** : une séance jouée garde les PJ qui étaient prévus (PJ actifs au moment où elle passe « jouée »), à côté des présents.
+- **Plus tard** : les réponses des joueurs (présent, absent, peut-être), puis un sondage de dates (« Sondage » ou « Vote »). Pas d'indisponibilités déclarées : elles se discutent autour de la table.
+- **Lots prévus** : 1. l'agenda du MJ (champs de la séance, fuseau, écran Agenda en liste et par mois, conflits dans un univers, fichier `.ics`) ; 2. l'agenda sur la page des joueurs, avec son `.ics` ; 3. l'abonnement par adresse secrète (serveur) ; 4. les conflits entre univers, cloisonnés ; 5. les réponses des joueurs.
 
 ### Ambiance sonore (15 novembre 2026, projet 41, avant le code)
 
@@ -353,7 +369,7 @@ Voir « Où on en est ». Image Docker publiée sur Docker Hub (`tchyze/cof-dm`,
 
 ### Ensuite
 
-À choisir avec le MJ dans `PROJETS.md`. Le projet 41 (ambiance sonore) est conçu mais mis de côté (voir « Ambiance sonore » dans les décisions). Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+Les lots 2 à 5 du projet 45 (agenda des séances). Puis à choisir avec le MJ dans `PROJETS.md`. Le projet 41 (ambiance sonore) est conçu mais mis de côté (voir « Ambiance sonore » dans les décisions). Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 

@@ -612,7 +612,7 @@ func TestServeurJoueur(t *testing.T) {
 		"/api/calendrier", "/api/parametres", "/api/resoudre?nom=gautier", "/medias/" + m["fichier"].(string),
 		"/api/journal", "/api/export", "/api/export/obsidian", "/api/export/obsidian?secrets=0", "/api/secrets", "/api/graphe",
 		"/api/chronologie", "/api/table", "/api/combats", "/api/liens-morts", "/api/bestiaire", chemin(gautier) + "/organigramme",
-		"/api/comptes", "/api/fonctionnalites", "/api/regles"} {
+		"/api/comptes", "/api/fonctionnalites", "/api/regles", "/api/agenda", "/api/agenda/ics", "/api/agenda/reglages"} {
 		if c, _, _ := b.proxy("GET", u, nil, joueuse); c != 403 {
 			t.Fatalf("GET %s par le joueur : %d", u, c)
 		}

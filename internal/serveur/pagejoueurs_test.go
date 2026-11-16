@@ -65,7 +65,7 @@ func TestPageJoueursLibre(t *testing.T) {
 		}
 	}
 	// le reste de l'application reste fermé
-	for _, u := range []string{"/api/entites", fmt.Sprintf("/api/entites/%v", s.aldric), "/api/combats", "/api/bestiaire", "/api/export", "/api/regles",
+	for _, u := range []string{"/api/agenda", "/api/agenda/ics", "/api/entites", fmt.Sprintf("/api/entites/%v", s.aldric), "/api/combats", "/api/bestiaire", "/api/export", "/api/regles",
 		"/api/table", "/api/journal", "/api/schema", "/api/parametres", "/api/joueurs/edition", "/api/joueur/ailleurs", fmt.Sprintf("/api/entites/%v/difficulte", s.renc)} {
 		if c, corps := b.joueurLibre("GET", u, nil, false); c != 401 {
 			t.Fatalf("GET %s par un joueur : %d %s", u, c, corps)

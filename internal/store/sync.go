@@ -57,7 +57,7 @@ const (
 // reglagesSync : les réglages de l'univers qui se synchronisent (dont les fonctionnalités
 // activées et l'édition par les joueurs) ; les autres (page des joueurs ouverte au réseau…) tiennent
 // à chaque côté.
-var reglagesSync = []string{"calendrier", MetaRegles, MetaReference, MetaFonctions, MetaEditionJoueurs}
+var reglagesSync = []string{"calendrier", MetaRegles, MetaReference, MetaFonctions, MetaEditionJoueurs, MetaFuseau}
 
 // MetaEditionJoueurs : « 1 » quand les joueurs modifient la feuille de leur PJ (réglage du MJ).
 const MetaEditionJoueurs = "edition_joueurs"
@@ -654,6 +654,13 @@ func appliquerReglage(tx execer, o *objetRecu) error {
 			return err
 		}
 		texte = canonique(choix)
+	case o.cle == MetaFuseau:
+		if err := valeurRecue(c, &texte); err != nil {
+			return err
+		}
+		if _, err := modele.Fuseau(texte); err != nil {
+			return invalide("%v", err)
+		}
 	case o.cle == MetaEditionJoueurs:
 		var n int
 		if err := valeurRecue(c, &n); err != nil || n != 1 {

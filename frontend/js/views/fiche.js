@@ -7,6 +7,7 @@ import * as panneaux from "./panneaux.js";
 import { panneauFeuille } from "./feuille.js";
 import { organigramme } from "./organigramme.js";
 import { ouvrirMontrer } from "../montrer.js";
+import { texteConflits, horaires, texteJour } from "./agenda.js";
 
 let courant = "";
 export const typeCourant = () => courant;
@@ -55,7 +56,7 @@ const PANNEAUX = {
   pnj: panneaux.combatPNJ, rencontre: panneaux.rencontre,
   seance: panneaux.combatsSeance, secret: panneaux.quiSait, aide: panneaux.envois, campagne: panneaux.potCommun,
 };
-export const COURTS = new Set(["texte", "choix", "nombre", "booleen", "ref", "refs", "date_jeu", "date"]);
+export const COURTS = new Set(["texte", "choix", "nombre", "booleen", "ref", "refs", "date_jeu", "date", "heure"]);
 export const RESUMES = ["resume", "impression", "but"];
 
 function lecture(el, f) {
@@ -63,7 +64,7 @@ function lecture(el, f) {
   const res = resolveur(f.mentions);
   const refs = f.refs || {};
   const resume = RESUMES.map(k => f.data[k]).find(Boolean);
-  const courts = t.champs.filter(c => COURTS.has(c.genre) && !c.auto && !RESUMES.includes(c.cle) && f.data[c.cle] != null && f.data[c.cle] !== "");
+  const courts = t.champs.filter(c => COURTS.has(c.genre) && (!c.auto || c.genre === "refs") && !RESUMES.includes(c.cle) && f.data[c.cle] != null && f.data[c.cle] !== "");
   const groupes = {};
   for (const c of courts) (groupes[c.groupe || ""] ||= []).push(c);
   const longs = t.champs.filter(c => c.genre === "long" && f.data[c.cle]);
@@ -102,6 +103,7 @@ function lecture(el, f) {
         </div>
       </div>
     </div>
+    ${f.type === "seance" && fonctionActive("agenda") && f.data.date_reelle ? `<section class="panneau agenda-fiche" id="p-agenda" hidden style="margin-bottom:18px"></section>` : ""}
     ${f.type === "faction" && fonctionActive("organigramme") ? `<section class="panneau" id="organigramme" style="margin-bottom:18px"></section>` : ""}
     <div class="fiche-corps">
       <div class="colonne">
@@ -134,6 +136,7 @@ function lecture(el, f) {
     </div>`;
 
   relations(el, f);
+  if ($("#p-agenda", el)) panneauAgenda($("#p-agenda", el), f);
   images(el, f);
   const empl = $("#chiffres-empl", el);
   if (empl) listeEmplacements().then(l => { empl.textContent = l.find(e => e.cle === empl.textContent)?.nom || empl.textContent; });
@@ -217,6 +220,19 @@ async function recharger(el, id) {
 }
 
 /** Boutons de création de fiches rattachées (quête d'une campagne, PNJ d'un lieu…). */
+// la séance dans l'agenda : son créneau réel et ses conflits d'horaire (en orange)
+async function panneauAgenda(zone, f) {
+  try {
+    const camp = Array.isArray(f.data.campagne) ? f.data.campagne[0] : f.data.campagne;
+    const r = await api("GET", "/api/agenda" + (camp ? "?campagne=" + camp : ""));
+    const s = r.seances.find(x => x.id === f.id);
+    if (!s || !s.conflits.length || s.statut === "annulée") return; // seulement quand une autre séance gêne
+    zone.innerHTML = `<h3>🗓 Conflits d'horaire <span class="sp"></span><a class="hint" href="#/agenda" style="text-transform:none;letter-spacing:0">voir l'agenda</a></h3>
+      <p><b>${esc(texteJour(s.date))}</b>, ${esc(horaires(s))}</p>${texteConflits(s.conflits)}`;
+    zone.hidden = false;
+  } catch { /* l'agenda n'est qu'un complément */ }
+}
+
 function liensCreation(f) {
   const liens = [];
   for (const t of types()) {
@@ -436,6 +452,10 @@ function formulaire(el, f, nouveau) {
         zone.innerHTML = `<label class="champ">${etiquette}<input type="date" value="${esc(v ?? "")}"></label>`;
         const i = $("input", zone); lecteurs[c.cle] = () => i.value || null; break;
       }
+      case "heure": {
+        zone.innerHTML = `<label class="champ">${etiquette}<input type="time" step="300" value="${esc(v ?? "")}"></label>`;
+        const i = $("input", zone); lecteurs[c.cle] = () => i.value || null; break;
+      }
       case "ref": case "refs": {
         zone.innerHTML = `<div class="champ"><label class="champ">${etiquette}</label><div class="w"></div></div>`;
         const s = selecteur($(".w", zone), { cibles: c.cibles, multiple: c.genre === "refs", valeur: v, refs, auChangement: marquer });
@@ -488,6 +508,7 @@ function formulaire(el, f, nouveau) {
     }
   }
   const form = $("#form", el);
+  if (f.type === "seance" && fonctionActive("agenda")) verifierAgenda(form, f, nouveau, lecteurs);
   form.addEventListener("input", marquer);
   form.addEventListener("change", marquer);
   $("#nom", el).focus();
@@ -540,4 +561,31 @@ function formulaire(el, f, nouveau) {
     window.removeEventListener("beforeunload", quitter);
     window.removeEventListener("hashchange", garde, true);
   };
+}
+
+// formulaire d'une séance : les conflits d'horaire s'affichent pendant qu'on la planifie
+function verifierAgenda(form, f, nouveau, lecteurs) {
+  const zone = $('[data-champ="date_reelle"]', form)?.closest("fieldset");
+  if (!zone || !lecteurs.date_reelle) return;
+  const sortie = document.createElement("div");
+  sortie.className = "pleine agenda-verif";
+  sortie.setAttribute("aria-live", "polite");
+  zone.append(sortie);
+  let minuterie = null;
+  const verifier = async () => {
+    const date = lecteurs.date_reelle();
+    if (!date) { sortie.innerHTML = ""; return; }
+    const camp = lecteurs.campagne?.();
+    const q = new URLSearchParams({ date, heure: lecteurs.heure?.() || "", duree: lecteurs.duree?.() || "", campagne: (Array.isArray(camp) ? camp[0] : camp) || 0 });
+    if (!nouveau) q.set("seance", f.id);
+    try {
+      const l = await api("GET", "/api/agenda/conflits?" + q);
+      sortie.innerHTML = lecteurs.statut?.() === "annulée" ? "" : l.length ? texteConflits(l) : `<p class="hint">✓ Aucun conflit d'horaire.</p>`;
+    } catch { sortie.innerHTML = ""; }
+  };
+  const plusTard = () => { clearTimeout(minuterie); minuterie = setTimeout(verifier, 300); };
+  form.addEventListener("input", plusTard);
+  form.addEventListener("change", plusTard);
+  form.addEventListener("click", plusTard); // le sélecteur de campagne
+  verifier();
 }

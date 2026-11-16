@@ -34,6 +34,7 @@ Options : `-port` (8100), `-data`, `-univers <fichier.cofdm>`, `-headless`, `-re
 | `internal/comptes`, `internal/reglages` | Comptes du mode serveur (`comptes.json`) ; réglages de l'ordinateur (`reglages.json`). |
 | `internal/regles`, `internal/reference`, `internal/fiches` | Fichier de règles importé ; profils, peuples, voies ; validation des monstres et feuilles. |
 | `internal/combat`, `internal/des` | Moteur de combat (lit la partie `combat` des règles) ; formules de dés. |
+| `internal/agenda` | Agenda des séances (dates **réelles**, à ne pas confondre avec le calendrier du monde de `internal/modele`) : créneaux dans le fuseau de l'univers, conflits d'horaire, fichier iCalendar (`.ics`). Routes dans `internal/serveur/agenda.go`, écran `js/views/agenda.js`. |
 | `internal/synchro`, `internal/majour` | Client de synchro du bureau ; mises à jour signées (Ed25519 sur `SHA256SUMS`, clé privée = secret `COF_DM_SIGNATURE`, jamais dans le dépôt). |
 | `internal/mcp`, `internal/obsidian` | Serveur MCP ; export vers Obsidian. |
 | `internal/installation` | Bureau Windows : installation pour l'utilisateur au premier lancement (`%LOCALAPPDATA%\Programs\COF DM`, raccourcis, « Applications installées », `-desinstaller`), sans CGO : ses tests se compilent pour Windows (`GOOS=windows go test -c`) et s'y lancent. Reprise de l'ancien mode portable (supprimé). Cache de WebView2 dans le dossier des données (`webview/`). |
