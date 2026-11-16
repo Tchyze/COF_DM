@@ -15,6 +15,7 @@ const (
 	DateMonde   = "date_jeu"    // date du calendrier du monde : {an, mois, jour}
 	DateReelle  = "date"        // date réelle AAAA-MM-JJ
 	Heure       = "heure"       // heure réelle HH:MM (agenda des séances)
+	Reponses    = "reponses"    // réponses des joueurs à une séance : [{pj, reponse, le}]
 	Etapes      = "etapes"      // liste de cases à cocher : [{texte, fait}]
 	Adversaires = "adversaires" // [{monstre, nom, qte, camp}] : monstres du bestiaire de l'univers
 	Monstre     = "monstre"     // identifiant d'un monstre du bestiaire de l'univers
@@ -221,6 +222,7 @@ var Types = []Type{
 			{Cle: "date_jeu", Nom: "Date en jeu", Genre: DateMonde},
 			{Cle: "date_jeu_fin", Nom: "Jusqu'au (en jeu)", Genre: DateMonde, Aide: "Quand la séance couvre plusieurs jours"},
 			{Cle: "presents", Nom: "PJ présents", Genre: Refs, Cibles: []string{"pj"}},
+			{Cle: "reponses", Nom: "Réponses des joueurs", Genre: Reponses, Auto: true, Fonction: "agenda", Aide: "Présent, absent ou peut-être, donné par chaque joueur sur sa page"},
 			{Cle: "prevus", Nom: "PJ prévus", Genre: Refs, Cibles: []string{"pj"}, Auto: true, Aide: "Les PJ actifs de la campagne quand la séance a été jouée"},
 			{Cle: "quetes", Nom: "Quêtes avancées", Genre: Refs, Cibles: []string{"quete"}},
 			{Cle: "lieux", Nom: "Lieux visités", Genre: Refs, Cibles: []string{"lieu"}},

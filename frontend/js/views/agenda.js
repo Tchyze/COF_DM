@@ -24,6 +24,22 @@ export function horaires(s) {
   return `${heureDe(s.debut)} – ${fin}`;
 }
 
+const MARQUES = { "présent": ["✓", "présent"], "peut-être": ["?", "peut-être"], "absent": ["✗", "absent"] };
+
+/** Qui est attendu, avec sa réponse (✓ présent, ? peut-être, ✗ absent), et le compte des réponses. */
+export function texteParticipants(participants, { resume = true } = {}) {
+  if (!participants?.length) return "";
+  const noms = participants.map(p => {
+    const nom = esc(p.joueur ? `${p.joueur} (${p.nom})` : p.nom);
+    const m = MARQUES[p.reponse];
+    return m ? `<span class="rep rep-${esc(p.reponse.replace(/[^a-z]/g, ""))}" title="${esc(m[1])}">${nom} ${m[0]}</span>` : `<span class="rep" title="pas encore répondu">${nom}</span>`;
+  }).join(", ");
+  const n = r => participants.filter(p => p.reponse === r).length, attente = participants.filter(p => !p.reponse).length;
+  const bilan = [n("présent") && `${n("présent")} présent${n("présent") > 1 ? "s" : ""}`, n("peut-être") && `${n("peut-être")} peut-être`,
+    n("absent") && `${n("absent")} absent${n("absent") > 1 ? "s" : ""}`, attente && `${attente} sans réponse`].filter(Boolean).join(" · ");
+  return `<div class="hint">👥 ${noms}${resume && bilan && attente < participants.length ? ` <span class="rep-bilan">— ${bilan}</span>` : ""}</div>`;
+}
+
 /** Les conflits d'une séance, en orange : une alerte pour un chevauchement, un message pour moins d'une heure d'écart. */
 export function texteConflits(conflits, { court = false } = {}) {
   if (!conflits?.length) return "";
@@ -137,7 +153,7 @@ export async function mount(el, params) {
           ${s.nature && s.nature !== "séance" ? `<span class="badge tag">${esc(s.nature)}</span>` : ""}
           ${s.statut === "annulée" ? `<span class="badge archive">annulée</span>` : s.statut === "jouée" ? `<span class="badge">jouée</span>` : ""}</div>
         ${s.lieu || s.visio ? `<div class="hint">${s.lieu ? `📍 ${esc(s.lieu)}` : ""}${s.lieu && s.visio ? " · " : ""}${s.visio ? `🔗 ${/^https?:\/\//.test(s.visio) ? `<a href="${esc(s.visio)}" target="_blank" rel="noopener noreferrer">${esc(s.visio)}</a>` : esc(s.visio)}` : ""}</div>` : ""}
-        ${s.participants.length ? `<div class="hint">👥 ${s.participants.map(p => esc(p.joueur ? `${p.joueur} (${p.nom})` : p.nom)).join(", ")}</div>` : ""}
+        ${texteParticipants(s.participants)}
         ${s.statut === "annulée" ? "" : texteConflits(s.conflits)}
       </div>
       ${lecture() ? "" : `<div class="agenda-actions">

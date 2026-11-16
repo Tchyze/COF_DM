@@ -56,9 +56,12 @@ import "strconv"
 // Modèle 10 : l'agenda des séances. Une séance a sa nature, le statut « annulée », son heure de
 // début (genre « heure »), sa durée, son lieu réel, son lien de visio, ce qui est dit aux joueurs et
 // les PJ prévus ; l'univers a son fuseau horaire (réglage « fuseau ») et la fonctionnalité « agenda ».
+//
+// Modèle 11 : les réponses des joueurs à une séance (« reponses », genre du même nom : présent,
+// peut-être, absent).
 const (
 	VersionProtocole = 1
-	VersionModele    = 10
+	VersionModele    = 11
 )
 
 // MetaModele : le modèle le plus récent qui a ouvert cet univers. Une application plus ancienne

@@ -2,6 +2,7 @@ package store
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/Tchyze/cof_dm/internal/modele"
 )
@@ -99,4 +100,66 @@ func (s *Store) PJActifs(campagne int64) ([]int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return pjActifs(s.db, campagne)
+}
+
+// Repondre range la réponse d'un joueur (pour son PJ) à une séance : « présent », « peut-être »,
+// « absent », ou "" pour la retirer. Lue et écrite sous le même verrou : deux joueurs qui répondent
+// en même temps gardent chacun la sienne. La date de modification de la séance ne bouge pas (un MJ
+// qui la modifie au même moment n'en est pas gêné) ; la synchronisation, elle, voit le changement.
+func (s *Store) Repondre(seance, pj int64, reponse, auteur string) (Entite, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Entite{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	e, err := lire(tx, seance)
+	if err != nil {
+		return Entite{}, err
+	}
+	if e.Type != "seance" {
+		return Entite{}, ErrIntrouvable
+	}
+	p, err := lire(tx, pj)
+	if err != nil || p.Type != "pj" {
+		return Entite{}, invalide("PJ introuvable.")
+	}
+	var l []any
+	for _, x := range modele.LireReponses(e.Data["reponses"]) {
+		if x.PJ != pj {
+			l = append(l, map[string]any{"pj": float64(x.PJ), "reponse": x.Reponse, "le": x.Le})
+		}
+	}
+	if reponse != "" {
+		l = append(l, map[string]any{"pj": float64(pj), "reponse": reponse, "le": float64(time.Now().Unix())})
+	}
+	data := map[string]any{}
+	for k, v := range e.Data {
+		data[k] = v
+	}
+	delete(data, "reponses")
+	if len(l) > 0 {
+		data["reponses"] = l
+	}
+	t, _ := modele.TypeDe(e.Type)
+	if e.Data, err = modele.Normaliser(t, data, s.cal, accesFiches{tx}); err != nil {
+		return Entite{}, erreurChamps(err)
+	}
+	dj, _ := json.Marshal(e.Data)
+	if _, err := tx.Exec(`UPDATE entites SET data=? WHERE id=?`, string(dj), seance); err != nil {
+		return Entite{}, err
+	}
+	if err := indexer(tx, e); err != nil {
+		return Entite{}, err
+	}
+	detail := p.Nom + " : " + reponse
+	if reponse == "" {
+		detail = p.Nom + " : réponse retirée"
+	}
+	noter(tx, "réponse", seance, e.Nom, detail, auteur)
+	if err := tx.Commit(); err != nil {
+		return Entite{}, err
+	}
+	return lire(s.db, seance)
 }

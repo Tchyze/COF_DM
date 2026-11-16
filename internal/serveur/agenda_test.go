@@ -236,8 +236,8 @@ func TestAgendaCompteJoueur(t *testing.T) {
 	arwen := creer("pj", "Arwen", map[string]any{"campagne": marche, "joueur": "Léa"})
 	brom := creer("pj", "Brom", map[string]any{"campagne": ailleurs, "joueur": "Léa"})
 	b.proxy("POST", "/api/entites/"+ftoa(arwen)+"/partage", map[string]any{"partage": true}, mj)
-	creer("seance", "M1", map[string]any{"campagne": marche, "date_reelle": "2099-03-06", "heure": "14:00", "notes": "SECRET-NOTES"})
-	creer("seance", "A1", map[string]any{"campagne": ailleurs, "date_reelle": "2099-03-06", "heure": "20:00"})
+	m1 := creer("seance", "M1", map[string]any{"campagne": marche, "date_reelle": "2099-03-06", "heure": "14:00", "notes": "SECRET-NOTES"})
+	a1 := creer("seance", "A1", map[string]any{"campagne": ailleurs, "date_reelle": "2099-03-06", "heure": "20:00"})
 	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
 	reg.Modifier("joueuse", func(c *comptes.Compte) error {
 		c.Admis = append(c.Admis, b.s.store.ID())
@@ -255,5 +255,77 @@ func TestAgendaCompteJoueur(t *testing.T) {
 	}
 	if c, _, _ := b.proxy("GET", "/api/agenda", nil, joueuse); c != 403 {
 		t.Fatalf("agenda du MJ par un joueur : %d", c)
+	}
+	// elle répond pour son PJ seulement, quel que soit celui qu'elle nomme ; pas à la séance d'Ailleurs
+	if c, v, _ := b.proxy("POST", "/api/joueur/agenda/"+ftoa(m1)+"/reponse?pj="+ftoa(brom), map[string]any{"reponse": "peut-être"}, joueuse); c != 200 {
+		t.Fatalf("réponse de la joueuse : %d %v", c, v)
+	}
+	if c, _, _ := b.proxy("POST", "/api/joueur/agenda/"+ftoa(a1)+"/reponse?pj="+ftoa(brom), map[string]any{"reponse": "présent"}, joueuse); c != 404 {
+		t.Fatalf("réponse à une séance d'une autre campagne : %d", c)
+	}
+	_, v, _ := b.proxy("GET", "/api/entites/"+ftoa(m1), nil, mj)
+	rep, _ := json.Marshal(v["data"].(map[string]any)["reponses"])
+	if !strings.Contains(string(rep), `"pj":`+ftoa(arwen)) || strings.Contains(string(rep), `"pj":`+ftoa(brom)) {
+		t.Fatalf("réponses rangées : %s", rep)
+	}
+}
+
+// Réponses des joueurs : à la maison, chacun répond pour le PJ qu'il joue dans la campagne de la
+// séance ; le MJ les voit sur les participants ; un absent ne compte plus dans les conflits ; une
+// séance annulée, passée ou d'une campagne qui n'est pas la sienne : 404.
+func TestReponsesJoueursLibre(t *testing.T) {
+	b, _ := bancReseau(t)
+	marche := b.fiche("campagne", "La Marche", nil)
+	ailleurs := b.fiche("campagne", "Ailleurs", nil)
+	autre := b.fiche("campagne", "Sans Léa", nil)
+	arwen := b.fiche("pj", "Arwen", map[string]any{"campagne": marche, "joueur": "Léa"})
+	brom := b.fiche("pj", "Brom", map[string]any{"campagne": ailleurs, "joueur": "Léa"})
+	m1 := b.fiche("seance", "M1", map[string]any{"campagne": marche, "date_reelle": "2099-03-06", "heure": "14:00", "duree": "4 h"})
+	a1 := b.fiche("seance", "A1", map[string]any{"campagne": ailleurs, "date_reelle": "2099-03-06", "heure": "16:00", "duree": "3 h"})
+	annulee := b.fiche("seance", "Annulée", map[string]any{"campagne": marche, "date_reelle": "2099-03-20", "statut": "annulée"})
+	s1 := b.fiche("seance", "S1", map[string]any{"campagne": autre, "date_reelle": "2099-03-07"})
+	passee := b.fiche("seance", "Passée", map[string]any{"campagne": marche, "date_reelle": "2020-01-04"})
+	b.local("POST", "/api/acces/joueurs", map[string]any{"active": true})
+	repondre := func(seance float64, rep string) (int, string) {
+		return b.joueurLibre("POST", "/api/joueur/agenda/"+ftoa(seance)+"/reponse?pj="+ftoa(arwen), map[string]any{"reponse": rep}, true)
+	}
+	// Léa, depuis Arwen, répond aussi pour Brom à la séance d'Ailleurs
+	if c, corps := repondre(a1, "absent"); c != 200 || !strings.Contains(corps, `"mon_pj":`+ftoa(brom)) {
+		t.Fatalf("réponse pour Ailleurs : %d %s", c, corps)
+	}
+	if c, _ := repondre(m1, "présent"); c != 200 {
+		t.Fatalf("réponse : %d", c)
+	}
+	for _, x := range []float64{annulee, s1, passee} {
+		if c, _ := repondre(x, "présent"); c != 404 {
+			t.Errorf("séance %v : %d", x, c)
+		}
+	}
+	if c, _ := repondre(m1, "bientôt"); c != 422 {
+		t.Fatalf("réponse inconnue : %d", c)
+	}
+	_, v := b.local("GET", "/api/agenda", nil)
+	s := seancesDe(t, v)
+	reponseDe := func(nom string, pj float64) any {
+		for _, x := range s[nom]["participants"].([]any) {
+			if p := x.(map[string]any); p["pj"] == pj {
+				return p["reponse"]
+			}
+		}
+		return "?"
+	}
+	if reponseDe("M1", arwen) != "présent" || reponseDe("A1", brom) != "absent" {
+		t.Fatalf("réponses vues par le MJ : %v / %v", s["M1"]["participants"], s["A1"]["participants"])
+	}
+	// Léa absente d'A1 : plus de conflit pour elle, seulement pour le MJ
+	if got := resumeConflits(s["M1"]); got != "A1 chevauchement le MJ" {
+		t.Fatalf("conflit après « absent » : %q", got)
+	}
+	// le journal note la réponse
+	if _, j := b.local("GET", "/api/journal", nil); !strings.Contains(j["_liste"].(string)+ftoa(0), "Brom : absent") {
+		t.Fatalf("journal : %v", j)
+	}
+	if c, _ := repondre(m1, ""); c != 200 {
+		t.Fatalf("réponse retirée : %d", c)
 	}
 }

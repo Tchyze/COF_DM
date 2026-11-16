@@ -12,7 +12,7 @@ import { lignesEffets, libellePar, voieLiee } from "./capacites.js";
 import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
 import { ligneJet, DES_RAPIDES } from "./des.js";
 import { rendu } from "./md.js";
-import { horaires, texteJour } from "./views/agenda.js";
+import { horaires, texteJour, texteParticipants } from "./views/agenda.js";
 import { panneauAbonnement } from "./abonnement.js";
 
 const CLE = "cof-joueur-pj";
@@ -367,8 +367,9 @@ async function vueAgenda() {
               ${s.nature && s.nature !== "séance" ? `<span class="badge tag">${esc(s.nature)}</span>` : ""}${s.statut === "annulée" ? `<span class="badge archive">annulée</span>` : ""}</div>
             ${s.lieu ? `<div class="hint">📍 ${esc(s.lieu)}</div>` : ""}
             ${s.visio ? `<div class="hint">🔗 ${lien(s.visio)}</div>` : ""}
-            ${s.participants.length ? `<div class="hint">👥 ${s.participants.map(p => esc(p.joueur ? `${p.joueur} (${p.nom})` : p.nom)).join(", ")}</div>` : ""}
+            ${texteParticipants(s.participants)}
             ${s.infos ? `<div class="md agenda-infos">${rendu(s.infos)}</div>` : ""}
+            ${s.statut === "annulée" || !s.mon_pj ? "" : boutonsReponse(s)}
           </div></article>`).join("")
         : `<p class="empty">Aucune séance prévue pour l'instant.</p>`}
       ${r.seances.length ? `<div class="row"><a href="${esc(avecPJ("/api/joueur/agenda/ics"))}" download><button type="button">📅 Ajouter à mon agenda (.ics)</button></a></div>
@@ -376,6 +377,21 @@ async function vueAgenda() {
     </section>
     ${etat.serveur ? `<section class="panel agenda-joueur abonnement" id="p-abonnement"></section>` : ""}`;
   if (etat.serveur) panneauAbonnement($("#p-abonnement", vue));
+  $$("[data-reponse]", vue).forEach(b => b.onclick = async () => {
+    const actuelle = b.getAttribute("aria-pressed") === "true";
+    try {
+      await api("POST", avecPJ(`/api/joueur/agenda/${b.dataset.seance}/reponse`), { reponse: actuelle ? "" : b.dataset.reponse });
+      toast(actuelle ? "Réponse retirée." : "Réponse envoyée au MJ.");
+      vueAgenda();
+    } catch (e) { toast(e.message, true); }
+  });
+}
+
+// Présent, peut-être, absent : la réponse du joueur pour le PJ qu'il joue dans cette campagne.
+function boutonsReponse(s) {
+  const moi = s.participants.find(p => p.pj === s.mon_pj)?.reponse || "";
+  const b = (r, libelle) => `<button type="button" class="petit${moi === r ? " primary" : " ghost"}" data-reponse="${r}" data-seance="${s.id}" aria-pressed="${moi === r}">${libelle}</button>`;
+  return `<div class="row agenda-reponse" role="group" aria-label="Je viens ?"><span class="hint">Je viens ?</span>${b("présent", "✓ Présent")}${b("peut-être", "? Peut-être")}${b("absent", "✗ Absent")}</div>`;
 }
 
 /* ---------------------------------------------------------- dés */
