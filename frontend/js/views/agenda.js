@@ -2,6 +2,7 @@
 // dans la chronologie). Liste à venir ou vue par mois ; planifier, déplacer, dupliquer, annuler ;
 // conflits d'horaires en orange. Tout est rangé dans les fiches « séance ».
 import { $, $$, esc, api, toast, lien, dialogue, delai } from "../ui.js";
+import { panneauAbonnement } from "../abonnement.js";
 
 const JOURS = ["lun.", "mar.", "mer.", "jeu.", "ven.", "sam.", "dim."];
 const lecture = () => !!window.cofAcces?.lecture_seule;
@@ -58,7 +59,9 @@ export async function mount(el, params) {
         <b id="fuseau">${esc(reglages.fuseau)}</b>${lecture() ? "" : ` · <button type="button" class="lien-bouton" id="changer-fuseau">changer</button>`}
         · <a id="ics" download>⬇ Fichier .ics</a> à importer dans un agenda (Google, Apple, Proton, Outlook…).</p>
       <div id="contenu"></div>
+      ${window.cofAcces?.serveur ? `<section class="panneau abonnement" id="abonnement"></section>` : ""}
     </div>`;
+  if ($("#abonnement", el)) panneauAbonnement($("#abonnement", el));
   const majIcs = () => { $("#ics", el).href = lien("/api/agenda/ics" + (camp ? "?campagne=" + camp : "")); };
   majIcs();
   let tour = 0; // seule la dernière réponse s'affiche, quand deux chargements se croisent

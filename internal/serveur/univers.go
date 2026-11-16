@@ -426,6 +426,10 @@ func (a *Application) noterRecent(chemin string) {
 // ---------------------------------------------------------------- HTTP
 
 func (a *Application) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, prefixeFlux) { // abonnement à l'agenda : le jeton de l'adresse est sa clé
+		a.servirFlux(w, r)
+		return
+	}
 	if r.URL.Path == "/api/univers" || strings.HasPrefix(r.URL.Path, "/api/univers/") {
 		a.servirUnivers(w, r)
 		return

@@ -219,6 +219,7 @@ func (s *Serveur) routesComptes() {
 	m.HandleFunc("POST /api/compte/jetons", s.monJeton)
 	m.HandleFunc("DELETE /api/compte/jetons/{id}", s.retirerMonJeton)
 	m.HandleFunc("DELETE /api/compte/jeton", s.rendreJeton)
+	s.routesAbonnement()
 	m.HandleFunc("GET /api/joueurs/comptes", s.joueursAdmis)
 	m.HandleFunc("PATCH /api/joueurs/comptes/{nom}", s.joindreJoueur)
 	m.HandleFunc("PUT /api/joueurs/edition", s.reglerEditionJoueurs)

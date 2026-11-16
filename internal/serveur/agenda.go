@@ -165,8 +165,11 @@ func (s *Serveur) seancesAgenda() ([]*seanceAgenda, error) {
 				for _, pj := range attendus {
 					joueur, cle := texte(pj, "joueur"), ""
 					switch {
-					case comptes[pj.ID] != "":
-						cle, joueur = "compte:"+comptes[pj.ID], comptes[pj.ID]
+					case comptes[pj.ID] != "": // la personne est son compte ; son nom reste celui écrit sur le PJ
+						cle = "compte:" + comptes[pj.ID]
+						if joueur == "" {
+							joueur = comptes[pj.ID]
+						}
 					case joueur != "":
 						cle = "joueur:" + strings.ToLower(joueur)
 					default:
@@ -345,7 +348,10 @@ func (s *Serveur) personnesDeCampagne(campagne int64) (map[string]string, error)
 		joueur = strings.TrimSpace(joueur)
 		switch {
 		case comptes[id] != "":
-			out["compte:"+comptes[id]] = comptes[id]
+			if joueur == "" {
+				joueur = comptes[id]
+			}
+			out["compte:"+comptes[id]] = joueur
 		case joueur != "":
 			out["joueur:"+strings.ToLower(joueur)] = joueur
 		default:

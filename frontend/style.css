@@ -898,6 +898,12 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
 .agenda-jour:hover .agenda-ajout,.agenda-ajout:focus{opacity:1}
 .agenda-fiche p{margin:4px 0}
 .boite.agenda .boite-corps{position:relative}
+.abonnement:empty{display:none}
+.abonnement{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.abonnement h3{margin:0}
+.abonnement-boutons{display:flex;flex-wrap:wrap;gap:8px}
+.abonnement-aide p{margin:6px 0}
+.abonnement input[readonly]{font-family:var(--f-mono);font-size:.8rem}
 .boite.agenda .agenda-carte{grid-template-columns:1fr;border-left-width:3px}
 .boite.agenda .agenda-actions{flex-direction:row;flex-wrap:wrap}
 @media (max-width:700px){
