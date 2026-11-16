@@ -29,6 +29,8 @@ export function texteConflits(conflits, { court = false } = {}) {
   if (!conflits?.length) return "";
   return `<div class="agenda-conflits">${conflits.map(c => {
     const qui = c.personnes.join(", ");
+    // un autre univers du serveur : rien n'en sort, ni la séance, ni l'heure
+    if (c.genre === "ailleurs") return `<div class="agenda-conflit">⚠ Conflit avec un autre univers du serveur : ${esc(qui)} ${c.personnes.length > 1 ? "ont" : "a"} déjà quelque chose à ce moment-là.</div>`;
     const quand = `${texteJour(jourDe(c.debut), true)} à ${heureDe(c.debut)}`;
     const autre = `<a href="#/f/${c.seance}">${esc(c.nom)}</a>${c.campagne ? ` (${esc(c.campagne)})` : ""}`;
     return c.genre === "chevauchement"
@@ -106,7 +108,7 @@ export async function mount(el, params) {
       const l = parJour[j] || [];
       cases += `<div class="agenda-jour${j.slice(0, 7) !== mois ? " hors" : ""}${j === aujourdhui() ? " auj" : ""}" data-jour="${j}">
         <span class="n">${+j.slice(8)}</span>
-        ${l.map(s => `<button type="button" class="agenda-puce${s.statut === "annulée" ? " annulee" : ""}${s.conflits.some(c => c.genre === "chevauchement") ? " conflit" : s.conflits.length ? " proche" : ""}" data-id="${s.id}" title="${esc(s.nom)}${s.campagne ? " · " + esc(s.campagne.nom) : ""}">${s.jour_entier ? "" : `<b>${heureDe(s.debut)}</b> `}${esc(s.nom)}</button>`).join("")}
+        ${l.map(s => `<button type="button" class="agenda-puce${s.statut === "annulée" ? " annulee" : ""}${s.conflits.some(c => c.genre !== "rapproche") ? " conflit" : s.conflits.length ? " proche" : ""}" data-id="${s.id}" title="${esc(s.nom)}${s.campagne ? " · " + esc(s.campagne.nom) : ""}">${s.jour_entier ? "" : `<b>${heureDe(s.debut)}</b> `}${esc(s.nom)}</button>`).join("")}
         ${lecture() ? "" : `<button type="button" class="agenda-ajout ghost petit" data-ajout="${j}" aria-label="Planifier le ${esc(texteJour(j))}">＋</button>`}
       </div>`;
     }
@@ -127,7 +129,7 @@ export async function mount(el, params) {
     $$("[data-ajout]", el).forEach(b => b.onclick = () => planifier({ date: b.dataset.ajout, campagne: camp }, charger, campagnes));
   };
   const carte = (s, seule = false) => `
-    <article class="agenda-carte${s.statut === "annulée" ? " annulee" : ""}${s.conflits.some(c => c.genre === "chevauchement") ? " conflit" : s.conflits.length ? " proche" : ""}" data-id="${s.id}">
+    <article class="agenda-carte${s.statut === "annulée" ? " annulee" : ""}${s.conflits.some(c => c.genre !== "rapproche") ? " conflit" : s.conflits.length ? " proche" : ""}" data-id="${s.id}">
       <div class="agenda-quand"><b>${esc(texteJour(s.date))}</b><span>${esc(horaires(s))}</span></div>
       <div class="agenda-quoi">
         <div class="ligne"><a class="agenda-nom" href="#/f/${s.id}">${esc(s.nom)}</a>

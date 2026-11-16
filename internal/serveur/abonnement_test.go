@@ -2,6 +2,7 @@ package serveur
 
 import (
 	"bytes"
+	"encoding/json"
 	"log"
 	"net/http/httptest"
 	"net/url"
@@ -164,4 +165,110 @@ func TestAbonnementBureau(t *testing.T) {
 	if w.Code == 200 && strings.Contains(w.Body.String(), "VCALENDAR") {
 		t.Fatalf("flux sur le bureau : %d", w.Code)
 	}
+}
+
+// Conflits entre univers : le MJ de l'univers A apprend seulement que tel joueur (ou lui-même) a déjà
+// quelque chose ailleurs à ce moment-là ; rien de l'autre univers ne sort (nom, campagne, séance,
+// lieu, heure, identifiant). Une séance annulée ou un agenda coupé ne gêne pas.
+func TestAgendaConflitsEntreUnivers(t *testing.T) {
+	a, reg, connecter := serveurMulti(t)
+	chef, meneur, maitre := connecter("chef"), connecter("meneur"), connecter("maitre")
+	connecter("lea")
+	premier := a.st.ID()
+	second := creerUnivers(t, chef, "Univers-Cache")
+	donner(reg, "meneur", premier, comptes.MJ)
+	donner(reg, "maitre", second, comptes.MJ)
+	donner(reg, "lea", premier, comptes.Joueur)
+	donner(reg, "lea", second, comptes.Joueur)
+	creer := func(st *store.Store, typ, nom string, data map[string]any) int64 {
+		e, err := st.Creer(typ, nom, data, nil, "test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return e.ID
+	}
+	s1, s2 := a.tous[premier].st, a.tous[second].st
+	marche := creer(s1, "campagne", "La Marche", nil)
+	cachee := creer(s2, "campagne", "Campagne-Cachee", nil)
+	arwen := creer(s1, "pj", "Arwen", map[string]any{"campagne": marche, "joueur": "Léa"})
+	creer(s1, "pj", "Cid", map[string]any{"campagne": marche, "joueur": "Hugo"})
+	brom := creer(s2, "pj", "Brom-Cache", map[string]any{"campagne": cachee, "joueur": "Léa"})
+	reg.Modifier("lea", func(c *comptes.Compte) error { c.Persos[premier], c.Persos[second] = arwen, brom; return nil })
+	creer(s1, "seance", "M1", map[string]any{"campagne": marche, "date_reelle": "2099-03-06", "heure": "14:00", "duree": "4 h"})
+	creer(s1, "seance", "M2", map[string]any{"campagne": marche, "date_reelle": "2099-03-13", "heure": "14:00", "duree": "4 h"})
+	i1 := creer(s2, "seance", "Seance-Cachee", map[string]any{"campagne": cachee, "date_reelle": "2099-03-06", "heure": "17:00",
+		"duree": "3 h", "lieu_reel": "Lieu-Cache", "visio": "https://visio.example/cache"})
+
+	interdits := []string{"Cache", "cache", "17:00", "16:00", second, "visio.example"}
+	verifier := func(n *navigateur, url string) map[string]map[string]any {
+		t.Helper()
+		w := n.brut("GET", url, nil)
+		for _, x := range interdits {
+			if strings.Contains(w.Body.String(), x) {
+				t.Fatalf("%q de l'autre univers dans %s : %s", x, url, w.Body.String())
+			}
+		}
+		var v map[string]any
+		json.Unmarshal(w.Body.Bytes(), &v)
+		return seancesDe(t, v)
+	}
+	s := verifier(meneur, "/api/agenda")
+	if got := resumeAilleurs(s["M1"]); got != "ailleurs Léa" {
+		t.Fatalf("M1 : %q (%v)", got, s["M1"]["conflits"])
+	}
+	if len(s["M2"]["conflits"].([]any)) != 0 {
+		t.Fatalf("M2, une autre semaine : %v", s["M2"]["conflits"])
+	}
+	// l'autre MJ voit la même chose, de son côté
+	maitre.faire("POST", "/api/mes-univers/courant", map[string]any{"id": second})
+	w := maitre.brut("GET", "/api/agenda", nil)
+	if strings.Contains(w.Body.String(), "La Marche") || strings.Contains(w.Body.String(), `"M1"`) || strings.Contains(w.Body.String(), premier) {
+		t.Fatalf("le premier univers fuit vers le second : %s", w.Body.String())
+	}
+	var v map[string]any
+	json.Unmarshal(w.Body.Bytes(), &v)
+	if got := resumeAilleurs(seancesDe(t, v)["Seance-Cachee"]); got != "ailleurs Léa" {
+		t.Fatalf("séance du second univers : %q", got)
+	}
+	// avant d'enregistrer : la même alerte, sans rien de plus
+	c, corps := meneur.faire("GET", "/api/agenda/conflits?date=2099-03-06&heure=19:30&duree=1%20h&campagne="+ftoa(float64(marche)), nil)
+	if c != 200 || !strings.Contains(meneur.brut("GET", "/api/agenda/conflits?date=2099-03-06&heure=19:30&duree=1%20h&campagne="+ftoa(float64(marche)), nil).Body.String(), `"ailleurs"`) {
+		t.Fatalf("essai : %d %v", c, corps)
+	}
+	// un même MJ dans les deux univers : « le MJ » aussi
+	donner(reg, "meneur", second, comptes.MJ)
+	s = verifier(meneur, "/api/agenda")
+	if got := resumeAilleurs(s["M1"]); got != "ailleurs Léa,le MJ" {
+		t.Fatalf("MJ des deux univers : %q", got)
+	}
+	// annulée là-bas, elle ne gêne plus
+	if _, err := s2.Modifier(i1, store.Maj{Data: map[string]any{"statut": "annulée"}}, "test"); err != nil {
+		t.Fatal(err)
+	}
+	if got := resumeAilleurs(verifier(meneur, "/api/agenda")["M1"]); got != "" {
+		t.Fatalf("séance annulée ailleurs : %q", got)
+	}
+	s2.Modifier(i1, store.Maj{Data: map[string]any{"statut": "prévue"}}, "test")
+	s2.ReglerFonctionnalites(map[string]bool{"agenda": false}, "test")
+	if got := resumeAilleurs(verifier(meneur, "/api/agenda")["M1"]); got != "" {
+		t.Fatalf("agenda coupé ailleurs : %q", got)
+	}
+}
+
+func resumeAilleurs(m map[string]any) string {
+	for _, x := range m["conflits"].([]any) {
+		c := x.(map[string]any)
+		if c["genre"] != "ailleurs" {
+			continue
+		}
+		var p []string
+		for _, y := range c["personnes"].([]any) {
+			p = append(p, y.(string))
+		}
+		if c["seance"] != nil || c["nom"] != nil || c["debut"] != nil || c["campagne"] != nil {
+			return "fuite : " + strings.Join(p, ",")
+		}
+		return "ailleurs " + strings.Join(p, ",")
+	}
+	return ""
 }

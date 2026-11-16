@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Tchyze/cof_dm/internal/agenda"
+	"github.com/Tchyze/cof_dm/internal/comptes"
 	"github.com/Tchyze/cof_dm/internal/modele"
 	"github.com/Tchyze/cof_dm/internal/store"
 )
@@ -71,10 +72,10 @@ type participant struct {
 
 // conflitAffiche : une autre séance qui gêne, et qui est concerné (noms affichés).
 type conflitAffiche struct {
-	Seance    int64    `json:"seance"`
-	Nom       string   `json:"nom"`
+	Seance    int64    `json:"seance,omitempty"` // absent pour un autre univers : rien n'en sort
+	Nom       string   `json:"nom,omitempty"`
 	Campagne  string   `json:"campagne,omitempty"`
-	Debut     string   `json:"debut"`
+	Debut     string   `json:"debut,omitempty"`
 	Genre     string   `json:"genre"`
 	Personnes []string `json:"personnes"`
 }
@@ -104,8 +105,13 @@ func (s *Serveur) joueursDesPJ() map[int64]string {
 }
 
 // seancesAgenda : toutes les séances datées de l'univers (non archivées), placées dans le temps,
-// avec leurs participants et leurs conflits.
-func (s *Serveur) seancesAgenda() ([]*seanceAgenda, error) {
+// avec leurs participants et leurs conflits, ceux des autres univers du serveur compris.
+func (s *Serveur) seancesAgenda() ([]*seanceAgenda, error) { return s.seancesAvec(true) }
+
+// seancesLocales : les mêmes, sans regarder les autres univers (ce que ceux-ci en lisent).
+func (s *Serveur) seancesLocales() ([]*seanceAgenda, error) { return s.seancesAvec(false) }
+
+func (s *Serveur) seancesAvec(ailleurs bool) ([]*seanceAgenda, error) {
 	tout, err := s.store.Toutes()
 	if err != nil {
 		return nil, err
@@ -114,7 +120,7 @@ func (s *Serveur) seancesAgenda() ([]*seanceAgenda, error) {
 	for _, e := range tout {
 		fiches[e.ID] = e
 	}
-	comptes := s.joueursDesPJ()
+	parCompte := s.joueursDesPJ()
 	// les PJ actifs de chaque campagne
 	actifs := map[int64][]store.Entite{}
 	for _, e := range tout {
@@ -165,10 +171,10 @@ func (s *Serveur) seancesAgenda() ([]*seanceAgenda, error) {
 				for _, pj := range attendus {
 					joueur, cle := texte(pj, "joueur"), ""
 					switch {
-					case comptes[pj.ID] != "": // la personne est son compte ; son nom reste celui écrit sur le PJ
-						cle = "compte:" + comptes[pj.ID]
+					case parCompte[pj.ID] != "": // la personne est son compte ; son nom reste celui écrit sur le PJ
+						cle = "compte:" + parCompte[pj.ID]
 						if joueur == "" {
-							joueur = comptes[pj.ID]
+							joueur = parCompte[pj.ID]
 						}
 					case joueur != "":
 						cle = "joueur:" + strings.ToLower(joueur)
@@ -206,7 +212,144 @@ func (s *Serveur) seancesAgenda() ([]*seanceAgenda, error) {
 			x.Conflits = append(x.Conflits, parID[c.Autre].conflitPour(x, c))
 		}
 	}
+	if !ailleurs {
+		return l, nil
+	}
+	if ext := s.creneauxAilleurs(); len(ext) > 0 {
+		mjs := s.comptesMJ()
+		for _, x := range l {
+			if x.Statut == "annulée" {
+				continue
+			}
+			if c, ok := x.conflitAilleurs(mjs, ext); ok {
+				x.Conflits = append(x.Conflits, c)
+			}
+		}
+	}
 	return l, nil
+}
+
+// ---------------------------------------------------------------- conflits entre univers (serveur)
+
+// Sur un serveur, la même personne (un compte) peut jouer ou mener dans plusieurs univers. Le MJ de
+// l'univers A apprend seulement qu'une de ses séances gêne « quelque chose » ailleurs pour tel joueur :
+// ni l'univers, ni la séance, ni la campagne, ni même l'heure. Les autres univers ne livrent à A que
+// des créneaux anonymes (début, fin, comptes attendus), jamais un nom ni un identifiant de fiche.
+
+// genreAilleurs : une séance d'un autre univers du serveur gêne (chevauchement ou moins d'une heure).
+const genreAilleurs = "ailleurs"
+
+// creneauExterne : une séance d'un autre univers, réduite à ce qui permet de voir un conflit.
+type creneauExterne struct {
+	debut, fin time.Time
+	jourEntier bool
+	comptes    []string // « compte:<nom> » : ceux qui y sont attendus (joueurs et MJ de cet univers)
+}
+
+// comptesMJ : les comptes MJ de cet univers, en clés de personne.
+func (s *Serveur) comptesMJ() []string {
+	if s.acces.comptes == nil {
+		return nil
+	}
+	var l []string
+	for _, c := range s.acces.comptes.Liste() {
+		if !c.Inactif && c.Role(s.store.ID()) == comptes.MJ {
+			l = append(l, "compte:"+c.Nom)
+		}
+	}
+	return l
+}
+
+// creneauxAilleurs : sur un serveur, les créneaux des autres univers (nil sur le bureau).
+func (s *Serveur) creneauxAilleurs() []creneauExterne {
+	if s.opt.ailleurs == nil {
+		return nil
+	}
+	return s.opt.ailleurs(s.store.ID())
+}
+
+// creneauxPourAilleurs : les séances à venir de cet univers (agenda activé, non annulées), réduites à
+// leurs créneaux et à leurs comptes.
+func (s *Serveur) creneauxPourAilleurs() []creneauExterne {
+	if !s.store.Active("agenda") {
+		return nil
+	}
+	l, err := s.seancesLocales()
+	if err != nil {
+		return nil
+	}
+	mjs := s.comptesMJ()
+	hier := time.Now().Add(-24 * time.Hour)
+	var out []creneauExterne
+	for _, x := range l {
+		if x.Statut == "annulée" || x.fin.Before(hier) {
+			continue
+		}
+		c := creneauExterne{debut: x.debut, fin: x.fin, jourEntier: x.JourEntier, comptes: append([]string(nil), mjs...)}
+		for k := range x.personnes {
+			if strings.HasPrefix(k, "compte:") {
+				c.comptes = append(c.comptes, k)
+			}
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// creneauxAilleurs : ceux de tous les univers servis sauf celui-ci, chacun compté pendant sa lecture.
+func (a *Application) creneauxAilleurs(sauf string) []creneauExterne {
+	a.mu.RLock()
+	var ouverts []*universOuvert
+	for _, o := range a.tous {
+		if o.st.ID() != sauf {
+			o.requetes.entrer()
+			ouverts = append(ouverts, o)
+		}
+	}
+	a.mu.RUnlock()
+	var out []creneauExterne
+	for _, o := range ouverts {
+		out = append(out, o.srv.creneauxPourAilleurs()...)
+		o.requetes.sortir()
+	}
+	return out
+}
+
+// conflitAilleurs : un seul conflit pour tous les créneaux d'ailleurs qui gênent cette séance, avec
+// les personnes concernées telles que cet univers les nomme.
+func (x *seanceAgenda) conflitAilleurs(mjs []string, ext []creneauExterne) (conflitAffiche, bool) {
+	ici := map[string]string{}
+	for k, nom := range x.personnes {
+		if strings.HasPrefix(k, "compte:") {
+			ici[k] = nom
+		}
+	}
+	for _, k := range mjs {
+		if _, joue := ici[k]; !joue {
+			ici[k] = "le MJ"
+		}
+	}
+	moi := agenda.Creneau{Debut: x.debut, Fin: x.fin, JourEntier: x.JourEntier}
+	qui := map[string]bool{}
+	for _, e := range ext {
+		if agenda.Relation(moi, agenda.Creneau{Debut: e.debut, Fin: e.fin, JourEntier: e.jourEntier}) == "" {
+			continue
+		}
+		for _, k := range e.comptes {
+			if nom, ok := ici[k]; ok {
+				qui[nom] = true
+			}
+		}
+	}
+	if len(qui) == 0 {
+		return conflitAffiche{}, false
+	}
+	c := conflitAffiche{Genre: genreAilleurs, Personnes: []string{}}
+	for nom := range qui {
+		c.Personnes = append(c.Personnes, nom)
+	}
+	sort.Strings(c.Personnes)
+	return c, true
 }
 
 func (x *seanceAgenda) creneau() agenda.Creneau {
@@ -296,7 +439,7 @@ func (s *Serveur) conflitsAgenda(w http.ResponseWriter, r *http.Request) {
 		erreur(w, 400, "Date AAAA-MM-JJ attendue.")
 		return
 	}
-	l, err := s.seancesAgenda()
+	l, err := s.seancesLocales()
 	if err != nil {
 		erreurStore(w, err)
 		return
@@ -328,6 +471,11 @@ func (s *Serveur) conflitsAgenda(w http.ResponseWriter, r *http.Request) {
 	for _, c := range agenda.Conflits(creneaux)[-1] {
 		out = append(out, parID[c.Autre].conflitPour(essai, c))
 	}
+	if ext := s.creneauxAilleurs(); len(ext) > 0 {
+		if c, ok := essai.conflitAilleurs(s.comptesMJ(), ext); ok {
+			out = append(out, c)
+		}
+	}
 	repondre(w, 200, out)
 }
 
@@ -337,7 +485,7 @@ func (s *Serveur) personnesDeCampagne(campagne int64) (map[string]string, error)
 	if err != nil {
 		return nil, err
 	}
-	comptes := s.joueursDesPJ()
+	parCompte := s.joueursDesPJ()
 	out := map[string]string{}
 	for _, id := range ids {
 		pj, err := s.store.Lire(id)
@@ -347,11 +495,11 @@ func (s *Serveur) personnesDeCampagne(campagne int64) (map[string]string, error)
 		joueur, _ := pj.Data["joueur"].(string)
 		joueur = strings.TrimSpace(joueur)
 		switch {
-		case comptes[id] != "":
+		case parCompte[id] != "":
 			if joueur == "" {
-				joueur = comptes[id]
+				joueur = parCompte[id]
 			}
-			out["compte:"+comptes[id]] = joueur
+			out["compte:"+parCompte[id]] = joueur
 		case joueur != "":
 			out["joueur:"+strings.ToLower(joueur)] = joueur
 		default:
@@ -365,7 +513,7 @@ func (s *Serveur) personnesDeCampagne(campagne int64) (map[string]string, error)
 // Google Agenda, Apple Calendrier, Proton Calendar, Outlook… Il ne contient que ce qu'il faut pour
 // s'organiser, jamais une note du MJ.
 func (s *Serveur) icsAgenda(w http.ResponseWriter, r *http.Request) {
-	l, err := s.seancesAgenda()
+	l, err := s.seancesLocales()
 	if err != nil {
 		erreurStore(w, err)
 		return
@@ -519,7 +667,7 @@ func (s *Serveur) seancesDuJoueur(w http.ResponseWriter, r *http.Request) ([]*se
 			}
 		}
 	}
-	l, err := s.seancesAgenda()
+	l, err := s.seancesLocales()
 	if err != nil {
 		erreurStore(w, err)
 		return nil, pj, false
