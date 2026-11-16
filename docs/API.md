@@ -346,7 +346,7 @@ Une campagne effacée emporte son pot ; une fiche « Objet » effacée y reste, 
 
 ## Page des joueurs
 
-Ce que la page des joueurs (`/joueur.html`) lit : la feuille de son personnage, le combat en cours réduit à ce qu'un joueur en voit, ses documents (aides de jeu reçues), le pot commun de sa campagne, les hauts faits. Rien n'y permet d'agir sur un combat.
+Ce que la page des joueurs (`/joueur.html`) lit : la feuille de son personnage, le combat en cours réduit à ce qu'un joueur en voit, ses documents (aides de jeu reçues), les prochaines séances de ses campagnes, le pot commun de sa campagne, les hauts faits. Rien n'y permet d'agir sur un combat.
 
 Deux façons d'y entrer :
 
@@ -369,6 +369,8 @@ Deux façons d'y entrer :
 | `GET /api/joueur/direct` | WebSocket, qui ne fait que recevoir : `{"type": "etat", "edition", "combat"}` à la connexion, puis `{"type": "combat", "combat"}` à chaque action, `{"type": "fiche", "id"}` quand une feuille change, `{"type": "edition", "active"}`, `{"type": "hauts_faits"}` quand un combat se termine, `{"type": "jet", "jet"}` à chaque jet public, `{"type": "document", "id", "nom", "pj": [ids]}` quand une aide arrive (un compte `joueur` n'est prévenu que pour son PJ), `{"type": "documents"}` quand un envoi est retiré, `{"type": "pot"}` quand un pot commun change, `{"type": "montre", "montre"}` quand le MJ montre ou retire quelque chose (`montre` aussi dans le message `etat`). `{"type": "ping"}` → `{"type": "pong"}`. Même contrôle d'origine que le suivi d'un combat. Ses droits sont revus toutes les 30 secondes : compte retiré ou désactivé, session fermée, jeton retiré, rôle ou PJ changé, et la connexion est coupée (l'écran se rebranche, s'il en a encore le droit, sur ce qu'il peut voir). |
 | `GET /api/entites/{id}/feuille`, `PUT …` | À la maison, sur la page libre : la feuille d'un PJ sans les notes du MJ ; l'écriture demande les feuilles déverrouillées (`403` sinon) et ne touche pas aux notes du MJ. Sur un serveur, un joueur passe par les mêmes routes pour son seul PJ (« Comptes joueurs »). |
 | `GET /api/reference?pj=<id>` | Les voies de la feuille de ce PJ, son profil et son peuple ; rien d'autre de la bibliothèque. Sans `pj` : une bibliothèque vide. |
+| `GET /api/joueur/agenda?pj=4` | Les séances pas encore finies des campagnes du joueur (fonctionnalité `agenda`), de la plus proche à la plus lointaine : `{"fuseau", "seances": [{"id", "nom", "campagne"?, "nature"?, "statut"?, "date", "debut", "fin", "jour_entier"?, "lieu"?, "visio"?, "infos"?, "participants": [{"pj", "nom", "joueur"?}]}]}`. Ses campagnes : sur un serveur, celle du PJ de son compte (quel que soit `pj`) ; à la maison et pour le MJ, celles du PJ `pj` et des autres PJ actifs au même nom de joueur. Une séance annulée y reste (`statut`). Rien d'autre de la fiche : ni conflit, ni note, ni préparation, ni résumé ; les liens `[[Nom]]` de `infos` sont remplacés par leur texte. Même règle pour `pj` que les documents. |
+| `GET /api/joueur/agenda/ics?pj=4` | Ces mêmes séances en fichier iCalendar (comme `GET /api/agenda/ics`), à ajouter à son propre agenda. |
 | `GET /api/joueur/montre/image?seq=` | L'image que le MJ montre à la table, et elle seule (`404` s'il n'en montre pas). `seq` ne sert qu'à changer d'adresse quand il en montre une autre. |
 
 Le combat vu par les joueurs : `{"nom", "round", "ordre": [{"nom", "camp", "pj"?, "a_terre"?, "courant", "suivant", "etats": ["…"]}]}`. `pj` : la fiche du PJ, pour que son joueur reconnaisse son tour ; `a_terre` : PJ inconscient. Les adversaires et les alliés hors de combat n'y figurent pas, ni les combattants cachés par le MJ (leur tour ne désigne personne) ; `nom` est le nom d'affichage quand le MJ en a donné un ; aucun chiffre (PV, DEF, initiative, attaques) n'est transmis. C'est le combat en cours le plus récemment joué.
@@ -469,7 +471,7 @@ Les dates **réelles** où la table se retrouve (fonctionnalité `agenda`), à n
 
 Qui est attendu : les PJ actifs (statut `actif` ou vide, non archivés) de la campagne, et le MJ ; une séance jouée cite ses `presents`, sinon ses `prevus`. Une personne se reconnaît à son compte sur un serveur (le compte dont c'est le PJ), sinon au champ `joueur` du PJ, à la casse près. Deux séances de la même personne qui se chevauchent : conflit `chevauchement` (alerte) ; à moins d'une heure l'une de l'autre : `rapproche` (message). Une séance annulée ne gêne personne. Les heures sont écrites dans le fuseau horaire de l'univers (réglage synchronisé, `Europe/Paris` par défaut).
 
-Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la liste blanche du rôle `joueur`.
+Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la liste blanche du rôle `joueur`. Les joueurs ont leur propre lecture, `GET /api/joueur/agenda` (voir « Page des joueurs »).
 
 | Requête | Effet |
 |---|---|
@@ -527,7 +529,7 @@ Certaines parties de l'application sont optionnelles, réglées **univers par un
 
 Une fonctionnalité coupée :
 
-- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/campagnes/{id}/pot…`, `/api/entites/{id}/verser-butin` et `/api/joueur/pot…` (`butin`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/agenda` (`agenda`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
+- ses routes répondent `404` `{"detail": "Fonctionnalité désactivée dans cet univers : …", "fonctionnalite": "<clé>"}` : `/api/des` et `/api/joueur/des` (`des`), `/api/aides` et `/api/joueur/documents` (`aides`), `/api/entites/{id}/feuille` (`feuilles`), `/api/combats` et `/api/joueur/hauts-faits` (`combat`), `/api/entites/{id}/difficulte` (`rencontres`), `/api/campagnes/{id}/pot…`, `/api/entites/{id}/verser-butin` et `/api/joueur/pot…` (`butin`), `/api/secrets` (`secrets`), `/api/table` (`ecran_mj`), `/api/entites/{id}/preparation` et `/apres-seance` (`seances`), `/api/agenda` et `/api/joueur/agenda` (`agenda`), `/api/graphe`, `/api/chronologie`, `/api/entites/{id}/organigramme`, `/api/export/obsidian`. Toute route `/api/joueur/…` et `POST /api/acces/joueurs` demandent `page_joueurs` ; à la maison, la page libre se ferme (`401`) ;
 - ses types de fiches (`rencontre`, `secret`, `aide`, `regle`) quittent le schéma, et avec eux les champs qui ne désignent qu'eux ; ils sortent de `GET /api/entites` et ne se créent plus (`422`, import compris). Une fiche existante reste lisible par `GET /api/entites/{id}` ;
 - la préparation d'une séance ne remonte plus ses secrets (`secrets`) ni ses rencontres (`rencontres`) ;
 - rien n'est effacé : ses données restent dans l'univers, voyagent avec la synchronisation et l'export, et reviennent à la réactivation.

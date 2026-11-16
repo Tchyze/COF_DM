@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/Tchyze/cof_dm/internal/comptes"
 )
 
 // banc d'agenda : deux campagnes, Léa joue dans les deux (son nom écrit deux fois, à la casse près),
@@ -165,4 +167,93 @@ func TestFonctionnalitesAgendaCoupe(t *testing.T) {
 		}
 	}
 	b.fiche("seance", "S", map[string]any{"campagne": marche, "date_reelle": "2027-07-10"})
+}
+
+// Page des joueurs, à la maison : un joueur voit les séances à venir de ses campagnes (celles de tous
+// les PJ qu'il joue, à son nom), en lecture, sans rien de réservé au MJ ni conflit ; sans PJ, rien.
+func TestAgendaJoueursLibre(t *testing.T) {
+	b, _ := bancReseau(t)
+	marche := b.fiche("campagne", "La Marche", nil)
+	ailleurs := b.fiche("campagne", "Ailleurs", nil)
+	autre := b.fiche("campagne", "Sans Léa", nil)
+	arwen := b.fiche("pj", "Arwen", map[string]any{"campagne": marche, "joueur": "Léa"})
+	b.fiche("pj", "Brom", map[string]any{"campagne": ailleurs, "joueur": "léa"})
+	b.fiche("pj", "Vieux", map[string]any{"campagne": autre, "joueur": "Léa", "statut": "mort"})
+	cid := b.fiche("pj", "Cid", map[string]any{"campagne": marche, "joueur": "Hugo"})
+	b.fiche("seance", "M1", map[string]any{"campagne": marche, "date_reelle": "2099-03-06", "heure": "14:00", "duree": "4 h",
+		"lieu_reel": "Chez Léa", "infos_joueurs": "Apportez vos dés ; on part de [[Château secret|la tour]]", "notes": "SECRET-NOTES", "preparation": "SECRET-PREPA"})
+	b.fiche("seance", "A1", map[string]any{"campagne": ailleurs, "date_reelle": "2099-03-06", "heure": "16:00", "duree": "3 h"})
+	b.fiche("seance", "S1", map[string]any{"campagne": autre, "date_reelle": "2099-03-07"})
+	b.fiche("seance", "Passée", map[string]any{"campagne": marche, "date_reelle": "2020-01-04", "heure": "20:00"})
+	if c, _ := b.joueurLibre("GET", "/api/joueur/agenda?pj="+ftoa(arwen), nil, false); c != 401 {
+		t.Fatalf("page fermée : %d", c)
+	}
+	if c, _ := b.local("POST", "/api/acces/joueurs", map[string]any{"active": true}); c != 200 {
+		t.Fatal(c)
+	}
+	c, corps := b.joueurLibre("GET", "/api/joueur/agenda?pj="+ftoa(arwen), nil, false)
+	if c != 200 || !strings.Contains(corps, `"M1"`) || !strings.Contains(corps, `"A1"`) || strings.Contains(corps, `"S1"`) ||
+		strings.Contains(corps, "Passée") || !strings.Contains(corps, "Apportez vos dés") || !strings.Contains(corps, "Chez Léa") {
+		t.Fatalf("agenda de Léa : %d %s", c, corps)
+	}
+	for _, interdit := range []string{"SECRET", "conflits", "chevauchement", "Château", "[["} {
+		if strings.Contains(corps, interdit) {
+			t.Errorf("%q dans l'agenda d'un joueur : %s", interdit, corps)
+		}
+	}
+	if c, corps := b.joueurLibre("GET", "/api/joueur/agenda?pj="+ftoa(cid), nil, false); c != 200 || !strings.Contains(corps, `"M1"`) || strings.Contains(corps, `"A1"`) {
+		t.Fatalf("agenda de Hugo : %d %s", c, corps)
+	}
+	if c, _ := b.joueurLibre("GET", "/api/joueur/agenda", nil, false); c != 404 {
+		t.Fatalf("sans PJ : %d", c)
+	}
+	c, corps = b.joueurLibre("GET", "/api/joueur/agenda/ics?pj="+ftoa(arwen), nil, false)
+	corps = strings.ReplaceAll(corps, "\r\n ", "")
+	if c != 200 || !strings.Contains(corps, "SUMMARY:M1 · La Marche") || !strings.Contains(corps, "SUMMARY:A1 · Ailleurs") || strings.Contains(corps, "S1") || strings.Contains(corps, "SECRET") {
+		t.Fatalf("ics de Léa : %d %s", c, corps)
+	}
+	// l'agenda coupé, la page ne le sert plus
+	b.local("PUT", "/api/fonctionnalites", map[string]bool{"agenda": false})
+	if c, _ := b.joueurLibre("GET", "/api/joueur/agenda?pj="+ftoa(arwen), nil, false); c != 404 {
+		t.Fatalf("agenda coupé : %d", c)
+	}
+}
+
+// Sur un serveur, un compte joueur ne voit que les séances de la campagne de son PJ, quel que soit le
+// PJ demandé ; il n'atteint pas l'agenda du MJ.
+func TestAgendaCompteJoueur(t *testing.T) {
+	b, reg := bancServeur(t)
+	mj := b.connecter("meneur")
+	creer := func(typ, nom string, data map[string]any) float64 {
+		c, v, _ := b.proxy("POST", "/api/entites", map[string]any{"type": typ, "nom": nom, "data": data}, mj)
+		if c != 201 {
+			t.Fatalf("création de %s : %d %v", nom, c, v)
+		}
+		return v["id"].(float64)
+	}
+	marche := creer("campagne", "La Marche", nil)
+	ailleurs := creer("campagne", "Ailleurs", nil)
+	arwen := creer("pj", "Arwen", map[string]any{"campagne": marche, "joueur": "Léa"})
+	brom := creer("pj", "Brom", map[string]any{"campagne": ailleurs, "joueur": "Léa"})
+	b.proxy("POST", "/api/entites/"+ftoa(arwen)+"/partage", map[string]any{"partage": true}, mj)
+	creer("seance", "M1", map[string]any{"campagne": marche, "date_reelle": "2099-03-06", "heure": "14:00", "notes": "SECRET-NOTES"})
+	creer("seance", "A1", map[string]any{"campagne": ailleurs, "date_reelle": "2099-03-06", "heure": "20:00"})
+	reg.Creer("joueuse", "mot-de-passe-esueuoj", false)
+	reg.Modifier("joueuse", func(c *comptes.Compte) error {
+		c.Admis = append(c.Admis, b.s.store.ID())
+		c.Roles[b.s.store.ID()] = comptes.Joueur
+		c.Persos[b.s.store.ID()] = int64(arwen)
+		return nil
+	})
+	joueuse := b.connecter("joueuse")
+	for _, u := range []string{"/api/joueur/agenda", "/api/joueur/agenda?pj=" + ftoa(brom)} {
+		c, v, _ := b.proxy("GET", u, nil, joueuse)
+		corps, _ := json.Marshal(v)
+		if c != 200 || !strings.Contains(string(corps), `"M1"`) || strings.Contains(string(corps), `"A1"`) || strings.Contains(string(corps), "SECRET") {
+			t.Fatalf("%s : %d %s", u, c, corps)
+		}
+	}
+	if c, _, _ := b.proxy("GET", "/api/agenda", nil, joueuse); c != 403 {
+		t.Fatalf("agenda du MJ par un joueur : %d", c)
+	}
 }

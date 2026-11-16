@@ -408,7 +408,7 @@ func (s *Serveur) evenements(l []*seanceAgenda) []agenda.Evenement {
 			d = append(d, "Visio : "+x.Visio)
 		}
 		if x.Infos != "" {
-			d = append(d, x.Infos)
+			d = append(d, sansLiens(x.Infos)) // un lien [[Nom]] vers une fiche ne dit rien hors de l'application
 		}
 		e.Description = strings.Join(d, "\n\n")
 		out = append(out, e)
@@ -451,4 +451,111 @@ func (s *Serveur) reglerAgenda(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.lireReglagesAgenda(w, r)
+}
+
+// ---------------------------------------------------------------- page des joueurs
+
+// Un joueur voit les séances de SES campagnes, sans pouvoir les modifier : date, heures, lieu, visio,
+// ce que le MJ leur dit et qui est attendu. Jamais un conflit (il citerait une autre campagne), une
+// note ni une préparation du MJ. Sur un serveur, ses campagnes sont celles du PJ de son compte ; à la
+// maison, celles de tous les PJ que joue la même personne (même champ « Joueur »).
+
+func (s *Serveur) routesAgendaJoueurs(m *http.ServeMux) {
+	m.HandleFunc("GET /api/joueur/agenda", s.agendaJoueur)
+	m.HandleFunc("GET /api/joueur/agenda/ics", s.icsJoueur)
+}
+
+// seanceJoueur : une séance telle qu'un joueur la voit.
+type seanceJoueur struct {
+	ID           int64         `json:"id"`
+	Nom          string        `json:"nom"`
+	Campagne     string        `json:"campagne,omitempty"`
+	Nature       string        `json:"nature,omitempty"`
+	Statut       string        `json:"statut,omitempty"`
+	Date         string        `json:"date"`
+	Debut        string        `json:"debut"`
+	Fin          string        `json:"fin"`
+	JourEntier   bool          `json:"jour_entier,omitempty"`
+	Lieu         string        `json:"lieu,omitempty"`
+	Visio        string        `json:"visio,omitempty"`
+	Infos        string        `json:"infos,omitempty"`
+	Participants []participant `json:"participants"`
+}
+
+// seancesDuJoueur : les séances à venir (pas encore finies) des campagnes du PJ visé.
+func (s *Serveur) seancesDuJoueur(w http.ResponseWriter, r *http.Request) ([]*seanceAgenda, store.Entite, bool) {
+	id, ok := s.pjDocuments(w, r)
+	if !ok {
+		return nil, store.Entite{}, false
+	}
+	pj, err := s.store.Lire(id)
+	if err != nil {
+		erreurStore(w, err)
+		return nil, pj, false
+	}
+	_, restreint := s.pjDuCompte(r)
+	campagnes := map[int64]bool{}
+	for _, c := range idsDe(pj.Data["campagne"]) {
+		campagnes[c] = true
+	}
+	if joueur := cleJoueur(pj); !restreint && joueur != "" {
+		tout, err := s.store.Toutes()
+		if err != nil {
+			erreurStore(w, err)
+			return nil, pj, false
+		}
+		for _, e := range tout {
+			st, _ := e.Data["statut"].(string)
+			if e.Type == "pj" && !e.Archive && (st == "" || st == "actif") && cleJoueur(e) == joueur {
+				for _, c := range idsDe(e.Data["campagne"]) {
+					campagnes[c] = true
+				}
+			}
+		}
+	}
+	l, err := s.seancesAgenda()
+	if err != nil {
+		erreurStore(w, err)
+		return nil, pj, false
+	}
+	maintenant := time.Now()
+	out := []*seanceAgenda{}
+	for _, x := range l {
+		if x.Campagne != nil && campagnes[x.Campagne.ID] && x.fin.After(maintenant) {
+			out = append(out, x)
+		}
+	}
+	return out, pj, true
+}
+
+func cleJoueur(pj store.Entite) string {
+	v, _ := pj.Data["joueur"].(string)
+	return strings.ToLower(strings.TrimSpace(v))
+}
+
+// agendaJoueur : GET /api/joueur/agenda[?pj=] — les séances à venir des campagnes du joueur.
+func (s *Serveur) agendaJoueur(w http.ResponseWriter, r *http.Request) {
+	l, _, ok := s.seancesDuJoueur(w, r)
+	if !ok {
+		return
+	}
+	out := make([]seanceJoueur, 0, len(l))
+	for _, x := range l {
+		v := seanceJoueur{ID: x.ID, Nom: x.Nom, Nature: x.Nature, Statut: x.Statut, Date: x.Date, Debut: x.Debut, Fin: x.Fin,
+			JourEntier: x.JourEntier, Lieu: x.Lieu, Visio: x.Visio, Infos: sansLiens(x.Infos), Participants: x.Participants}
+		if x.Campagne != nil {
+			v.Campagne = x.Campagne.Nom
+		}
+		out = append(out, v)
+	}
+	repondre(w, 200, map[string]any{"fuseau": s.store.Fuseau(), "seances": out})
+}
+
+// icsJoueur : GET /api/joueur/agenda/ics[?pj=] — ces mêmes séances en fichier iCalendar.
+func (s *Serveur) icsJoueur(w http.ResponseWriter, r *http.Request) {
+	l, pj, ok := s.seancesDuJoueur(w, r)
+	if !ok {
+		return
+	}
+	s.envoyerICS(w, nomUnivers(s.store.Chemin())+" — "+pj.Nom, s.evenements(l))
 }
