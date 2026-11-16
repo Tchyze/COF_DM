@@ -109,7 +109,7 @@ func (s *Serveur) evenementsPour(c comptes.Compte) []agenda.Evenement {
 	default:
 		return nil
 	}
-	l, err := s.seancesAgenda()
+	l, err := s.seancesLocales()
 	if err != nil {
 		return nil
 	}

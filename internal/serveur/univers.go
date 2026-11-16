@@ -84,6 +84,8 @@ func NouvelleApplication(opt Options) *Application {
 	if opt.Comptes == nil {
 		a.opt.Relie = a.Relie
 		a.opt.app = a
+	} else {
+		a.opt.ailleurs = a.creneauxAilleurs
 	}
 	m := a.mux
 	m.HandleFunc("GET /api/univers", a.etat)

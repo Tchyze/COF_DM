@@ -69,6 +69,9 @@ type Options struct {
 	Proxies []*net.IPNet
 	acces   *acces       // partagé par l'Application et les Serveurs des univers ouverts
 	app     *Application // application de bureau : le combat et les dés en direct passent par elle (direct.go)
+	// ailleurs : mode serveur, les créneaux anonymes des autres univers servis (conflits d'agenda entre
+	// univers, agenda.go) ; nil sur le bureau.
+	ailleurs func(sauf string) []creneauExterne
 	// Dialogue ouvre la boîte « Ouvrir » ou « Enregistrer » du système et renvoie le fichier choisi
 	// ("" : annulé) ; nil : le chemin se saisit dans l'interface.
 	Dialogue func(enregistrer bool, nom, dossier string) (string, error)
