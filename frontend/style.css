@@ -899,6 +899,11 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
 .agenda-fiche p{margin:4px 0}
 .boite.agenda .boite-corps{position:relative}
 .abonnement:empty{display:none}
+.rep-present{color:var(--ok)}
+.rep-absent{color:var(--mort);text-decoration:line-through}
+.rep-peutetre{color:var(--warn)}
+.rep-bilan{color:var(--faint)}
+.agenda-reponse{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:4px}
 .abonnement{display:flex;flex-direction:column;gap:10px;margin-top:18px}
 .abonnement h3{margin:0}
 .abonnement-boutons{display:flex;flex-wrap:wrap;gap:8px}

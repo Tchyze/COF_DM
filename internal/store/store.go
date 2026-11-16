@@ -443,6 +443,12 @@ func indexer(tx execer, e Entite) error {
 					return err
 				}
 			}
+		case modele.Reponses: // les PJ qui ont répondu à une séance : supprimer le PJ retire sa réponse
+			for _, x := range modele.LireReponses(v) {
+				if _, err := tx.Exec(`INSERT INTO refs (source, champ, cible) VALUES (?,?,?)`, e.ID, ch.Cle, x.PJ); err != nil {
+					return err
+				}
+			}
 		case modele.Butin: // les objets du monde d'un butin : la fiche est citée par la rencontre
 			for _, o := range modele.LireButin(v).Objets {
 				if o.Fiche == 0 {
@@ -882,6 +888,21 @@ func (s *Store) Supprimer(id int64, auteur string) ([]string, error) {
 				var reste []int64
 				for _, x := range ids(o.Data[ch.Cle]) {
 					if x != id {
+						reste = append(reste, x)
+					}
+				}
+				if len(reste) == 0 {
+					delete(o.Data, ch.Cle)
+				} else {
+					o.Data[ch.Cle] = reste
+				}
+			case modele.Reponses:
+				if _, ok := o.Data[ch.Cle]; !ok {
+					continue
+				}
+				var reste []modele.ReponseJoueur
+				for _, x := range modele.LireReponses(o.Data[ch.Cle]) {
+					if x.PJ != id {
 						reste = append(reste, x)
 					}
 				}

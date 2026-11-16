@@ -65,9 +65,10 @@ type seanceAgenda struct {
 
 // participant : un PJ attendu à la séance, et qui le joue.
 type participant struct {
-	PJ     int64  `json:"pj"`
-	Nom    string `json:"nom"`
-	Joueur string `json:"joueur,omitempty"`
+	PJ      int64  `json:"pj"`
+	Nom     string `json:"nom"`
+	Joueur  string `json:"joueur,omitempty"`
+	Reponse string `json:"reponse,omitempty"` // présent, peut-être, absent ; vide : pas encore répondu
 }
 
 // conflitAffiche : une autre séance qui gêne, et qui est concerné (noms affichés).
@@ -168,7 +169,15 @@ func (s *Serveur) seancesAvec(ailleurs bool) ([]*seanceAgenda, error) {
 						}
 					}
 				}
+				reponses := map[int64]string{}
+				for _, rj := range modele.LireReponses(e.Data["reponses"]) {
+					reponses[rj.PJ] = rj.Reponse
+				}
 				for _, pj := range attendus {
+					x.Participants = append(x.Participants, participant{PJ: pj.ID, Nom: pj.Nom, Joueur: texte(pj, "joueur"), Reponse: reponses[pj.ID]})
+					if reponses[pj.ID] == "absent" {
+						continue // il a dit qu'il ne viendrait pas : cette séance ne le gêne en rien
+					}
 					joueur, cle := texte(pj, "joueur"), ""
 					switch {
 					case parCompte[pj.ID] != "": // la personne est son compte ; son nom reste celui écrit sur le PJ
@@ -185,7 +194,9 @@ func (s *Serveur) seancesAvec(ailleurs bool) ([]*seanceAgenda, error) {
 					if joueur == "" {
 						x.personnes[cle] = pj.Nom
 					}
-					x.Participants = append(x.Participants, participant{PJ: pj.ID, Nom: pj.Nom, Joueur: joueur})
+					if p := &x.Participants[len(x.Participants)-1]; p.Joueur == "" {
+						p.Joueur = joueur // le nom de son compte, faute d'un nom écrit sur le PJ
+					}
 				}
 			}
 		}
@@ -550,11 +561,14 @@ func (s *Serveur) evenements(l []*seanceAgenda) []agenda.Evenement {
 		if len(x.Participants) > 0 {
 			var p []string
 			for _, pt := range x.Participants {
+				nom := pt.Nom
 				if pt.Joueur != "" {
-					p = append(p, pt.Joueur+" ("+pt.Nom+")")
-				} else {
-					p = append(p, pt.Nom)
+					nom = pt.Joueur + " (" + pt.Nom + ")"
 				}
+				if pt.Reponse != "" {
+					nom += " : " + pt.Reponse
+				}
+				p = append(p, nom)
 			}
 			d = append(d, "Participants : "+strings.Join(p, ", "))
 		}
@@ -617,6 +631,7 @@ func (s *Serveur) reglerAgenda(w http.ResponseWriter, r *http.Request) {
 func (s *Serveur) routesAgendaJoueurs(m *http.ServeMux) {
 	m.HandleFunc("GET /api/joueur/agenda", s.agendaJoueur)
 	m.HandleFunc("GET /api/joueur/agenda/ics", s.icsJoueur)
+	m.HandleFunc("POST /api/joueur/agenda/{id}/reponse", s.repondreJoueur)
 }
 
 // seanceJoueur : une séance telle qu'un joueur la voit.
@@ -634,52 +649,56 @@ type seanceJoueur struct {
 	Visio        string        `json:"visio,omitempty"`
 	Infos        string        `json:"infos,omitempty"`
 	Participants []participant `json:"participants"`
+	MonPJ        int64         `json:"mon_pj"` // le PJ qui répond pour lui à cette séance
 }
 
 // seancesDuJoueur : les séances à venir (pas encore finies) des campagnes du PJ visé.
-func (s *Serveur) seancesDuJoueur(w http.ResponseWriter, r *http.Request) ([]*seanceAgenda, store.Entite, bool) {
+// mesPJ : pour chaque campagne du joueur, le PJ qui y répond pour lui.
+func (s *Serveur) seancesDuJoueur(w http.ResponseWriter, r *http.Request) (l []*seanceAgenda, pj store.Entite, mesPJ map[int64]int64, ok bool) {
 	id, ok := s.pjDocuments(w, r)
 	if !ok {
-		return nil, store.Entite{}, false
+		return nil, store.Entite{}, nil, false
 	}
 	pj, err := s.store.Lire(id)
 	if err != nil {
 		erreurStore(w, err)
-		return nil, pj, false
+		return nil, pj, nil, false
 	}
 	_, restreint := s.pjDuCompte(r)
-	campagnes := map[int64]bool{}
+	campagnes := map[int64]int64{}
 	for _, c := range idsDe(pj.Data["campagne"]) {
-		campagnes[c] = true
+		campagnes[c] = pj.ID
 	}
 	if joueur := cleJoueur(pj); !restreint && joueur != "" {
 		tout, err := s.store.Toutes()
 		if err != nil {
 			erreurStore(w, err)
-			return nil, pj, false
+			return nil, pj, nil, false
 		}
 		for _, e := range tout {
 			st, _ := e.Data["statut"].(string)
 			if e.Type == "pj" && !e.Archive && (st == "" || st == "actif") && cleJoueur(e) == joueur {
 				for _, c := range idsDe(e.Data["campagne"]) {
-					campagnes[c] = true
+					if campagnes[c] == 0 {
+						campagnes[c] = e.ID
+					}
 				}
 			}
 		}
 	}
-	l, err := s.seancesLocales()
+	tous, err := s.seancesLocales()
 	if err != nil {
 		erreurStore(w, err)
-		return nil, pj, false
+		return nil, pj, nil, false
 	}
 	maintenant := time.Now()
-	out := []*seanceAgenda{}
-	for _, x := range l {
-		if x.Campagne != nil && campagnes[x.Campagne.ID] && x.fin.After(maintenant) {
-			out = append(out, x)
+	l = []*seanceAgenda{}
+	for _, x := range tous {
+		if x.Campagne != nil && campagnes[x.Campagne.ID] != 0 && x.fin.After(maintenant) {
+			l = append(l, x)
 		}
 	}
-	return out, pj, true
+	return l, pj, campagnes, true
 }
 
 func cleJoueur(pj store.Entite) string {
@@ -689,7 +708,7 @@ func cleJoueur(pj store.Entite) string {
 
 // agendaJoueur : GET /api/joueur/agenda[?pj=] — les séances à venir des campagnes du joueur.
 func (s *Serveur) agendaJoueur(w http.ResponseWriter, r *http.Request) {
-	l, _, ok := s.seancesDuJoueur(w, r)
+	l, _, mesPJ, ok := s.seancesDuJoueur(w, r)
 	if !ok {
 		return
 	}
@@ -698,7 +717,7 @@ func (s *Serveur) agendaJoueur(w http.ResponseWriter, r *http.Request) {
 		v := seanceJoueur{ID: x.ID, Nom: x.Nom, Nature: x.Nature, Statut: x.Statut, Date: x.Date, Debut: x.Debut, Fin: x.Fin,
 			JourEntier: x.JourEntier, Lieu: x.Lieu, Visio: x.Visio, Infos: sansLiens(x.Infos), Participants: x.Participants}
 		if x.Campagne != nil {
-			v.Campagne = x.Campagne.Nom
+			v.Campagne, v.MonPJ = x.Campagne.Nom, mesPJ[x.Campagne.ID]
 		}
 		out = append(out, v)
 	}
@@ -707,9 +726,52 @@ func (s *Serveur) agendaJoueur(w http.ResponseWriter, r *http.Request) {
 
 // icsJoueur : GET /api/joueur/agenda/ics[?pj=] — ces mêmes séances en fichier iCalendar.
 func (s *Serveur) icsJoueur(w http.ResponseWriter, r *http.Request) {
-	l, pj, ok := s.seancesDuJoueur(w, r)
+	l, pj, _, ok := s.seancesDuJoueur(w, r)
 	if !ok {
 		return
 	}
 	s.envoyerICS(w, nomUnivers(s.store.Chemin())+" — "+pj.Nom, s.evenements(l))
+}
+
+// repondreJoueur : POST /api/joueur/agenda/{id}/reponse?pj= {"reponse": "présent" | "peut-être" |
+// "absent" | ""} — le joueur dit s'il vient à une séance à venir de ses campagnes, pour le PJ qu'il y
+// joue (sur un serveur, celui de son compte). Une séance annulée, finie ou d'une autre campagne :
+// 404. Seule écriture de l'agenda ouverte aux joueurs ; elle ne touche qu'à sa réponse.
+func (s *Serveur) repondreJoueur(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Reponse string `json:"reponse"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	permise := in.Reponse == ""
+	for _, o := range modele.ReponsesSeance {
+		permise = permise || in.Reponse == o
+	}
+	if !permise {
+		erreur(w, 422, "Réponse attendue : "+strings.Join(modele.ReponsesSeance, ", ")+".")
+		return
+	}
+	seance, err := idDe(r)
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	l, _, mesPJ, ok := s.seancesDuJoueur(w, r)
+	if !ok {
+		return
+	}
+	for _, x := range l {
+		if x.ID != seance || x.Statut == "annulée" {
+			continue
+		}
+		if _, err := s.store.Repondre(seance, mesPJ[x.Campagne.ID], in.Reponse, auteurDe(r)); err != nil {
+			erreurStore(w, err)
+			return
+		}
+		s.agendaJoueur(w, r)
+		return
+	}
+	erreurStore(w, store.ErrIntrouvable)
 }
