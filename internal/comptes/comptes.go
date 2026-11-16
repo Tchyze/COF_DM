@@ -90,6 +90,8 @@ type Compte struct {
 	// et revaut s'il y revient : l'effacer là serait une réinitialisation sans trace.
 	SecondFacteur *SecondFacteur `json:"second_facteur,omitempty"`
 	ReinitLocale  float64        `json:"reinit_locale,omitempty"` // voir ReinitialiserLocalement
+	// Agenda : l'adresse d'abonnement à l'agenda des séances (agenda.go), jamais d'un administrateur.
+	Agenda *JetonAgenda `json:"agenda,omitempty"`
 }
 
 // Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
@@ -155,7 +157,8 @@ func reprendre(c *Compte) bool {
 	}
 	if c.Admin {
 		change = len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0 || change
-		c.Roles, c.Admis, c.Persos, c.Jetons = nil, nil, nil, nil
+		change = change || c.Agenda != nil
+		c.Roles, c.Admis, c.Persos, c.Jetons, c.Agenda = nil, nil, nil, nil, nil
 		return change
 	}
 	for u, role := range c.Roles {
@@ -209,6 +212,10 @@ func copie(c *Compte) Compte {
 	x.Admis = append([]string(nil), c.Admis...)
 	x.Jetons = append([]Jeton(nil), c.Jetons...)
 	x.SecondFacteur = copieSecondFacteur(c.SecondFacteur)
+	if c.Agenda != nil {
+		a := *c.Agenda
+		x.Agenda = &a
+	}
 	return x
 }
 
@@ -451,6 +458,9 @@ func (r *Registre) Modifier(nom string, f func(*Compte) error) (Compte, error) {
 	}
 	if x.Admin && len(x.Roles)+len(x.Admis)+len(x.Persos)+len(x.Jetons) > 0 {
 		return Compte{}, ErrAdmin
+	}
+	if x.Admin {
+		x.Agenda = nil // devenu administrateur, il ne lit plus rien des univers
 	}
 	*c = x
 	if avant.Admin && !avant.Inactif && !r.resteUnAdmin() {

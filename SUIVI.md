@@ -2,14 +2,14 @@
 
 Fichier de passation : où en est le projet, comment on y travaille, les décisions prises et ce qu'il reste à faire. À lire avant de reprendre le travail, et à tenir à jour à la fin de chaque lot. Ce fichier est public : rien sur l'installation du MJ (machine, chemins, fichiers, sauvegardes), qui va dans `LOCAL.md`, hors dépôt.
 
-Dernière mise à jour : 16 novembre 2026 (projet 45, agenda des séances : lots 1 et 2 à essayer, modèle 10).
+Dernière mise à jour : 16 novembre 2026 (projet 45, agenda des séances : lots 1 à 3 à essayer, modèle 10).
 
 ## Où on en est
 
 - **Version stable : 1.4.0** (15 novembre 2026) : PR 53 à 55 (afficheur de table), avec F-12 (PR 50, 52), le test stabilisé (PR 51) et les dépendances (PR 48, 49). Image sur Docker Hub (`1.4.0`, `latest`). Avant elle : 1.3.2 (2 novembre 2026), PR 47 (fenêtre « Mes univers » du bureau) ; 1.3.1 (2 novembre 2026), PR 41 à 43 ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 9 (dans la 1.4.0 : `sbire` du bestiaire, `alias`, `cache` et `sbire` d'un combattant ; 8 de la 1.2.5 à la 1.3.2), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** (16 novembre 2026) : projet 45, **agenda des séances** (voir « Agenda des séances » dans les décisions). Lot 1, l'agenda du MJ : PR 57, modèle 10. Lot 2, l'agenda sur la page des joueurs : branche `agenda-joueurs`, empilée sur la PR 57. Tout attend l'essai du MJ. Le projet 15, afficheur de table, est publié dans la 1.4.0 (voir « Afficheur de table » dans « Ce qui a été fait »). Le jeton Docker Hub recollé le 15 novembre 2026 a servi à l'envoi de la 1.4.0 : il marche. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
+- **Chantier en cours** (16 novembre 2026) : projet 45, **agenda des séances** (voir « Agenda des séances » dans les décisions). Lot 1, l'agenda du MJ : PR 57, modèle 10. Lot 2, l'agenda sur la page des joueurs : PR 58, empilée sur la PR 57. Lot 3, l'abonnement : branche `agenda-abonnement`, empilée sur la PR 58. Tout attend l'essai du MJ. Le projet 15, afficheur de table, est publié dans la 1.4.0 (voir « Afficheur de table » dans « Ce qui a été fait »). Le jeton Docker Hub recollé le 15 novembre 2026 a servi à l'envoi de la 1.4.0 : il marche. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -193,6 +193,7 @@ Les dates **réelles** où la table se retrouve. Le mot « calendrier » reste a
 - **Trace** : une séance jouée garde les PJ qui étaient prévus (PJ actifs au moment où elle passe « jouée »), à côté des présents.
 - **Plus tard** : les réponses des joueurs (présent, absent, peut-être), puis un sondage de dates (« Sondage » ou « Vote »). Pas d'indisponibilités déclarées : elles se discutent autour de la table.
 - **Page des joueurs** (lot 2) : onglet « Agenda », les séances pas encore finies de ses campagnes (celles du PJ de son compte sur un serveur ; à la maison, celles de tous les PJ actifs au même nom de joueur), annulées comprises (barrées), avec lieu, visio, participants et texte du MJ ; un bouton télécharge le `.ics`. Ni conflit, ni note du MJ.
+- **Abonnement** (lot 3) : l'adresse `…/agenda/<jeton>.ics`, créée par chacun depuis l'onglet Agenda (joueur) ou l'agenda du MJ ; boutons Google Agenda, Apple, Outlook, « Copier l'adresse », aide pour Proton et Android. Le jeton est gardé chiffré : la page peut le remontrer pour un second appareil. « Changer d'adresse » coupe l'ancienne. Un MJ reçoit toutes les séances de ses univers, un joueur celles de la campagne de son PJ ; jamais rien de réservé au MJ. L'administrateur voit qui est abonné et coupe une adresse (« Couper l'agenda »), sans lire d'univers. Sur le serveur du MJ, l'adresse prend `COF_DM_ORIGINE`.
 - **Lots prévus** : 1. l'agenda du MJ (champs de la séance, fuseau, écran Agenda en liste et par mois, conflits dans un univers, fichier `.ics`) ; 2. l'agenda sur la page des joueurs, avec son `.ics` ; 3. l'abonnement par adresse secrète (serveur) ; 4. les conflits entre univers, cloisonnés ; 5. les réponses des joueurs.
 
 ### Ambiance sonore (15 novembre 2026, projet 41, avant le code)

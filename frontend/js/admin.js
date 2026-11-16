@@ -147,10 +147,10 @@ async function vueComptes(el, moi) {
     <p class="hint">Un compte <b>administrateur</b> gère le serveur, sans rôle dans les univers ni jeton d'API. Les autres reçoivent leur place univers par univers (« Univers » → Comptes…).</p>
     <div class="panneau" style="overflow-x:auto"><table class="tab adm-table"><thead><tr><th>Compte</th><th>Univers</th><th>Actif</th><th></th></tr></thead><tbody>
       ${l.map(c => `<tr data-nom="${esc(c.nom)}">
-        <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons ? ` <span class="hint">· ${c.jetons} jeton(s)</span>` : ""}</td>
+        <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons ? ` <span class="hint">· ${c.jetons} jeton(s)</span>` : ""}${c.agenda ? ` <span class="hint" title="Créée le ${esc(dateHeure(c.agenda.cree))}${c.agenda.utilise ? ", lue le " + esc(dateHeure(c.agenda.utilise)) : ""}">· abonné à l'agenda</span>` : ""}</td>
         <td><div class="ligne" style="gap:4px">${places(c)}</div></td>
         <td><label class="adm-actif"><input type="checkbox" data-a="actif" aria-label="${esc(c.nom)} actif" ${c.inactif ? "" : "checked"}><span>actif</span></label></td>
-        <td style="text-align:right;white-space:nowrap">${c.nom === moi ? `<a class="hint" href="#/compte">Mon compte</a>` : `${c.admin && c.second_facteur ? `<button class="ghost petit" data-a="reinit">Second facteur…</button>` : ""}<button class="ghost petit" data-a="mdp">Mot de passe…</button><button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
+        <td style="text-align:right;white-space:nowrap">${c.nom === moi ? `<a class="hint" href="#/compte">Mon compte</a>` : `${c.admin && c.second_facteur ? `<button class="ghost petit" data-a="reinit">Second facteur…</button>` : ""}${c.agenda ? `<button class="ghost petit" data-a="agenda" title="Coupe son adresse d'abonnement à l'agenda (appareil perdu, compte volé)">Couper l'agenda</button>` : ""}<button class="ghost petit" data-a="mdp">Mot de passe…</button><button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
       </tr>`).join("")}
     </tbody></table></div>
     <form id="adm-compte" class="panneau colonne" style="gap:10px">
@@ -185,6 +185,12 @@ async function vueComptes(el, moi) {
         toast(`Second facteur de ${nom} réinitialisé.`);
         maj();
       },
+    });
+    const agenda = $('[data-a="agenda"]', tr);
+    if (agenda) armer(agenda, "Confirmer", async () => {
+      try { await api("DELETE", `/api/admin/comptes/${encodeURIComponent(nom)}/agenda`); toast(`Adresse d'agenda de ${nom} coupée : ses agendas ne se mettent plus à jour.`); }
+      catch (err) { toast(err.message, true); }
+      maj();
     });
     const suppr = $('[data-a="suppr"]', tr);
     if (suppr && compte.admin) suppr.onclick = () => confirmerAction({

@@ -13,6 +13,7 @@ import { recapHTML, recapMarkdown, dateCourte } from "./recap.js";
 import { ligneJet, DES_RAPIDES } from "./des.js";
 import { rendu } from "./md.js";
 import { horaires, texteJour } from "./views/agenda.js";
+import { panneauAbonnement } from "./abonnement.js";
 
 const CLE = "cof-joueur-pj";
 const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0, fonctions: {} };
@@ -371,8 +372,10 @@ async function vueAgenda() {
           </div></article>`).join("")
         : `<p class="empty">Aucune séance prévue pour l'instant.</p>`}
       ${r.seances.length ? `<div class="row"><a href="${esc(avecPJ("/api/joueur/agenda/ics"))}" download><button type="button">📅 Ajouter à mon agenda (.ics)</button></a></div>
-      <p class="hint">Le fichier s'ouvre dans Google Agenda, Apple Calendrier, Proton Calendar, Outlook… Si le MJ change une date, téléchargez-le à nouveau. Heures dans le fuseau ${esc(r.fuseau)}.</p>` : ""}
-    </section>`;
+      <p class="hint">Le fichier s'ouvre dans Google Agenda, Apple Calendrier, Proton Calendar, Outlook… Si le MJ change une date, téléchargez-le à nouveau${etat.serveur ? ", ou abonnez-vous ci-dessous : votre agenda se mettra à jour tout seul" : ""}. Heures dans le fuseau ${esc(r.fuseau)}.</p>` : ""}
+    </section>
+    ${etat.serveur ? `<section class="panel agenda-joueur abonnement" id="p-abonnement"></section>` : ""}`;
+  if (etat.serveur) panneauAbonnement($("#p-abonnement", vue));
 }
 
 /* ---------------------------------------------------------- dés */

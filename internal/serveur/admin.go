@@ -62,6 +62,7 @@ func (a *Application) routesAdmin() *http.ServeMux {
 	m.HandleFunc("PATCH /api/admin/comptes/{nom}", a.adminModifierCompte)
 	m.HandleFunc("DELETE /api/admin/comptes/{nom}", a.adminSupprimerCompte)
 	m.HandleFunc("POST /api/admin/comptes/{nom}/second-facteur/reinitialiser", a.adminReinitialiserSecondFacteur)
+	m.HandleFunc("DELETE /api/admin/comptes/{nom}/agenda", a.adminRetirerAgenda)
 	return m
 }
 
@@ -430,6 +431,13 @@ func vueAdmin(c comptes.Compte) map[string]any {
 		"admis": append([]string{}, c.Admis...), "jetons": len(c.Jetons), "cree": c.Cree}
 	if c.Admin {
 		v["second_facteur"] = c.AFacteur()
+	}
+	if c.Agenda != nil { // l'adresse d'abonnement existe : quand, et sa dernière lecture ; jamais le jeton
+		ag := map[string]any{"cree": c.Agenda.Cree}
+		if c.Agenda.Utilise != 0 {
+			ag["utilise"] = c.Agenda.Utilise
+		}
+		v["agenda"] = ag
 	}
 	return v
 }
