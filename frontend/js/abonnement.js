@@ -28,10 +28,15 @@ export async function panneauAbonnement(box) {
         <a href="${esc(a.webcal)}"><button type="button">Apple (iPhone, Mac)</button></a>
         <a href="${esc(outlook)}" target="_blank" rel="noopener noreferrer"><button type="button">Outlook</button></a>
         <button type="button" data-copier>Copier l'adresse</button>
+        ${a.qr ? `<button type="button" data-qr aria-expanded="false" aria-controls="abonnement-qr">Afficher le QR code</button>` : ""}
       </div>
+      ${a.qr ? `<figure class="abonnement-qr" id="abonnement-qr" hidden>
+        <img src="${esc(a.qr)}" alt="QR code de votre adresse d'abonnement" width="256" height="256">
+        <figcaption class="hint">Scannez-le avec l'appareil photo du téléphone. <b>iPhone</b> : il propose de s'abonner dans Calendrier. <b>Android</b> : l'application Google Agenda ne s'abonne pas à une adresse ; une application comme ICSx⁵ le fait, sinon passez par le bouton « Google Agenda » depuis un ordinateur. Ne le montrez pas à d'autres : qui le scanne voit vos séances.</figcaption>
+      </figure>` : ""}
       <details class="abonnement-aide"><summary>Proton Calendar, Android, autre agenda</summary>
         <p><b>Proton Calendar</b> : « Autres agendas » → « Ajouter un agenda » → « Depuis une URL », puis collez l'adresse.</p>
-        <p><b>Android</b> : l'application Google Agenda ne s'abonne pas elle-même. Utilisez le bouton « Google Agenda » (il ouvre le site), connecté au même compte Google : l'agenda apparaît ensuite sur le téléphone.</p>
+        <p><b>Android</b> : l'application Google Agenda ne s'abonne pas elle-même. Utilisez le bouton « Google Agenda » (il ouvre le site), connecté au même compte Google : l'agenda apparaît ensuite sur le téléphone. Depuis le téléphone lui-même : dans Chrome, menu ⋮ → « Version pour ordinateur », puis le bouton.</p>
         <p><b>Autre agenda</b> : cherchez « s'abonner à un agenda » ou « ajouter depuis une URL », et collez l'adresse.</p>
       </details>
       <label class="champ"><span>Votre adresse <small>gardez-la pour vous : qui l'a voit vos séances</small></span><input readonly value="${esc(a.adresse)}" data-adresse></label>
@@ -40,6 +45,13 @@ export async function panneauAbonnement(box) {
         <button type="button" class="ghost petit" data-changer title="Les agendas abonnés à l'ancienne adresse ne se mettent plus à jour">Changer d'adresse</button>
         <button type="button" class="ghost petit" data-retirer>Supprimer l'adresse</button>
       </div>`;
+    const boutonQR = $("[data-qr]", box);
+    if (boutonQR) boutonQR.onclick = () => {
+      const fig = $(".abonnement-qr", box), ouvert = fig.hidden;
+      fig.hidden = !ouvert;
+      boutonQR.setAttribute("aria-expanded", String(ouvert));
+      boutonQR.textContent = ouvert ? "Masquer le QR code" : "Afficher le QR code";
+    };
     $("[data-adresse]", box).onfocus = e => e.target.select();
     $("[data-copier]", box).onclick = () => navigator.clipboard?.writeText(a.adresse)
       .then(() => toast("Adresse copiée."), () => { $("[data-adresse]", box).select(); toast("Copie impossible : l'adresse est sélectionnée, copiez-la.", true); });

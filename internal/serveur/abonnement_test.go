@@ -2,7 +2,9 @@ package serveur
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
+	pngpkg "image/png"
 	"log"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/Tchyze/cof_dm/internal/comptes"
 	"github.com/Tchyze/cof_dm/internal/store"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 // lireFlux : l'adresse d'abonnement lue comme le fait Google ou Apple : sans session ni cookie, d'une
@@ -69,7 +72,7 @@ func TestAbonnementAgenda(t *testing.T) {
 	creer(s2, "seance", "I1", map[string]any{"campagne": iles, "date_reelle": "2099-03-08", "heure": "14:00"})
 	creer(s1, "seance", "Vieille", map[string]any{"campagne": marche, "date_reelle": "2020-01-04", "heure": "20:00"})
 
-	if c, v := lea.faire("GET", "/api/compte/agenda", nil); c != 200 || v["abonnable"] != true || v["adresse"] != nil {
+	if c, v := lea.faire("GET", "/api/compte/agenda", nil); c != 200 || v["abonnable"] != true || v["adresse"] != nil || v["qr"] != nil {
 		t.Fatalf("avant : %d %v", c, v)
 	}
 	c, v := lea.faire("POST", "/api/compte/agenda", nil)
@@ -81,6 +84,7 @@ func TestAbonnementAgenda(t *testing.T) {
 	if _, v2 := lea.faire("GET", "/api/compte/agenda", nil); v2["adresse"] != v["adresse"] {
 		t.Fatalf("adresse remontrée : %v", v2)
 	}
+	verifierQRAgenda(t, v)
 	code, corps := lireFlux(a, chemin)
 	if code != 200 || !strings.Contains(corps, "SUMMARY:M1 · La Marche") || !strings.Contains(corps, "SUMMARY:I1 · Les Îles") ||
 		strings.Contains(corps, "X1") || strings.Contains(corps, "Vieille") || strings.Contains(corps, "SECRET") {
@@ -271,4 +275,25 @@ func resumeAilleurs(m map[string]any) string {
 		return "ailleurs " + strings.Join(p, ",")
 	}
 	return ""
+}
+
+// verifierQRAgenda : le QR code de la vue est celui de son adresse webcal://, en PNG.
+func verifierQRAgenda(t *testing.T, v map[string]any) {
+	t.Helper()
+	qr, _ := v["qr"].(string)
+	donnees, ok := strings.CutPrefix(qr, "data:image/png;base64,")
+	if !ok {
+		t.Fatalf("QR code absent : %v", v)
+	}
+	png, err := base64.StdEncoding.DecodeString(donnees)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pngpkg.Decode(bytes.NewReader(png)); err != nil {
+		t.Fatalf("QR code illisible : %v", err)
+	}
+	attendu, _ := qrcode.Encode(v["webcal"].(string), qrcode.Medium, tailleQRAgenda)
+	if !bytes.Equal(png, attendu) {
+		t.Fatal("le QR code ne porte pas l'adresse webcal://")
+	}
 }

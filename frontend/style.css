@@ -908,6 +908,9 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
 .abonnement h3{margin:0}
 .abonnement-boutons{display:flex;flex-wrap:wrap;gap:8px}
 .abonnement-aide p{margin:6px 0}
+.abonnement-qr{margin:0;display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.abonnement-qr[hidden]{display:none}
+.abonnement-qr img{display:block;width:256px;max-width:100%;height:auto;background:#fff;padding:8px;border-radius:6px}
 .abonnement input[readonly]{font-family:var(--f-mono);font-size:.8rem}
 .boite.agenda .agenda-carte{grid-template-columns:1fr;border-left-width:3px}
 .boite.agenda .agenda-actions{flex-direction:row;flex-wrap:wrap}
