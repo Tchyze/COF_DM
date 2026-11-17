@@ -1,12 +1,14 @@
 package serveur
 
 import (
+	"encoding/base64"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/Tchyze/cof_dm/internal/agenda"
 	"github.com/Tchyze/cof_dm/internal/comptes"
+	qrcode "github.com/skip2/go-qrcode"
 )
 
 // Abonnement à l'agenda des séances (mode serveur seulement). Google Agenda, Apple Calendrier, Proton
@@ -26,6 +28,8 @@ const (
 	essaisFlux = 30
 	// historiqueFlux : les séances finies depuis moins longtemps restent dans le flux
 	historiqueFlux = 60 * 24 * time.Hour
+	// tailleQRAgenda : le côté, en pixels, du QR code de l'adresse d'abonnement
+	tailleQRAgenda = 320
 )
 
 // servirFlux : GET /agenda/<jeton>.ics.
@@ -163,9 +167,11 @@ func (s *Serveur) adressePublique(r *http.Request) string {
 	return schema + "://" + r.Host
 }
 
-// vueAgendaCompte : {"abonnable", "adresse", "webcal", "cree", "utilise"} pour son titulaire.
+// vueAgendaCompte : {"abonnable", "adresse", "webcal", "qr", "cree", "utilise"} pour son titulaire. qr :
+// le QR code de l'adresse webcal:// (image PNG en data: URL), à scanner avec un téléphone ; fait ici,
+// comme celui du second facteur, pour que l'adresse secrète ne passe par aucun service extérieur.
 func (s *Serveur) vueAgendaCompte(r *http.Request, c comptes.Compte) map[string]any {
-	out := map[string]any{"abonnable": abonnable(c), "adresse": nil, "webcal": nil}
+	out := map[string]any{"abonnable": abonnable(c), "adresse": nil, "webcal": nil, "qr": nil}
 	clair, j := s.acces.comptes.LireAgenda(c.Nom)
 	if clair == "" || !abonnable(c) {
 		return out
@@ -173,6 +179,9 @@ func (s *Serveur) vueAgendaCompte(r *http.Request, c comptes.Compte) map[string]
 	adresse := s.adressePublique(r) + prefixeFlux + clair + ".ics"
 	_, reste, _ := strings.Cut(adresse, "://")
 	out["adresse"], out["webcal"], out["cree"] = adresse, "webcal://"+reste, j.Cree
+	if png, err := qrcode.Encode("webcal://"+reste, qrcode.Medium, tailleQRAgenda); err == nil {
+		out["qr"] = "data:image/png;base64," + base64.StdEncoding.EncodeToString(png)
+	}
 	if j.Utilise != 0 {
 		out["utilise"] = j.Utilise
 	}
