@@ -207,9 +207,51 @@ func TestNotificationsCompteJoueur(t *testing.T) {
 	if l, n, _ := b.s.store.Notifications(10, int64(brom)); len(l) != 1 || n != 1 {
 		t.Fatalf("celle de Brom touchée : %v %d", l, n)
 	}
-	for _, x := range []struct{ m, u string }{{"GET", "/api/notifications"}, {"POST", "/api/notifications/lues"}, {"POST", "/api/agenda/" + ftoa(m1) + "/relance"}} {
+	for _, x := range []struct{ m, u string }{{"GET", "/api/notifications"}, {"POST", "/api/notifications/lues"}, {"POST", "/api/agenda/" + ftoa(m1) + "/relance"}, {"POST", "/api/notifications/message"}} {
 		if c, _, _ := b.proxy(x.m, x.u, map[string]any{}, joueuse); c != 403 {
 			t.Fatalf("%s %s par une joueuse : %d", x.m, x.u, c)
 		}
+	}
+}
+
+// Message du MJ : à tous les PJ actifs de la campagne, à sens unique ; ni vide, ni trop long ; la page
+// libre ne l'envoie pas.
+func TestNotificationsMessage(t *testing.T) {
+	b, _ := bancReseau(t)
+	marche := b.fiche("campagne", "La Marche", nil)
+	autre := b.fiche("campagne", "Ailleurs", nil)
+	arwen := b.fiche("pj", "Arwen", map[string]any{"campagne": marche})
+	brom := b.fiche("pj", "Brom", map[string]any{"campagne": marche})
+	mort := b.fiche("pj", "Mort", map[string]any{"campagne": marche, "statut": "mort"})
+	loin := b.fiche("pj", "Loin", map[string]any{"campagne": autre})
+	b.local("POST", "/api/acces/joueurs", map[string]any{"active": true})
+	c, v := b.local("POST", "/api/notifications/message", map[string]any{"campagne": marche, "texte": "  Pensez à vos dés !\nÀ jeudi.  "})
+	if c != 200 || v["envoyes"] != float64(2) {
+		t.Fatalf("message : %d %v", c, v)
+	}
+	for _, pj := range []float64{arwen, brom} {
+		l, _, _ := b.s.store.Notifications(10, int64(pj))
+		if len(l) != 1 || l[0].Titre != "Message du MJ — La Marche" || l[0].Texte != "Pensez à vos dés !\nÀ jeudi." || l[0].Genre != "message" {
+			t.Fatalf("reçu par %v : %+v", pj, l)
+		}
+	}
+	for _, pj := range []float64{mort, loin} {
+		if l, _, _ := b.s.store.Notifications(10, int64(pj)); len(l) != 0 {
+			t.Fatalf("reçu par %v : %+v", pj, l)
+		}
+	}
+	if l, _, _ := b.s.store.Notifications(10, 0); len(l) != 0 {
+		t.Fatalf("copie dans la cloche du MJ : %+v", l)
+	}
+	for _, x := range []map[string]any{{"campagne": marche, "texte": "  "}, {"campagne": marche, "texte": strings.Repeat("é", 501)}} {
+		if c, _ := b.local("POST", "/api/notifications/message", x); c != 422 {
+			t.Fatalf("message refusé attendu : %d", c)
+		}
+	}
+	if c, _ := b.local("POST", "/api/notifications/message", map[string]any{"campagne": arwen, "texte": "x"}); c != 404 {
+		t.Fatalf("message à une fiche qui n'est pas une campagne : %d", c)
+	}
+	if c, _ := b.joueurLibre("POST", "/api/notifications/message", map[string]any{"campagne": marche, "texte": "x"}, true); c != 401 {
+		t.Fatalf("message par la page libre : %d", c)
 	}
 }
