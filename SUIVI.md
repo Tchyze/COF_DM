@@ -9,7 +9,7 @@ Dernière mise à jour : 17 novembre 2026 (version 1.5.1 : QR code de l'abonneme
 - **Version stable : 1.5.1** (17 novembre 2026) : PR 62 (QR code de l'adresse d'abonnement à l'agenda), publiée à la demande du MJ sans préversion d'essai. Avant elle : 1.5.0 (16 novembre 2026), PR 57 à 61 (agenda des séances) ; 1.4.0 (15 novembre 2026), PR 48 à 55 (afficheur de table, F-12) ; 1.3.2 (2 novembre 2026), PR 47 (fenêtre « Mes univers » du bureau) ; 1.3.1 (2 novembre 2026), PR 41 à 43 ; 1.3.0 (1er novembre 2026), PR 32 à 40.
 - **Numéros d'échange** : `VersionModele` 11 (dans la 1.5.0 : agenda des séances, voir versions.go ; 9 dans la 1.4.0 ; 8 de la 1.2.5 à la 1.3.2), `versionDonnees` 6, `VersionProtocole` 1. Un bureau et un serveur ne se synchronisent qu'au même modèle : ils se mettent à jour ensemble.
 - **Branches** : `main`, et `essai-complet`, qui ne sert plus que d'instance d'essai. Le dépôt supprime la branche d'une PR fusionnée.
-- **Chantier en cours** : aucun. Le projet 45, **agenda des séances**, est publié dans la 1.5.0 (voir « Agenda des séances » dans les décisions et dans « Ce qui a été fait ») ; ses suites (relance, rappel, sondage, planification depuis l'après-séance) iront avec les notifications (projet 29). Le projet 15, afficheur de table, est publié dans la 1.4.0 (voir « Afficheur de table » dans « Ce qui a été fait »). Le jeton Docker Hub recollé le 15 novembre 2026 a servi à l'envoi de la 1.4.0 : il marche. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
+- **Chantier en cours** : projet 29, **notifications**, conçu avec le MJ le 18 novembre 2026 (voir « Notifications » dans les décisions) ; rien n'est codé. Le projet 45, **agenda des séances**, est publié dans la 1.5.0 (voir « Agenda des séances » dans les décisions et dans « Ce qui a été fait ») ; ses suites (relance, rappel, sondage, planification depuis l'après-séance) iront avec les notifications (projet 29). Le projet 15, afficheur de table, est publié dans la 1.4.0 (voir « Afficheur de table » dans « Ce qui a été fait »). Le jeton Docker Hub recollé le 15 novembre 2026 a servi à l'envoi de la 1.4.0 : il marche. Projet 41, ambiance sonore : conçu avec le MJ le 15 novembre 2026 (voir « Ambiance sonore » dans les décisions), puis **mis de côté** le même jour (son application actuelle lui suffit) ; rien n'est commencé, ne le reprendre qu'à sa demande.
 - **Le serveur du MJ** : voir `LOCAL.md` (hors dépôt).
 - **Fusion de tracker_COF** : terminée. Le dépôt tracker_COF n'évolue plus.
 
@@ -198,6 +198,18 @@ Les dates **réelles** où la table se retrouve. Le mot « calendrier » reste a
 - **Réponses des joueurs** (lot 5) : sur la page des joueurs, « Je viens ? ✓ Présent · ? Peut-être · ✗ Absent » sous chaque séance à venir (recliquer retire la réponse) ; à la maison, Léa répond pour le PJ qu'elle joue dans la campagne de la séance. Le MJ voit ✓ / ? / ✗ à côté de chaque participant et le compte (« 2 présents · 1 sans réponse ») ; le fichier `.ics` les cite. Un joueur absent ne compte plus dans les conflits de cette séance. Rangées dans la séance (`reponses`, modèle 11), notées au journal, sans changer sa date de modification.
 - **Lots prévus** : 1. l'agenda du MJ (champs de la séance, fuseau, écran Agenda en liste et par mois, conflits dans un univers, fichier `.ics`) ; 2. l'agenda sur la page des joueurs, avec son `.ics` ; 3. l'abonnement par adresse secrète (serveur) ; 4. les conflits entre univers, cloisonnés ; 5. les réponses des joueurs.
 
+### Notifications (18 novembre 2026, projet 29, avant le code)
+
+- **Deux canaux** : une **cloche** dans l'application (compteur, liste lue ou non lue), chez le MJ et les joueurs, qui passe par le direct et marche aussi à la maison ; la **notification du téléphone** en veille (Web Push, par l'application installée), sur un serveur en HTTPS seulement. Ni Discord ni e-mail.
+- **Téléphones** : Android et iPhone. Sur iPhone, l'application doit d'abord être installée sur l'écran d'accueil (règle d'Apple) : l'écran le dit. Chaque appareil donne son accord (« Recevoir les notifications ») ; l'administrateur voit les appareils inscrits et en retire.
+- **Texte neutre** sur le téléphone (« COF DM — Rappel de séance », « COF DM — Message du MJ ») : le détail ne se lit qu'en ouvrant l'application. Les notifications passent par les serveurs de Google, Apple ou Mozilla, chiffrées.
+- **Heures calmes**, de 22 h à 8 h (fuseau de l'univers) : rien ne sonne ; la cloche se remplit tout de suite, le téléphone est prévenu à 8 h.
+- **Agenda, côté joueurs** : rappel de la séance **la veille au soir** (seulement aux attendus qui n'ont pas répondu « absent ») ; séance déplacée ou annulée. **Relance** des joueurs sans réponse **seulement quand le MJ clique sur « Relancer »**, jamais d'elle-même.
+- **Agenda, côté MJ** : les réponses des joueurs (présent, peut-être, absent).
+- **Message du MJ** : à sens unique, à **tous les joueurs** de la campagne ; pas de réponse.
+- **Plus tard** : « C'est à vous ! », nouvelle aide de jeu, sondage de dates, planification depuis l'après-séance.
+- **Lots prévus** : N1. la cloche ; N2. le téléphone en veille (service worker, clés du serveur gardées dans les données, réglages par appareil, vue de l'administrateur) ; N3. l'agenda (rappel, déplacée ou annulée, relance, réponses vers le MJ) ; N4. le message du MJ. Une version d'essai par lot.
+
 ### Ambiance sonore (15 novembre 2026, projet 41, avant le code)
 
 Conçue avec le MJ, puis **mise de côté** le même jour : son application actuelle lui suffit. Rien n'est codé ; ne la reprendre qu'à sa demande, et reposer la question si un point manque.
@@ -381,7 +393,7 @@ Voir « Où on en est ». Image Docker publiée sur Docker Hub (`tchyze/cof-dm`,
 
 ### Ensuite
 
-À choisir avec le MJ dans `PROJETS.md`. Les suites de l'agenda (relance, rappel, sondage, planification depuis l'après-séance) attendent les notifications (projet 29). Le projet 41 (ambiance sonore) est conçu mais mis de côté (voir « Ambiance sonore » dans les décisions). Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
+À choisir avec le MJ dans `PROJETS.md`. Les suites de l'agenda (relance, rappel) vont avec les notifications (projet 29, conçu) ; le sondage et la planification depuis l'après-séance viendront après. Le projet 41 (ambiance sonore) est conçu mais mis de côté (voir « Ambiance sonore » dans les décisions). Le projet 14 (butin et pot commun) est publié dans la 1.2.5. Le fichier de règles du MJ (hors dépôt) porte sa partie `personnage.montee`, à réimporter dans chaque univers.
 
 ### Défauts connus
 
