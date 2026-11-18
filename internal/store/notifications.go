@@ -191,3 +191,34 @@ func (s *Store) NoterSuiviSeance(seance int64, v SuiviSeance) error {
 	_, err := s.db.Exec(`INSERT OR REPLACE INTO notif_seances (seance, signature, rappel) VALUES (?,?,?)`, seance, v.Signature, v.Rappel)
 	return err
 }
+
+// APousser : les notifications pas encore envoyées aux appareils, créées depuis « depuis » (temps
+// Unix) ; elles passent aussitôt « envoyées », celles d'avant aussi, sans partir (le serveur était
+// arrêté : trop tard pour sonner).
+func (s *Store) APousser(depuis float64) ([]Notification, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	rows, err := tx.Query(`SELECT id, cree, genre, pour, titre, texte, lien, seance FROM notifications WHERE poussee=0 AND cree>=? ORDER BY id`, depuis)
+	if err != nil {
+		return nil, err
+	}
+	out := []Notification{}
+	for rows.Next() {
+		var n Notification
+		if err := rows.Scan(&n.ID, &n.Cree, &n.Genre, &n.Pour, &n.Titre, &n.Texte, &n.Lien, &n.Seance); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	rows.Close()
+	if _, err := tx.Exec(`UPDATE notifications SET poussee=1 WHERE poussee=0`); err != nil {
+		return nil, err
+	}
+	return out, tx.Commit()
+}

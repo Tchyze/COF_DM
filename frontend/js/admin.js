@@ -147,7 +147,7 @@ async function vueComptes(el, moi) {
     <p class="hint">Un compte <b>administrateur</b> gère le serveur, sans rôle dans les univers ni jeton d'API. Les autres reçoivent leur place univers par univers (« Univers » → Comptes…).</p>
     <div class="panneau" style="overflow-x:auto"><table class="tab adm-table"><thead><tr><th>Compte</th><th>Univers</th><th>Actif</th><th></th></tr></thead><tbody>
       ${l.map(c => `<tr data-nom="${esc(c.nom)}">
-        <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons ? ` <span class="hint">· ${c.jetons} jeton(s)</span>` : ""}${c.agenda ? ` <span class="hint" title="Créée le ${esc(dateHeure(c.agenda.cree))}${c.agenda.utilise ? ", lue le " + esc(dateHeure(c.agenda.utilise)) : ""}">· abonné à l'agenda</span>` : ""}</td>
+        <td><b>${esc(c.nom)}</b>${c.nom === moi ? ` <span class="hint">(vous)</span>` : ""}${c.jetons ? ` <span class="hint">· ${c.jetons} jeton(s)</span>` : ""}${c.agenda ? ` <span class="hint" title="Créée le ${esc(dateHeure(c.agenda.cree))}${c.agenda.utilise ? ", lue le " + esc(dateHeure(c.agenda.utilise)) : ""}">· abonné à l'agenda</span>` : ""}${c.appareils?.length ? `<div class="adm-appareils">${c.appareils.map(a => `<span class="hint" title="Inscrit le ${esc(dateHeure(a.cree))}${a.recu ? ", dernier envoi le " + esc(dateHeure(a.recu)) : ""}${a.erreur ? " · " + esc(a.erreur) : ""}">🔔 ${esc(a.nom)}</span>${c.nom === moi ? "" : ` <button class="ghost petit" data-appareil="${esc(a.id)}" title="Cet appareil ne recevra plus ses notifications (appareil perdu, compte volé)">Retirer</button>`}`).join(" ")}</div>` : ""}</td>
         <td><div class="ligne" style="gap:4px">${places(c)}</div></td>
         <td><label class="adm-actif"><input type="checkbox" data-a="actif" aria-label="${esc(c.nom)} actif" ${c.inactif ? "" : "checked"}><span>actif</span></label></td>
         <td style="text-align:right;white-space:nowrap">${c.nom === moi ? `<a class="hint" href="#/compte">Mon compte</a>` : `${c.admin && c.second_facteur ? `<button class="ghost petit" data-a="reinit">Second facteur…</button>` : ""}${c.agenda ? `<button class="ghost petit" data-a="agenda" title="Coupe son adresse d'abonnement à l'agenda (appareil perdu, compte volé)">Couper l'agenda</button>` : ""}<button class="ghost petit" data-a="mdp">Mot de passe…</button><button class="ghost petit" data-a="suppr">Supprimer</button>`}</td>
@@ -192,6 +192,11 @@ async function vueComptes(el, moi) {
       catch (err) { toast(err.message, true); }
       maj();
     });
+    $$("[data-appareil]", tr).forEach(b => armer(b, "Confirmer", async () => {
+      try { await api("DELETE", `/api/admin/comptes/${encodeURIComponent(nom)}/appareils/${encodeURIComponent(b.dataset.appareil)}`); toast(`Appareil retiré : il ne recevra plus les notifications de ${nom}.`); }
+      catch (err) { toast(err.message, true); }
+      maj();
+    }));
     const suppr = $('[data-a="suppr"]', tr);
     if (suppr && compte.admin) suppr.onclick = () => confirmerAction({
       titre: `Supprimer ${nom}`,

@@ -92,6 +92,10 @@ type Compte struct {
 	ReinitLocale  float64        `json:"reinit_locale,omitempty"` // voir ReinitialiserLocalement
 	// Agenda : l'adresse d'abonnement à l'agenda des séances (agenda.go), jamais d'un administrateur.
 	Agenda *JetonAgenda `json:"agenda,omitempty"`
+	// Appareils : ceux qui reçoivent ses notifications (appareils.go), jamais d'un administrateur.
+	Appareils []Appareil `json:"appareils,omitempty"`
+	// NotifsCoupees : les genres de notification qu'il ne veut pas sur ses appareils.
+	NotifsCoupees []string `json:"notifs_coupees,omitempty"`
 }
 
 // Role renvoie le rôle du compte dans un univers ("" : aucun accès, toujours pour un administrateur).
@@ -157,8 +161,8 @@ func reprendre(c *Compte) bool {
 	}
 	if c.Admin {
 		change = len(c.Roles)+len(c.Admis)+len(c.Persos)+len(c.Jetons) > 0 || change
-		change = change || c.Agenda != nil
-		c.Roles, c.Admis, c.Persos, c.Jetons, c.Agenda = nil, nil, nil, nil, nil
+		change = change || c.Agenda != nil || len(c.Appareils) > 0
+		c.Roles, c.Admis, c.Persos, c.Jetons, c.Agenda, c.Appareils = nil, nil, nil, nil, nil, nil
 		return change
 	}
 	for u, role := range c.Roles {
@@ -212,6 +216,8 @@ func copie(c *Compte) Compte {
 	x.Admis = append([]string(nil), c.Admis...)
 	x.Jetons = append([]Jeton(nil), c.Jetons...)
 	x.SecondFacteur = copieSecondFacteur(c.SecondFacteur)
+	x.Appareils = append([]Appareil(nil), c.Appareils...)
+	x.NotifsCoupees = append([]string(nil), c.NotifsCoupees...)
 	if c.Agenda != nil {
 		a := *c.Agenda
 		x.Agenda = &a
@@ -460,7 +466,8 @@ func (r *Registre) Modifier(nom string, f func(*Compte) error) (Compte, error) {
 		return Compte{}, ErrAdmin
 	}
 	if x.Admin {
-		x.Agenda = nil // devenu administrateur, il ne lit plus rien des univers
+		x.Agenda = nil    // devenu administrateur, il ne lit plus rien des univers
+		x.Appareils = nil // ni ne reçoit leurs notifications
 	}
 	*c = x
 	if avant.Admin && !avant.Inactif && !r.resteUnAdmin() {

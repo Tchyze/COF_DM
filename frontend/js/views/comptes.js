@@ -1,5 +1,6 @@
 // Mode serveur : « Mon compte » (mot de passe, jetons d'API) et, pour le MJ, les joueurs de son
 // univers. Les comptes du serveur se gèrent dans l'administration (admin.js).
+import { panneauAppareils } from "../appareils.js";
 import { $, $$, esc, api, toast, armer, dateHeure } from "../ui.js";
 import { typeDe } from "../schema.js";
 
@@ -48,7 +49,9 @@ export async function panneauCompte(box, { jetons = true, apres = null } = {}) {
     ${c.jetons.length ? `<table class="tab"><tbody>${c.jetons.map(j => `<tr><td>${esc(j.nom || "sans nom")}<br><small class="hint">${j.utilise ? "utilisé le " + dateHeure(j.utilise) : "jamais utilisé"}</small></td><td class="num" style="white-space:nowrap">${dateHeure(j.cree)}</td>
       <td style="text-align:right"><button class="ghost petit" data-jeton="${esc(j.id)}">Retirer</button></td></tr>`).join("")}</tbody></table>` : `<p class="vide">Aucun jeton.</p>`}
     <form id="cpt-jeton" class="ligne"><input id="cpt-jeton-nom" placeholder="À quoi sert-il ? (ex. import Obsidian)" maxlength="60" style="flex:1;min-width:0"><button type="submit">＋ Créer un jeton</button></form>
-    <div id="cpt-clair" class="alerte" hidden></div>` : ""}`;
+    <div id="cpt-clair" class="alerte" hidden></div>` : ""}
+    <div id="cpt-notifs"></div>`;
+  if (!c.admin && (c.role === "mj" || c.role === "joueur")) panneauAppareils($("#cpt-notifs", box), c.role);
   const maj = () => panneauCompte(box, { jetons });
   $("#cpt-mdp", box).onsubmit = async e => {
     e.preventDefault();
