@@ -507,6 +507,22 @@ Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la lis
 | `POST /api/notifications/lues` `{"ids": [...]}` | Marque lues ces notifications du MJ (`ids` vide : toutes). Réponse : comme la lecture. |
 | `POST /api/agenda/{id}/relance` | Prévient les attendus qui n'ont pas encore répondu (fonctionnalité `agenda`). Réponse : `{"relances": n, "noms": ["Arwen"]}` (`0` : tout le monde a répondu). Séance annulée, jouée ou finie : `422` ; inconnue : `404`. Notée au journal. |
 
+### Notifications sur les appareils
+
+Serveur seulement, avec son adresse publique (`-origine`, en HTTPS ; `http://localhost` pour un essai sur la machine) : chaque notification qui entre dans une cloche part aussi aux appareils inscrits du compte concerné (Web Push). Joueur : celles du PJ de son compte ; MJ : celles du MJ de l'univers ; auditeur et administrateur : rien. Le message est neutre, chiffré pour l'appareil : `{"titre": "COF DM", "texte", "lien", "etiquette"}`, où `texte` dit seulement le genre (« Rappel de séance », « Séance déplacée », « Séance annulée », « Le MJ attend votre réponse », « Un joueur a répondu », « Message du MJ » ; plusieurs : « 3 nouvelles notifications ») et `lien` mène à l'agenda de l'univers (`/joueur.html?univers=…#/agenda`, ou `/?univers=…#/agenda` pour le MJ). De 22 h à 8 h (fuseau de l'univers), rien ne part : à 8 h, un seul message par compte. Une notification de plus de 12 heures ne part plus. Le relais répond `404` ou `410` : l'appareil est retiré ; cinq refus d'affilée aussi. `frontend/sw.js` affiche le message et ouvre `lien` ; il ne garde rien en cache.
+
+Routes de « Mon compte » (tout compte qui n'est pas administrateur ; ouvertes au rôle `joueur`, comme le reste de `/api/compte`) :
+
+| Requête | Effet |
+|---|---|
+| `GET /api/compte/notifications` | `{"possible", "cle", "appareils": [{"id", "nom", "cree", "recu"?, "erreur"?}], "coupees", "genres", "calme": [22, 8]}`. `possible` : ce serveur envoie (adresse publique) ; `cle` : sa clé publique VAPID, pour `pushManager.subscribe`. Jamais l'adresse d'envoi ni les clés d'un appareil. |
+| `POST /api/compte/notifications/appareils` `{"nom", "abonnement": {"endpoint", "expirationTime"?, "keys": {"p256dh", "auth"}}}` | Inscrit l'appareil (l'abonnement que rend le navigateur) ; le même `endpoint` remplace l'ancien. Seulement un relais connu (`fcm.googleapis.com`, `updates.push.services.mozilla.com`, `*.push.apple.com`, `*.notify.windows.com`), en HTTPS : sinon `422`. Dix appareils au plus (le plus ancien part). Sans adresse publique : `409` ; administrateur : `403`. Réponse : comme la lecture, avec `ici` (le numéro de cet appareil). Entre au journal de sécurité. |
+| `DELETE /api/compte/notifications/appareils/{id}` | Retire un de ses appareils. |
+| `PUT /api/compte/notifications/reglages` `{"coupees": ["rappel", …]}` | Les genres que ses appareils ne reçoivent pas (la cloche les garde tous) : `rappel`, `deplacee`, `annulee`, `relance`, `reponse`, `message` ; un autre est ignoré. |
+| `POST /api/compte/notifications/essai` | Un message d'essai à tous ses appareils, tout de suite (même la nuit) : `{"envoyes"}`. Aucun appareil : `409`. |
+
+Administration : `GET /api/admin/comptes` montre `appareils` (nom et dates, jamais l'adresse ni les clés) ; `DELETE /api/admin/comptes/{nom}/appareils/{id}` en retire un (appareil perdu, compte volé), entre au journal de sécurité. Le compte devient administrateur : ses appareils sont retirés.
+
 ## Écran du MJ
 
 Ce que l'écran du MJ (`#/table`) affiche. Ces réponses contiennent les champs réservés au MJ.

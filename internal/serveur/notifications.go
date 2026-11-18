@@ -189,6 +189,9 @@ func (s *Serveur) notifier(n store.NouvelleNotif, pour ...int64) {
 	if len(pjs) > 0 && s.joueurs != nil {
 		s.joueurs.envoyer(map[string]any{"type": "notifications", "pj": pjs})
 	}
+	if s.opt.push != nil {
+		s.pousser(s.opt.push.horloge())
+	}
 }
 
 // ---------------------------------------------------------------- textes
@@ -339,6 +342,7 @@ func (a *Application) veillerNotifications() {
 				a.mu.RUnlock()
 				if servi {
 					o.srv.veillerNotifications(maintenant)
+					o.srv.pousser(maintenant) // dont celles retenues pendant les heures calmes
 					o.requetes.sortir()
 				}
 			}
