@@ -2,7 +2,7 @@
 // Routes : #/  #/t/<type>  #/f/<id>  #/f/<id>/modifier  #/nouveau/<type>?nom=…  #/nouveau?nom=…
 //          #/bestiaire[/<id>|/nouveau]  #/createur
 //          #/voies[/<profils|peuples>]  #/aller/<nom>  #/table[/<quête>]  #/preparer/<séance>  #/apres/<séance>  #/graphe[/<id>]  #/chronologie  #/agenda  #/liens  #/journal  #/parametres[/<bloc>]
-import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers } from "./ui.js";
+import { $, $$, esc, api, toast, delai, universOnglet, choisirUniversOnglet, enTetesUnivers, dialogue } from "./ui.js";
 import { chargerSchema, schema, typeDe, vignette, badgeType, actif as fonctionActive } from "./schema.js";
 import * as tableau from "./views/tableau.js";
 import * as table from "./views/table.js";
@@ -451,6 +451,32 @@ function ecranSecondFacteur(marque, facteurs) {
   initClocheMJ();
   route();
 })();
+// Message du MJ : un mot à tous les joueurs d'une campagne, à sens unique (cloche et téléphone).
+async function ecrireAuxJoueurs() {
+  let campagnes;
+  try { campagnes = (await api("GET", "/api/entites?type=campagne")).filter(c => !c.archive); }
+  catch (e) { toast(e.message, true); return; }
+  if (!campagnes.length) { toast("Aucune campagne : le message part aux PJ d'une campagne.", true); return; }
+  const { voile, fermer } = dialogue("Message aux joueurs", `<form class="colonne" id="msg-form" style="gap:10px">
+      <label class="champ"><span>Campagne</span><select id="msg-camp">${campagnes.map(c => `<option value="${c.id}">${esc(c.nom)}</option>`).join("")}</select></label>
+      <label class="champ"><span>Message <small id="msg-compte">0 / 500</small></span><textarea id="msg-texte" rows="5" maxlength="500" required placeholder="Ex. : on commence à 20 h 30 jeudi, pensez à vos fiches."></textarea></label>
+      <p class="hint">Il arrive dans la cloche 🔔 de chaque joueur de la campagne (PJ actifs), et sur les téléphones inscrits. Les joueurs ne peuvent pas y répondre.</p>
+      <div class="row"><button type="submit" class="primary">📣 Envoyer</button><button type="button" id="msg-annuler">Annuler</button></div>
+    </form>`, { piege: true });
+  const texte = $("#msg-texte", voile);
+  texte.oninput = () => { $("#msg-compte", voile).textContent = `${texte.value.length} / 500`; };
+  $("#msg-annuler", voile).onclick = fermer;
+  $("#msg-form", voile).onsubmit = async e => {
+    e.preventDefault();
+    try {
+      const r = await api("POST", "/api/notifications/message", { campagne: +$("#msg-camp", voile).value, texte: texte.value });
+      toast(`Message envoyé à ${r.noms.join(", ")}.`);
+      fermer();
+    } catch (err) { toast(err.message, true); }
+  };
+  texte.focus();
+}
+
 // La cloche du MJ : relue toutes les 30 secondes tant que l'écran est visible, et au retour sur l'écran.
 function initClocheMJ() {
   const cloche = initCloche({
@@ -458,6 +484,7 @@ function initClocheMJ() {
     marquer: ids => api("POST", "/api/notifications/lues", { ids }),
     placer: b => $("#ouvrir-recherche").before(b),
     badge: n => $("#burger").classList.toggle("a-notifs", n > 0),
+    ecrire: window.cofAcces?.lecture_seule ? null : ecrireAuxJoueurs,
   });
   cloche.rafraichir();
   setInterval(() => { if (document.visibilityState === "visible") cloche.rafraichir(); }, 30000);
