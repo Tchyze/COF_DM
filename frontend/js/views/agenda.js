@@ -159,6 +159,7 @@ export async function mount(el, params) {
       ${lecture() ? "" : `<div class="agenda-actions">
         <button type="button" class="petit" data-action="modifier">✎ Modifier</button>
         <button type="button" class="petit ghost" data-action="dupliquer">⧉ Dupliquer</button>
+        ${!s.statut || s.statut === "prévue" ? (new Date(s.fin) > new Date() && s.participants.some(p => !p.reponse) ? `<button type="button" class="petit ghost" data-action="relancer" title="Prévenir ceux qui n'ont pas encore répondu">❓ Relancer</button>` : "") : ""}
         <button type="button" class="petit ghost" data-action="${s.statut === "annulée" ? "retablir" : "annuler"}">${s.statut === "annulée" ? "↺ Rétablir" : "✕ Annuler"}</button>
       </div>`}
       ${seule ? `<p><a href="#/f/${s.id}">Ouvrir la fiche</a></p>` : ""}
@@ -170,6 +171,13 @@ export async function mount(el, params) {
       const a = b.dataset.action;
       if (a === "modifier") return planifier(s, charger, campagnes);
       if (a === "dupliquer") return dupliquer(s, charger);
+      if (a === "relancer") {
+        try {
+          const r = await api("POST", `/api/agenda/${s.id}/relance`);
+          toast(r.relances ? `Relance envoyée à ${r.noms.join(", ")}.` : "Tout le monde a déjà répondu.");
+        } catch (e) { toast(e.message, true); }
+        return;
+      }
       try {
         await api("PATCH", "/api/entites/" + s.id, { data: { statut: a === "annuler" ? "annulée" : "prévue" } });
         toast(a === "annuler" ? "Séance annulée : elle reste visible, barrée." : "Séance rétablie.");

@@ -177,7 +177,7 @@ func Ouvrir(chemin string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
-	if _, err := db.Exec(schema + schemaDocuments + schemaFeuilles + schemaSync + schemaConflits); err != nil {
+	if _, err := db.Exec(schema + schemaDocuments + schemaFeuilles + schemaSync + schemaConflits + schemaNotifications); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("création du schéma : %w", err)
 	}

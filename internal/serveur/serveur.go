@@ -287,6 +287,7 @@ func (s *Serveur) routes() {
 	s.routesDes()
 	s.routesAfficheur()
 	s.routesAgenda()
+	s.routesNotifications()
 	s.routesPageJoueurs() // après routesAcces, qui crée la liste blanche du rôle « joueur »
 
 	m.HandleFunc("POST /api/relations", s.relier)

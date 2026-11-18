@@ -766,10 +766,17 @@ func (s *Serveur) repondreJoueur(w http.ResponseWriter, r *http.Request) {
 		if x.ID != seance || x.Statut == "annulée" {
 			continue
 		}
-		if _, err := s.store.Repondre(seance, mesPJ[x.Campagne.ID], in.Reponse, auteurDe(r)); err != nil {
+		pj, avant := mesPJ[x.Campagne.ID], ""
+		for _, p := range x.Participants {
+			if p.PJ == pj {
+				avant = p.Reponse
+			}
+		}
+		if _, err := s.store.Repondre(seance, pj, in.Reponse, auteurDe(r)); err != nil {
 			erreurStore(w, err)
 			return
 		}
+		s.noterReponse(x, pj, avant, in.Reponse)
 		s.agendaJoueur(w, r)
 		return
 	}
