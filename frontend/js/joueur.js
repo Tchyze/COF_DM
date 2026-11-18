@@ -14,6 +14,7 @@ import { ligneJet, DES_RAPIDES } from "./des.js";
 import { rendu } from "./md.js";
 import { horaires, texteJour, texteParticipants } from "./views/agenda.js";
 import { panneauAbonnement } from "./abonnement.js";
+import { initCloche } from "./cloche.js";
 
 const CLE = "cof-joueur-pj";
 const etat = { serveur: false, edition: false, combat: null, pj: null, pjs: [], vue: "fiche", de: 20, jets: [], dernierJet: 0, crit: 20, docs: [], doc: 0, fonctions: {} };
@@ -48,7 +49,7 @@ function vueChoix() {
     b.onclick = () => {
       etat.pj = etat.pjs.find(p => p.id === +b.dataset.pj);
       garderChoix(etat.pj.id);
-      etat.docs = []; chargerDocs();
+      etat.docs = []; chargerDocs(); cloche?.rafraichir();
       location.hash = "#/";
       route();
       proposerMontee();
@@ -128,6 +129,7 @@ async function relirePJ() {
   const p = etat.pjs.find(x => x.id === etat.pj?.id);
   if (p) etat.pj = p;
   $("#pj-date").hidden = !etat.pj?.date;
+  cloche?.cacher(!etat.pj || etat.vue === "choix");
   $("#pj-date").textContent = etat.pj?.date ? "📅 " + etat.pj.date : "";
   rafraichirFiche();
   proposerMontee();
@@ -557,7 +559,7 @@ function montrer(m) {
   $("#montre-fermer", zone).onclick = () => { montreFerme = m.seq; zone.remove(); };
 }
 
-let ws = null, essais = 0, dernier = Date.now(), arrete = false;
+let ws = null, essais = 0, dernier = Date.now(), arrete = false, cloche = null;
 function connecter() {
   if (arrete) return;
   const sock = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}${lien("/api/joueur/direct")}`);
@@ -568,7 +570,7 @@ function connecter() {
     const m = JSON.parse(e.data);
     if (m.type === "jet") { ajouterJets([m.jet]); return; }
     if ("montre" in m) montrer(m.montre); // « etat » à la connexion, « montre » quand le MJ change
-    if (m.type === "etat") { relireJets(); chargerDocs(); etat.combat = m.combat; if (etat.edition !== m.edition) { etat.edition = m.edition; rafraichirFiche(); } }
+    if (m.type === "etat") { relireJets(); chargerDocs(); cloche?.rafraichir(); etat.combat = m.combat; if (etat.edition !== m.edition) { etat.edition = m.edition; rafraichirFiche(); } }
     else if (m.type === "combat") etat.combat = m.combat;
     else if (m.type === "edition") { etat.edition = m.active; toast(m.active ? "Le MJ a déverrouillé les feuilles : vous pouvez modifier la vôtre." : "Le MJ a verrouillé les feuilles."); if (etat.vue === "fiche" && etat.pj) vueFiche(); }
     else if (m.type === "fiche" && etat.pj && m.id === etat.pj.id) relirePJ();
@@ -576,6 +578,7 @@ function connecter() {
     else if (m.type === "document") { if (etat.pj && m.pj.includes(etat.pj.id)) { toast(`✉ Nouveau document : ${m.nom}`); chargerDocs(); } }
     else if (m.type === "documents") chargerDocs();
     else if (m.type === "pot") { if (etat.vue === "pot") vuePot(); }
+    else if (m.type === "notifications") { if (etat.pj && m.pj.includes(etat.pj.id)) { cloche?.rafraichir(); toast("🔔 Nouvelle notification"); } }
     if (etat.vue === "combat") vueCombat();
     rendreBandeau();
   };
@@ -658,6 +661,12 @@ async function demarrer() {
   if (e.serveur && !etat.pj && !etat.pjs.length) { fermee("Aucun personnage", "Aucun PJ n'est rattaché à votre compte, ou sa fiche n'est pas partagée. Demandez au MJ.", true); return; }
   if (!etat.pj) garderChoix(0);
   $("#pj-changer").onclick = () => { location.hash = "#/choix"; };
+  // la cloche : relue par le direct (nouvelle notification, reconnexion) et au changement de PJ
+  cloche = initCloche({
+    lire: () => etat.pj ? api("GET", avecPJ("/api/joueur/notifications")) : Promise.resolve({ non_lues: 0, notifications: [] }),
+    marquer: ids => api("POST", avecPJ("/api/joueur/notifications/lues"), { ids }),
+    placer: b => $("#conn").before(b),
+  });
   window.addEventListener("hashchange", route);
   connecter();
   await route();
