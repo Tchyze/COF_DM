@@ -44,6 +44,7 @@ func (s *Serveur) routesPageJoueurs() {
 		s.routesPotJoueurs(m)
 		s.routesMontreJoueurs(m)
 		s.routesAgendaJoueurs(m)
+		s.routesNotificationsJoueurs(m)
 	}
 	if s.acces.comptes != nil {
 		return
@@ -59,10 +60,11 @@ func (s *Serveur) routesPageJoueurs() {
 	l.HandleFunc("GET /api/joueur/direct", s.joueurDirect)
 	// les aides de jeu reçues par le PJ choisi
 	s.routesDocumentsJoueurs(l)
-	s.routesDesJoueurs(l)    // un jet, qui ne touche pas à l'univers
-	s.routesPotJoueurs(l)    // une proposition de partage du pot commun, que le MJ valide ou refuse
-	s.routesMontreJoueurs(l) // l'image que le MJ montre à la table
-	s.routesAgendaJoueurs(l) // les séances à venir de ses campagnes, en lecture
+	s.routesDesJoueurs(l)           // un jet, qui ne touche pas à l'univers
+	s.routesPotJoueurs(l)           // une proposition de partage du pot commun, que le MJ valide ou refuse
+	s.routesMontreJoueurs(l)        // l'image que le MJ montre à la table
+	s.routesAgendaJoueurs(l)        // les séances à venir de ses campagnes, en lecture
+	s.routesNotificationsJoueurs(l) // sa cloche ; seule écriture : marquer ses notifications lues
 	l.HandleFunc("GET /api/entites/{id}/feuille", s.feuilleLireLibre)
 	l.HandleFunc("PUT /api/entites/{id}/feuille", s.feuilleEcrireLibre)
 	l.HandleFunc("POST /api/joueur/pj/{id}/niveau", s.monterNiveauJoueur(s.pjLibre)) // le niveau accordé par le MJ

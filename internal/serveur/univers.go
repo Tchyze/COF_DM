@@ -148,6 +148,7 @@ func (a *Application) Demarrer(demande string) error {
 		}
 	}
 	go a.veiller()
+	go a.veillerNotifications()
 	if !a.multi() {
 		go a.synchroniserEnFond()
 		if a.opt.Relancer != nil { // l'application lancée par un MJ, pas un banc d'essai

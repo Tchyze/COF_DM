@@ -377,6 +377,8 @@ Deux façons d'y entrer :
 | `GET /api/joueur/agenda?pj=4` | Les séances pas encore finies des campagnes du joueur (fonctionnalité `agenda`), de la plus proche à la plus lointaine : `{"fuseau", "seances": [{"id", "nom", "campagne"?, "nature"?, "statut"?, "date", "debut", "fin", "jour_entier"?, "lieu"?, "visio"?, "infos"?, "participants": [{"pj", "nom", "joueur"?, "reponse"?}], "mon_pj"}]}`. `mon_pj` : le PJ qui répond pour lui à cette séance. Ses campagnes : sur un serveur, celle du PJ de son compte (quel que soit `pj`) ; à la maison et pour le MJ, celles du PJ `pj` et des autres PJ actifs au même nom de joueur. Une séance annulée y reste (`statut`). Rien d'autre de la fiche : ni conflit, ni note, ni préparation, ni résumé ; les liens `[[Nom]]` de `infos` sont remplacés par leur texte. Même règle pour `pj` que les documents. |
 | `POST /api/joueur/agenda/{id}/reponse?pj=4` `{"reponse": "présent" \| "peut-être" \| "absent" \| ""}` | Le joueur dit s'il vient à une séance pas encore finie et non annulée de ses campagnes, pour le PJ qu'il y joue (`mon_pj` ; sur un serveur, celui de son compte, quel que soit `pj`) ; `""` retire sa réponse. Autre séance : `404` ; réponse inconnue : `422`. Ne touche qu'à sa réponse (ni la date de modification de la séance, ni rien d'autre) ; notée au journal. Réponse : comme `GET /api/joueur/agenda`. |
 | `GET /api/joueur/agenda/ics?pj=4` | Ces mêmes séances en fichier iCalendar (comme `GET /api/agenda/ics`), à ajouter à son propre agenda. |
+| `GET /api/joueur/notifications?pj=4` | La cloche du joueur (voir « Notifications ») : `{"non_lues", "notifications": [...]}`. Sur un serveur, celles du PJ de son compte (quel que soit `pj`) ; à la maison, celles du PJ `pj` et des autres PJ actifs au même nom de joueur. |
+| `POST /api/joueur/notifications/lues?pj=4` `{"ids": [...]}` | Marque lues ces notifications (`ids` vide : toutes), parmi les siennes seulement. Seule écriture de la cloche ouverte aux joueurs. Réponse : comme la lecture. |
 | `GET /api/joueur/montre/image?seq=` | L'image que le MJ montre à la table, et elle seule (`404` s'il n'en montre pas). `seq` ne sert qu'à changer d'adresse quand il en montre une autre. |
 
 Le combat vu par les joueurs : `{"nom", "round", "ordre": [{"nom", "camp", "pj"?, "a_terre"?, "courant", "suivant", "etats": ["…"]}]}`. `pj` : la fiche du PJ, pour que son joueur reconnaisse son tour ; `a_terre` : PJ inconscient. Les adversaires et les alliés hors de combat n'y figurent pas, ni les combattants cachés par le MJ (leur tour ne désigne personne) ; `nom` est le nom d'affichage quand le MJ en a donné un ; aucun chiffre (PV, DEF, initiative, attaques) n'est transmis. C'est le combat en cours le plus récemment joué.
@@ -488,6 +490,22 @@ Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la lis
 | `PUT /api/agenda/reglages` `{"fuseau": "Europe/Paris"}` | Change le fuseau horaire de l'univers (nom IANA ; `422` s'il est inconnu). Noté au journal. |
 
 **Abonnement** (serveur seulement). Google Agenda, Apple Calendrier, Proton Calendar, Outlook… relisent une adresse depuis leurs propres serveurs, sans session ni cookie : `GET /agenda/<jeton>.ics` (hors de `/api`, sans univers visé) répond avec le jeton de l'adresse pour seule clé. Un jeton par compte (`POST /api/compte/agenda`), qui ne donne que ce flux, jamais l'API ; il est gardé chiffré et par son empreinte, et n'est écrit dans aucun journal. Le flux réunit tous les univers du compte où l'agenda est activé : comme joueur, les séances de la campagne de son PJ (fiche partagée) ; comme MJ, toutes celles de l'univers ; comme auditeur, rien. Il garde les séances finies depuis moins de 60 jours. Même contenu que le fichier `.ics` : rien de réservé au MJ. Jeton inconnu, changé, retiré, ou compte désactivé : `404`, toujours la même réponse ; au-delà de 30 adresses inconnues depuis une même adresse IP sur la durée des essais de connexion : `429`. `GET` ou `HEAD` seulement. Le reverse proxy, lui, note les adresses demandées dans son propre journal. Sur l'application de bureau : `404` (un fichier `.ics` à télécharger en tient lieu).
+
+## Notifications
+
+La cloche du MJ et celle des joueurs. Une notification : `{"id", "cree", "genre", "pour", "titre", "texte"?, "lien"?, "seance"?, "lue"}`. `pour` : `0` pour le MJ (tous les MJ de l'univers la partagent), sinon le PJ à qui elle s'adresse ; `lien` : où mène un clic (`#/agenda`). On en garde 100 par destinataire ; la cloche montre les 50 dernières.
+
+Genres : `rappel` (la veille de la séance à 19 h, heure de l'univers, aux attendus qui n'ont pas répondu `absent`), `deplacee` (date ou heure changée, ou séance rétablie, à tous les attendus), `annulee`, `relance` (bouton « Relancer » du MJ), `reponse` (pour le MJ : un joueur répond ou retire sa réponse). Les trois premiers viennent d'un veilleur qui passe une fois par minute sur les séances à venir (fonctionnalité `agenda`) ; une séance vue pour la première fois ne fait rien dire (sauf son rappel, s'il est l'heure). Jamais une note du MJ.
+
+Elles naissent là où l'univers fait foi : sur un serveur, ou sur le bureau qui n'est relié à aucun serveur. Elles ne se synchronisent pas (table locale de l'univers). **Copie reliée** : aucune n'y naît ; ces routes passent au serveur avec le jeton du poste (`503` s'il ne répond pas), et la relance envoie d'abord les changements d'ici.
+
+Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la liste blanche du rôle `joueur`. Une notification pour un joueur part aussi par le WebSocket de la page des joueurs : `{"type": "notifications", "pj": [<PJ>]}`.
+
+| Requête | Effet |
+|---|---|
+| `GET /api/notifications` | La cloche du MJ : `{"non_lues", "notifications": [...]}`, des plus récentes aux plus anciennes. |
+| `POST /api/notifications/lues` `{"ids": [...]}` | Marque lues ces notifications du MJ (`ids` vide : toutes). Réponse : comme la lecture. |
+| `POST /api/agenda/{id}/relance` | Prévient les attendus qui n'ont pas encore répondu (fonctionnalité `agenda`). Réponse : `{"relances": n, "noms": ["Arwen"]}` (`0` : tout le monde a répondu). Séance annulée, jouée ou finie : `422` ; inconnue : `404`. Notée au journal. |
 
 ## Écran du MJ
 

@@ -27,6 +27,7 @@ import { clesPossibles, prouverCle, messageCle } from "./webauthn.js";
 import { boutonInstaller } from "./installer.js";
 import { initBadgeMaj } from "./majour.js";
 import { initDes } from "./des.js";
+import { initCloche } from "./cloche.js";
 
 const GROUPES = [
   ["Monde", ["pnj", "lieu", "faction", "objet", "lore", "evenement"]],
@@ -447,6 +448,19 @@ function ecranSecondFacteur(marque, facteurs) {
   await dessinerNav();
   if (fonctionActive("des")) initDes({ lecture: !!acces.lecture_seule });
   if (!acces.lecture_seule) initPastilleMontre(); // ce qui est montré à la table, à retirer d'un clic
+  initClocheMJ();
   route();
 })();
+// La cloche du MJ : relue toutes les 30 secondes tant que l'écran est visible, et au retour sur l'écran.
+function initClocheMJ() {
+  const cloche = initCloche({
+    lire: () => api("GET", "/api/notifications"),
+    marquer: ids => api("POST", "/api/notifications/lues", { ids }),
+    placer: b => $("#ouvrir-recherche").before(b),
+    badge: n => $("#burger").classList.toggle("a-notifs", n > 0),
+  });
+  cloche.rafraichir();
+  setInterval(() => { if (document.visibilityState === "visible") cloche.rafraichir(); }, 30000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") cloche.rafraichir(); });
+}
 export { schema };
