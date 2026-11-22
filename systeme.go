@@ -25,6 +25,8 @@ func alerte(msg string) {
 	switch runtime.GOOS {
 	case "windows":
 		_ = exec.Command("mshta", "javascript:alert("+jsChaine("COF DM\n\n"+msg)+");close()").Run()
+	case "darwin":
+		_ = exec.Command("osascript", "-e", "activate", "-e", "display alert \"COF DM\" message "+asChaine(msg)+" as critical").Run()
 	case "linux":
 		if _, err := exec.LookPath("zenity"); err == nil {
 			_ = exec.Command("zenity", "--error", "--title=COF DM", "--text="+msg).Run()
@@ -65,6 +67,9 @@ func dialogueDisponible() bool {
 		_, err1 := exec.LookPath("zenity")
 		_, err2 := exec.LookPath("kdialog")
 		return err1 == nil || err2 == nil
+	case "darwin":
+		_, err := exec.LookPath("osascript")
+		return err == nil
 	}
 	return false
 }
@@ -88,6 +93,20 @@ func dialogueFichier(enregistrer bool, nom, dossier string) (string, error) {
 			"$d.InitialDirectory = " + psChaine(dossier) + "; " + options +
 			"if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.FileName) }"
 		cmd = exec.Command("powershell", "-NoProfile", "-STA", "-NonInteractive", "-Command", script)
+	case "darwin":
+		// « activate » met la boîte devant la fenêtre ; annuler fait sortir osascript en erreur
+		lieu := ""
+		if i, err := os.Stat(dossier); err == nil && i.IsDir() {
+			lieu = " default location (POSIX file " + asChaine(dossier) + ")"
+		}
+		choix := "choose file with prompt \"Ouvrir un univers COF DM\"" + lieu
+		if enregistrer {
+			choix = "choose file name with prompt \"Enregistrer l'univers\"" + lieu
+			if propose != "" {
+				choix += " default name " + asChaine(propose)
+			}
+		}
+		cmd = exec.Command("osascript", "-e", "activate", "-e", "POSIX path of ("+choix+")")
 	case "linux":
 		depart := filepath.Join(dossier, propose)
 		if propose == "" {
@@ -120,6 +139,11 @@ func dialogueFichier(enregistrer bool, nom, dossier string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// asChaine écrit une chaîne AppleScript entre guillemets.
+func asChaine(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`
 }
 
 // psChaine écrit une chaîne PowerShell entre apostrophes.

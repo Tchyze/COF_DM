@@ -59,6 +59,10 @@ func dossierParDefaut() string {
 		if d := os.Getenv("APPDATA"); d != "" {
 			return filepath.Join(d, "COF DM")
 		}
+	case "darwin":
+		if h, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(h, "Library", "Application Support", "COF DM")
+		}
 	default:
 		if d := os.Getenv("XDG_DATA_HOME"); d != "" {
 			return filepath.Join(d, "cof-dm")
@@ -526,7 +530,7 @@ func main() {
 			}
 		}()
 		opt.Relancer = func(programme string) {
-			cmd := exec.Command(programme, os.Args[1:]...)
+			cmd := exec.Command(majour.Lanceur(programme), os.Args[1:]...) // macOS : le programme de l'application
 			cmd.Env = append(os.Environ(), envRelance+"=1")
 			if err := cmd.Start(); err != nil {
 				log.Printf("relance après la mise à jour impossible : %v", err)

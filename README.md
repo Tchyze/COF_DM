@@ -2,7 +2,7 @@
 
 Gestionnaire de monde et de campagnes pour **Chroniques Oubliées Fantasy** : PNJ, lieux, factions, objets, lore, quêtes, rencontres, séances, PJ, secrets et règles, reliés entre eux, avec recherche, graphe, chronologie, « qui sait quoi » et une API complète pour qu'un programme (ou Claude) puisse tenir le monde à jour.
 
-Application de bureau Windows / Linux, données locales, sans compte ni service payant. Le bestiaire, les feuilles de personnage, les voies et capacités, les rencontres et le combat sont dans l'application. Pour jouer à plusieurs, une **édition serveur** (image Docker) héberge les univers avec un compte par personne ; chaque joueur suit la partie sur son téléphone, et l'application de bureau du MJ s'y synchronise, même hors ligne.
+Application de bureau Windows / Mac / Linux, données locales, sans compte ni service payant. Le bestiaire, les feuilles de personnage, les voies et capacités, les rencontres et le combat sont dans l'application. Pour jouer à plusieurs, une **édition serveur** (image Docker) héberge les univers avec un compte par personne ; chaque joueur suit la partie sur son téléphone, et l'application de bureau du MJ s'y synchronise, même hors ligne.
 
 Le monde est **unique et persistant** : il n'y a pas d'état par campagne. Un PNJ tué dans une campagne reste mort partout ; chaque événement a des conséquences sur la suite.
 
@@ -520,7 +520,7 @@ L'application de bureau se met à jour seule, sur votre clic : **Paramètres →
 - **Canal Stable** : les versions publiées (`vX.Y.Z`), pour jouer.
 - **Canal Test** : en plus, les versions d'essai d'une modification en cours (`vX.Y.Z-test.N`), publiées pour l'essayer avant de la fusionner. Repasser en Stable propose la prochaine version stable.
 - **Installer et redémarrer** : l'univers est sauvegardé et fermé, la nouvelle version téléchargée puis **vérifiée** (la liste des empreintes est signée par la clé de publication de COF DM ; un fichier qui ne correspond pas est refusé et rien ne change), le programme remplacé, et l'application redémarre.
-- Se met à jour seul : l'exe Windows et l'AppImage. Une version compilée à la main se met à jour à la main. Le serveur Docker, lui, se met à jour par `docker compose pull && docker compose up -d` (image publiée) ou `docker compose up -d --build` (construite depuis le dépôt).
+- Se met à jour seul : l'exe Windows, l'application Mac (remplacée en entier, dans Applications) et l'AppImage. Une version compilée à la main se met à jour à la main. Le serveur Docker, lui, se met à jour par `docker compose pull && docker compose up -d` (image publiée) ou `docker compose up -d --build` (construite depuis le dépôt).
 
 Pour publier une version d'essai d'une branche : onglet **Actions → Release → Run workflow**, la branche, canal **test**.
 
@@ -649,6 +649,7 @@ Pour un serveur distant : `COF_DM_URL` (son adresse, en HTTPS), `COF_DM_JETON` (
 Les versions publiées (onglet *Releases*) fournissent un programme à lancer.
 
 - **Windows** : `COF-DM.exe` (WebView2, déjà présent sous Windows 10 et 11). **Il s'installe seul au premier lancement**, sans droits d'administrateur : le programme va dans `%LOCALAPPDATA%\Programs\COF DM`, un raccourci « COF DM » est créé sur le Bureau et dans le menu Démarrer, et COF DM apparaît dans « Applications installées » (d'où il se désinstalle). L'exe téléchargé, s'il était sur le Bureau ou dans les Téléchargements, est ensuite retiré. Relancer un exe plus ancien que la version installée ouvre simplement la version installée.
+- **Mac** (macOS 11 ou plus, Apple Silicon et Intel) : `COF-DM-x.y.z-macOS.dmg` ; l'ouvrir et glisser **COF DM** dans le dossier **Applications**, puis le lancer depuis Applications (ou le Launchpad). COF DM n'est pas enregistré chez Apple (le compte développeur est payant) : **au premier lancement**, macOS refuse de l'ouvrir. Ouvrez alors **Réglages Système → Confidentialité et sécurité**, descendez jusqu'au message sur COF DM et cliquez **Ouvrir quand même**, puis confirmez. C'est à faire une seule fois : les mises à jour automatiques suivantes s'ouvrent directement. Lancé depuis l'image disque ou les Téléchargements sans être glissé dans Applications, COF DM fonctionne, mais ne peut pas se mettre à jour seul. Désinstaller : mettre COF DM à la corbeille depuis Applications (vos données restent).
 - **Linux** : `COF-DM-x.y.z-x86_64.AppImage` ; le rendre exécutable (`chmod +x`) puis le lancer. Il faut WebKitGTK 4.1 sur le système (`libwebkit2gtk-4.1-0` sur Debian / Ubuntu, `webkit2gtk4.1` sur Fedora).
 
 Au lancement, l'application ouvre sa fenêtre ; ses données sont dans :
@@ -656,6 +657,7 @@ Au lancement, l'application ouvre sa fenêtre ; ses données sont dans :
 | Système | Dossier |
 |---|---|
 | Windows | `%APPDATA%\COF DM` |
+| Mac | `~/Library/Application Support/COF DM` |
 | Linux | `~/.local/share/cof-dm` |
 
 **Désinstaller (Windows)** : « Applications installées » → COF DM → Désinstaller. Le programme, ses raccourcis et son inscription partent ; vos données restent, sauf si vous demandez à les supprimer (elles serviront si vous réinstallez). COF DM doit être fermé.
@@ -731,7 +733,7 @@ go build -tags sqlite_fts5 -o cof-dm .                  # application de bureau
 go build -tags "sqlite_fts5 nogui serveur" -o cof-dm-serveur .   # édition serveur (celle de l'image Docker)
 ```
 
-La fenêtre native utilise WebView2 sous Windows, GTK 3 et WebKitGTK 4.1 sous Linux.
+La fenêtre native utilise WebView2 sous Windows, WebKit (WKWebView) sur Mac, GTK 3 et WebKitGTK 4.1 sous Linux. Le bureau Mac ne se compile que sur un Mac (Objective-C pour sa barre de menus, `gui_darwin.go`) ; l'application (`COF DM.app`) est assemblée par le workflow *Release* (`build/macos/Info.plist`).
 
 | Dossier | Contenu |
 |---|---|

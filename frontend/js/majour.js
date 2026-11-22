@@ -27,7 +27,7 @@ export async function panneauMaj(box) {
             : m.automatique && m.installable
             ? `<p class="hint">L'univers ouvert est sauvegardé et fermé, la nouvelle version vérifiée (signature de COF DM) puis installée, et l'application redémarre.</p>
                <div class="ligne"><button class="primary" id="maj-installer">⬆ Installer et redémarrer</button></div>`
-            : `<p class="hint">Ce programme ne se met pas à jour seul${m.automatique ? "" : " (version de développement, ou binaire Linux hors AppImage)"} : téléchargez la version depuis <a href="${esc(d.page)}" target="_blank" rel="noopener">sa page</a>.</p>`}
+            : `<p class="hint">Ce programme ne se met pas à jour seul${m.automatique ? "" : " (version de développement, binaire Linux hors AppImage, ou application Mac lancée hors du dossier Applications)"} : téléchargez la version depuis <a href="${esc(d.page)}" target="_blank" rel="noopener">sa page</a>.</p>`}
         </div>`
       : `<p class="hint">${m.verifie && !m.erreur ? "✓ L'application est à jour." : ""}</p>`}
       <div class="ligne"><button id="maj-chercher">Rechercher maintenant</button></div>`;
