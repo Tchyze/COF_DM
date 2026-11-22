@@ -1,6 +1,6 @@
 // Installer l'application sur une tablette : une icône sur l'écran d'accueil, qui l'ouvre en plein écran
-// dans le navigateur. Le navigateur ne le propose qu'en HTTPS : sans lui, aucun bouton ne s'affiche. Pas de
-// service worker : rien ne reste sur l'appareil, et l'application a besoin du serveur.
+// dans le navigateur. Le navigateur ne le propose qu'en HTTPS : sans lui, aucun bouton ne s'affiche. Le service
+// worker (sw.js) ne sert qu'aux notifications : rien ne reste sur l'appareil, et l'application a besoin du serveur.
 import { toast } from "./ui.js";
 
 let invite = null;

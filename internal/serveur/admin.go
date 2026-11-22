@@ -63,6 +63,7 @@ func (a *Application) routesAdmin() *http.ServeMux {
 	m.HandleFunc("DELETE /api/admin/comptes/{nom}", a.adminSupprimerCompte)
 	m.HandleFunc("POST /api/admin/comptes/{nom}/second-facteur/reinitialiser", a.adminReinitialiserSecondFacteur)
 	m.HandleFunc("DELETE /api/admin/comptes/{nom}/agenda", a.adminRetirerAgenda)
+	m.HandleFunc("DELETE /api/admin/comptes/{nom}/appareils/{id}", a.adminRetirerAppareil)
 	return m
 }
 
@@ -438,6 +439,9 @@ func vueAdmin(c comptes.Compte) map[string]any {
 			ag["utilise"] = c.Agenda.Utilise
 		}
 		v["agenda"] = ag
+	}
+	if len(c.Appareils) > 0 { // les appareils qui reçoivent ses notifications : nom et dates ; jamais l'adresse ni les clés
+		v["appareils"] = vueAppareils(c)
 	}
 	return v
 }

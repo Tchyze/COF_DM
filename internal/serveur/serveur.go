@@ -69,6 +69,7 @@ type Options struct {
 	Proxies []*net.IPNet
 	acces   *acces       // partagé par l'Application et les Serveurs des univers ouverts
 	app     *Application // application de bureau : le combat et les dés en direct passent par elle (direct.go)
+	push    *pousseur    // serveur avec une adresse publique en HTTPS : les notifications sur les appareils (push.go)
 	// ailleurs : mode serveur, les créneaux anonymes des autres univers servis (conflits d'agenda entre
 	// univers, agenda.go) ; nil sur le bureau.
 	ailleurs func(sauf string) []creneauExterne
@@ -99,6 +100,7 @@ type Serveur struct {
 	debit   debitJets      // … et ce qu'il reste à chaque lanceur
 	potMu   sync.Mutex     // les écritures du pot commun, l'une après l'autre (butin.go)
 	envoi   sync.Mutex     // un seul fichier reçu à la fois dans cet univers (limites sur un serveur)
+	pushMu  sync.Mutex     // une seule relève des notifications à envoyer aux appareils à la fois
 
 	intervalleDroits atomic.Int64 // écrans en direct : tous les combien leurs droits sont revus (suivi.go)
 }
