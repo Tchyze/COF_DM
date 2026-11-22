@@ -19,6 +19,7 @@ func ouvrirFenetre(url string) bool {
 		return false
 	}
 	defer w.Destroy()
+	menuSysteme(w)
 	w.SetTitle("COF DM")
 	w.SetSize(1400, 900, webview.HintNone)
 	w.Navigate(url)

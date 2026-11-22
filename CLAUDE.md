@@ -1,6 +1,6 @@
 # CLAUDE.md — COF DM
 
-Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Application de bureau Windows / Linux (fenêtre native autour d'une interface web embarquée), un fichier SQLite `.cofdm` par univers. Une édition serveur (image Docker) héberge plusieurs univers avec des comptes ; le bureau s'y synchronise. Le projet frère tracker_COF (bestiaire, feuilles, rencontres, combat) y est entièrement fusionné.
+Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Application de bureau Windows / Mac / Linux (fenêtre native autour d'une interface web embarquée), un fichier SQLite `.cofdm` par univers. Une édition serveur (image Docker) héberge plusieurs univers avec des comptes ; le bureau s'y synchronise. Le projet frère tracker_COF (bestiaire, feuilles, rencontres, combat) y est entièrement fusionné.
 
 - **Tout en français** : code, identifiants, commentaires, commits, docs.
 - **Avant de reprendre** : lire `SUIVI.md` (état, consignes du MJ, décisions), `PROJETS.md` (chantiers et priorités) et, s'il existe, `LOCAL.md` (installation du MJ, hors dépôt). Pour un gros chantier, poser les questions de fond au MJ avant de coder.
@@ -9,7 +9,7 @@ Gestionnaire de monde et de campagnes pour Chroniques Oubliées Fantasy. Applica
 
 - Go ≥ 1.26.10 (`go.mod`), **CGO obligatoire** (`mattn/go-sqlite3`).
 - Tag **`sqlite_fts5` toujours** (sans lui, `internal/store/fts5_requis.go` fait échouer la compilation). Tag `nogui` : sans fenêtre (tests, CI, headless). Tag `serveur` : édition serveur.
-- Fenêtre : `webview/webview_go` (WebView2 / GTK 3 + WebKitGTK 4.1).
+- Fenêtre : `webview/webview_go` (WebView2 / WKWebView sur Mac / GTK 3 + WebKitGTK 4.1). Mac : barre de menus en Objective-C (`gui_darwin.go`, sans elle pas de copier-coller au clavier), compilée seulement sur un Mac (job `macos` de *Tests* et *Release*) ; mise à jour = l'application `.app` entière (`internal/majour/mac.go`).
 - Frontend : HTML / CSS / JS **sans framework, sans dépendance, sans build**, embarqué par `//go:embed frontend`. Jamais de npm ni de bundler.
 - `outils/` : Python 3, bibliothèque standard seulement (import d'un vault Obsidian).
 

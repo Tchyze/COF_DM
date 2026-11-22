@@ -171,7 +171,8 @@ type Disponible struct {
 
 // Programme : le fichier à remplacer pour mettre à jour ce programme, et le nom du fichier publié
 // qui lui correspond. Vide : pas de mise à jour automatique ici (programme lancé par go run, binaire
-// Linux hors AppImage, autre système).
+// Linux hors AppImage, macOS hors d'une application, autre système). Sur macOS, c'est l'application
+// entière (« COF DM.app ») : Lanceur donne le programme à relancer.
 func Programme() (chemin string, publie func(string) bool) {
 	switch runtime.GOOS {
 	case "windows":
@@ -186,6 +187,17 @@ func Programme() (chemin string, publie func(string) bool) {
 	case "linux":
 		if a := os.Getenv("APPIMAGE"); a != "" {
 			return a, func(nom string) bool { return strings.HasSuffix(nom, "-x86_64.AppImage") }
+		}
+	case "darwin":
+		exe, err := os.Executable()
+		if err != nil {
+			return "", nil
+		}
+		if e, err := filepath.EvalSymlinks(exe); err == nil {
+			exe = e
+		}
+		if app := appDe(exe); app != "" {
+			return app, func(nom string) bool { return strings.HasSuffix(nom, suffixeMac) }
 		}
 	}
 	return "", nil
@@ -335,7 +347,16 @@ func Installer(d *Disponible) (string, error) {
 	if err := Verifier(empreintes.Bytes(), signature.Bytes(), d.Fichier, h.Sum(nil)); err != nil {
 		return "", err
 	}
-	if err := Remplacer(cible, tmp.Name()); err != nil {
+	nouveau := tmp.Name()
+	if strings.HasSuffix(cible, ".app") { // macOS : l'application entière, dépliée à côté
+		app, dossier, err := deballerApp(tmp.Name(), cible)
+		if err != nil {
+			return "", err
+		}
+		defer os.RemoveAll(dossier)
+		nouveau = app
+	}
+	if err := Remplacer(cible, nouveau); err != nil {
 		return "", err
 	}
 	return cible, nil
@@ -440,7 +461,7 @@ func errNonModifiable(cible string) error {
 // (verrou simulé, attente raccourcie).
 var (
 	renommer        = os.Rename
-	retirer         = os.Remove
+	retirer         = retirerChemin
 	pauses          = []time.Duration{100 * time.Millisecond, 250 * time.Millisecond, 500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second}
 	pausesNettoyage = []time.Duration{500 * time.Millisecond, time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second, 15 * time.Second, 30 * time.Second}
 )
@@ -456,6 +477,14 @@ func reessayer(p []time.Duration, f func() error) error {
 		err = f()
 	}
 	return err
+}
+
+// retirerChemin : un fichier, ou une application macOS d'avant (un dossier) avec son contenu.
+func retirerChemin(chemin string) error {
+	if i, err := os.Lstat(chemin); err == nil && i.IsDir() {
+		return os.RemoveAll(chemin)
+	}
+	return os.Remove(chemin)
 }
 
 // retirerSiPresent : un fichier déjà absent est bien retiré.

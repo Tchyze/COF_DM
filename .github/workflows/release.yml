@@ -7,6 +7,10 @@ name: Release
 # - Windows : COF-DM.exe (aussi en zip), qui s'installe seul au premier lancement pour l'utilisateur ;
 #   WebView2 est déjà présent sous Windows 10 et 11.
 # - Linux : AppImage ; demande WebKitGTK 4.1 sur le système (libwebkit2gtk-4.1-0).
+# - macOS (11 et plus, Apple Silicon et Intel) : COF DM.app dans une image disque (.dmg) pour la
+#   première installation, et en zip (-macOS.zip) pour les mises à jour automatiques, qui remplacent
+#   l'application entière. Signée sans compte développeur Apple (signature « ad hoc ») : au premier
+#   lancement, macOS demande d'autoriser l'application (Réglages → Confidentialité et sécurité).
 # Chaque Release porte SHA256SUMS, les empreintes de ses fichiers, et SHA256SUMS.sig, leur signature
 # Ed25519 (base64) par la clé de publication (secret COF_DM_SIGNATURE, au format PEM) : l'application
 # refuse une mise à jour qu'elle ne vérifie pas avec la clé publique de internal/majour.
@@ -163,6 +167,71 @@ jobs:
           name: windows
           path: dist/*
 
+  macos:
+    needs: [version, tests]
+    if: inputs.docker == ''
+    runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26" # la dernière 1.26.x ; go.mod fixe le minimum
+          check-latest: true
+      - name: Version
+        run: echo "VERSION=${{ needs.version.outputs.version }}" >> "$GITHUB_ENV"
+      - name: Compilation (Apple Silicon et Intel, en un seul programme)
+        run: |
+          for a in arm64 amd64; do
+            CGO_ENABLED=1 GOARCH=$a go build -tags sqlite_fts5 -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "cof-dm-$a" .
+          done
+          lipo -create -output cof-dm cof-dm-arm64 cof-dm-amd64
+          lipo -info cof-dm
+      - name: Essai du programme
+        # il démarre sans fenêtre, ouvre un univers neuf (SQLite) et répond dans la version attendue
+        run: |
+          D="$RUNNER_TEMP/donnees"
+          ./cof-dm -headless -data "$D" -port 8199 > "$RUNNER_TEMP/essai.log" 2>&1 &
+          P=$!
+          trap 'kill $P 2>/dev/null' EXIT
+          for i in $(seq 30); do curl -fsS -o /dev/null http://127.0.0.1:8199/api/sante 2>/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8199/api/sante | tee sante.json; echo
+          test "$(jq -r .version sante.json)" = "$VERSION" || { cat "$RUNNER_TEMP/essai.log"; echo "le programme ne répond pas en $VERSION"; exit 1; }
+      - name: Application et image disque
+        run: |
+          APP="COF DM.app"
+          mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+          cp cof-dm "$APP/Contents/MacOS/cof-dm"
+          sed "s/@VERSION@/${VERSION%%-*}/g" build/macos/Info.plist > "$APP/Contents/Info.plist"
+          plutil -lint "$APP/Contents/Info.plist"
+          I=cof-dm.iconset; mkdir "$I"
+          for t in 16 32 128 256 512; do
+            sips -z $t $t build/icon.png --out "$I/icon_${t}x${t}.png" > /dev/null
+            sips -z $((t * 2)) $((t * 2)) build/icon.png --out "$I/icon_${t}x${t}@2x.png" > /dev/null
+          done
+          iconutil -c icns "$I" -o "$APP/Contents/Resources/cof-dm.icns"
+          cp LICENSE "$APP/Contents/Resources/"
+          # signature « ad hoc » de l'application entière (sans compte développeur Apple) : sans elle,
+          # macOS dirait l'application « endommagée » au lieu de proposer de l'autoriser
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" "dist/COF-DM-$VERSION-macOS.zip"
+          mkdir dmg && cp -R "$APP" dmg/ && ln -s /Applications dmg/Applications
+          for i in 1 2 3; do # hdiutil échoue parfois (« Resource busy ») sur les machines de GitHub
+            hdiutil create -volname "COF DM" -srcfolder dmg -ov -format UDZO "dist/COF-DM-$VERSION-macOS.dmg" && break
+            sleep 5
+          done
+          test -f "dist/COF-DM-$VERSION-macOS.dmg"
+          ls -la dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos
+          path: dist/*
+
   docker:
     needs: [version, tests]
     runs-on: ubuntu-latest
@@ -247,7 +316,7 @@ jobs:
 
   release:
     if: startsWith(github.ref, 'refs/tags/v') || inputs.canal == 'test'
-    needs: [version, linux, windows]
+    needs: [version, linux, windows, macos]
     runs-on: ubuntu-latest
     environment: publication # la clé de signature n'en sort qu'après approbation
     permissions:
@@ -288,7 +357,8 @@ jobs:
           generate_release_notes: true
           body: |
             **Windows** : lancez `COF-DM.exe` (aussi dans le zip) : il s'installe seul pour vous, sans droits d'administrateur (raccourcis sur le Bureau et dans le menu Démarrer, désinstallation par « Applications installées »).
+            **Mac** (macOS 11 ou plus, Apple Silicon et Intel) : ouvrez le `.dmg` et glissez COF DM dans le dossier Applications. Au premier lancement, macOS refuse d'ouvrir une application qui ne vient pas d'un développeur enregistré chez Apple : ouvrez Réglages Système → Confidentialité et sécurité, puis « Ouvrir quand même » en bas de la page (une seule fois). Les mises à jour suivantes s'installent ensuite seules, comme sous Windows.
             **Linux** : rendez l'AppImage exécutable (`chmod +x`) puis lancez-la ; il faut WebKitGTK 4.1 (`libwebkit2gtk-4.1-0` sur Debian/Ubuntu, `webkit2gtk4.1` sur Fedora).
             **Serveur (Docker)** : l'image de cette version est sur Docker Hub, tags `${{ needs.version.outputs.version }}` et `latest` (voir le README, « Avec Docker »).
             **Ancien mode portable** : un dossier `COF DM - données` à côté du programme est repris au lancement dans le dossier de données de l'utilisateur, sans rien perdre.
-            **Vérifier un téléchargement** : `sha256sum --check --ignore-missing SHA256SUMS` (Linux), ou comparer `Get-FileHash COF-DM.exe` à la ligne de `SHA256SUMS` (Windows). `SHA256SUMS.sig` en est la signature, que l'application vérifie avant toute mise à jour.
+            **Vérifier un téléchargement** : `sha256sum --check --ignore-missing SHA256SUMS` (Linux), ou comparer `Get-FileHash COF-DM.exe` à la ligne de `SHA256SUMS` (Windows), ou `shasum -a 256 -c --ignore-missing SHA256SUMS` (Mac). `SHA256SUMS.sig` en est la signature, que l'application vérifie avant toute mise à jour.

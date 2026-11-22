@@ -45,3 +45,19 @@ jobs:
         run: CGO_ENABLED=1 go build -tags "sqlite_fts5 nogui" -o /tmp/cof-dm .
       - name: Compilation (édition serveur, celle de l'image Docker)
         run: CGO_ENABLED=1 go build -tags "sqlite_fts5 nogui serveur" -o /tmp/cof-dm-serveur .
+
+  macos:
+    # le bureau Mac (fenêtre WebKit, menu en Objective-C) ne se compile que sur un Mac
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.26" # la dernière 1.26.x ; go.mod fixe le minimum
+          check-latest: true
+      - name: Compilation du bureau
+        run: CGO_ENABLED=1 go build -tags sqlite_fts5 -o /tmp/cof-dm .
+      - name: Tests de la mise à jour et du bureau
+        run: go test -tags "sqlite_fts5 nogui" . ./internal/majour/ ./internal/serveur/
