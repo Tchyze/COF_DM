@@ -495,7 +495,7 @@ Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la lis
 
 La cloche du MJ et celle des joueurs. Une notification : `{"id", "cree", "genre", "pour", "titre", "texte"?, "lien"?, "seance"?, "lue"}`. `pour` : `0` pour le MJ (tous les MJ de l'univers la partagent), sinon le PJ à qui elle s'adresse ; `lien` : où mène un clic (`#/agenda`). On en garde 100 par destinataire ; la cloche montre les 50 dernières.
 
-Genres : `rappel` (la veille de la séance à 19 h, heure de l'univers, aux attendus qui n'ont pas répondu `absent`), `deplacee` (date ou heure changée, ou séance rétablie, à tous les attendus), `annulee`, `relance` (bouton « Relancer » du MJ), `reponse` (pour le MJ : un joueur répond ou retire sa réponse). Les trois premiers viennent d'un veilleur qui passe une fois par minute sur les séances à venir (fonctionnalité `agenda`) ; une séance vue pour la première fois ne fait rien dire (sauf son rappel, s'il est l'heure). Jamais une note du MJ.
+Genres : `rappel` (la veille de la séance à 19 h, heure de l'univers, aux attendus qui n'ont pas répondu `absent`), `deplacee` (date ou heure changée, ou séance rétablie, à tous les attendus), `annulee`, `relance` (bouton « Relancer » du MJ), `reponse` (pour le MJ : un joueur répond ou retire sa réponse), `message` (un mot du MJ à toute une campagne). Les trois premiers viennent d'un veilleur qui passe une fois par minute sur les séances à venir (fonctionnalité `agenda`) ; une séance vue pour la première fois ne fait rien dire (sauf son rappel, s'il est l'heure). Jamais une note du MJ.
 
 Elles naissent là où l'univers fait foi : sur un serveur, ou sur le bureau qui n'est relié à aucun serveur. Elles ne se synchronisent pas (table locale de l'univers). **Copie reliée** : aucune n'y naît ; ces routes passent au serveur avec le jeton du poste (`503` s'il ne répond pas), et la relance envoie d'abord les changements d'ici.
 
@@ -506,6 +506,7 @@ Routes du MJ (l'auditeur lit) ; aucune n'entre dans la page libre ni dans la lis
 | `GET /api/notifications` | La cloche du MJ : `{"non_lues", "notifications": [...]}`, des plus récentes aux plus anciennes. |
 | `POST /api/notifications/lues` `{"ids": [...]}` | Marque lues ces notifications du MJ (`ids` vide : toutes). Réponse : comme la lecture. |
 | `POST /api/agenda/{id}/relance` | Prévient les attendus qui n'ont pas encore répondu (fonctionnalité `agenda`). Réponse : `{"relances": n, "noms": ["Arwen"]}` (`0` : tout le monde a répondu). Séance annulée, jouée ou finie : `422` ; inconnue : `404`. Notée au journal. |
+| `POST /api/notifications/message` `{"campagne", "texte"}` | Le message du MJ à tous les PJ actifs (statut `actif` ou vide, non archivés) de la campagne, à sens unique : titre « Message du MJ — <campagne> », `texte` tel quel (500 caractères au plus). Réponse : `{"envoyes", "noms"}`. Vide ou trop long, ou aucun PJ actif : `422` ; campagne inconnue ou archivée : `404`. Noté au journal, avec le texte ; pas de copie dans la cloche du MJ. |
 
 ### Notifications sur les appareils
 

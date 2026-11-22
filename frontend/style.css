@@ -944,7 +944,9 @@ button.fp-vcase.acquise{background:color-mix(in srgb,var(--accent) 18%,transpare
 .cloche-ligne{display:flex;flex-direction:column;gap:2px;min-width:0}
 .cloche-ligne b{font-weight:600;overflow-wrap:anywhere}
 .cloche-ligne span,.cloche-ligne small{color:var(--muted);overflow-wrap:anywhere}
-.cloche-actions{justify-content:space-between;margin-top:10px}
+.cloche-ligne span{white-space:pre-line}
+.cloche-actions{justify-content:flex-end;flex-wrap:wrap;gap:8px;margin-top:10px}
+.cloche-actions #cloche-ecrire{margin-right:auto}
 .ntf-genres{border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:10px 0;display:flex;flex-direction:column;gap:4px}
 .ntf-genres legend{padding:0 4px}
 .adm-appareils{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:4px}

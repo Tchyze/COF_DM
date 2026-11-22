@@ -15,8 +15,9 @@ function quand(s) {
 }
 
 /** Pose la cloche. lire() → {non_lues, notifications} ; marquer(ids) → idem (ids vide : toutes) ;
- * placer(bouton) l'insère dans la page ; badge(n) : à appeler aussi ailleurs (menu replié…). */
-export function initCloche({ lire, marquer, placer, badge = () => {} }) {
+ * placer(bouton) l'insère dans la page ; badge(n) : à appeler aussi ailleurs (menu replié…) ;
+ * ecrire() : le MJ écrit aux joueurs (bouton dans la liste). */
+export function initCloche({ lire, marquer, placer, badge = () => {}, ecrire = null }) {
   const bouton = document.createElement("button");
   bouton.type = "button";
   bouton.className = "ghost petit cloche";
@@ -66,12 +67,13 @@ export function initCloche({ lire, marquer, placer, badge = () => {} }) {
 
   bouton.onclick = async () => {
     ouverte = dialogue("Notifications", `<div class="cloche-zone"></div>
-      <div class="row cloche-actions"><button type="button" class="ghost petit" id="cloche-tout">Tout marquer comme lu</button><button type="button" class="petit" id="cloche-fermer">Fermer</button></div>`,
+      <div class="row cloche-actions">${ecrire ? `<button type="button" class="petit" id="cloche-ecrire">📣 Écrire aux joueurs</button>` : ""}<button type="button" class="ghost petit" id="cloche-tout">Tout marquer comme lu</button><button type="button" class="petit" id="cloche-fermer">Fermer</button></div>`,
     { classe: "cloche-boite", rendre: bouton });
     const f = ouverte.fermer;
     ouverte.fermer = () => { f(); ouverte = null; };
     ouverte.voile.querySelector("#cloche-tout").onclick = () => envoyerLues([]);
     ouverte.voile.querySelector("#cloche-fermer").onclick = fermer;
+    if (ecrire) ouverte.voile.querySelector("#cloche-ecrire").onclick = () => { fermer(); ecrire(); };
     ouverte.voile.addEventListener("click", e => { if (e.target === ouverte?.voile) ouverte = null; });
     ouverte.voile.addEventListener("keydown", e => { if (e.key === "Escape") ouverte = null; });
     peindreListe();

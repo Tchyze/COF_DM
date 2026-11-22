@@ -15,7 +15,8 @@ import (
 //     aux attendus qui n'ont pas dit « absent » ; séance déplacée, annulée ou rétablie, à tous les
 //     attendus ;
 //   - la réponse d'un joueur à une séance (présent, peut-être, absent), pour le MJ ;
-//   - la relance du MJ (bouton « Relancer »), aux attendus qui n'ont pas encore répondu.
+//   - la relance du MJ (bouton « Relancer »), aux attendus qui n'ont pas encore répondu ;
+//   - le message du MJ à toute une campagne, à sens unique.
 //
 // Elles naissent là où l'univers fait foi : sur un serveur, ou sur le bureau qui n'est relié à aucun
 // serveur. Une copie reliée n'en fait aucune (le serveur s'en charge, une fois les changements
@@ -32,6 +33,7 @@ func (s *Serveur) routesNotifications() {
 	m.HandleFunc("GET /api/notifications", s.parServeur(s.notificationsMJ, false))
 	m.HandleFunc("POST /api/notifications/lues", s.parServeur(s.marquerLuesMJ, false))
 	m.HandleFunc("POST /api/agenda/{id}/relance", s.parServeur(s.relancer, true))
+	m.HandleFunc("POST /api/notifications/message", s.parServeur(s.envoyerMessage, true))
 }
 
 func (s *Serveur) routesNotificationsJoueurs(m *http.ServeMux) {
@@ -413,4 +415,62 @@ func (s *Serveur) relancer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	erreurStore(w, store.ErrIntrouvable)
+}
+
+// ---------------------------------------------------------------- message du MJ
+
+// maxMessage : la longueur d'un message du MJ, en caractères.
+const maxMessage = 500
+
+// envoyerMessage : POST /api/notifications/message {"campagne": id, "texte"} — un mot du MJ à tous
+// les joueurs de la campagne (ses PJ actifs), à sens unique : il entre dans leur cloche, et leurs
+// appareils sonnent (« Message du MJ »). Réponse : {"envoyes": n, "noms": [...]}.
+func (s *Serveur) envoyerMessage(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Campagne int64  `json:"campagne"`
+		Texte    string `json:"texte"`
+	}
+	if err := lireJSON(r, &in); err != nil {
+		erreurStore(w, err)
+		return
+	}
+	in.Texte = strings.TrimSpace(in.Texte)
+	if in.Texte == "" {
+		erreur(w, 422, "Le message est vide.")
+		return
+	}
+	if n := len([]rune(in.Texte)); n > maxMessage {
+		erreur(w, 422, fmt.Sprintf("Message trop long (%d caractères au plus).", maxMessage))
+		return
+	}
+	camp, err := s.store.Lire(in.Campagne)
+	if err != nil || camp.Type != "campagne" || camp.Archive {
+		erreurStore(w, store.ErrIntrouvable)
+		return
+	}
+	tout, err := s.store.Toutes()
+	if err != nil {
+		erreurStore(w, err)
+		return
+	}
+	pour, noms := []int64{}, []string{}
+	for _, e := range tout {
+		st, _ := e.Data["statut"].(string)
+		if e.Type != "pj" || e.Archive || (st != "" && st != "actif") {
+			continue
+		}
+		for _, c := range idsDe(e.Data["campagne"]) {
+			if c == camp.ID {
+				pour, noms = append(pour, e.ID), append(noms, e.Nom)
+				break
+			}
+		}
+	}
+	if len(pour) == 0 {
+		erreur(w, 422, "Aucun PJ actif dans cette campagne : personne à prévenir.")
+		return
+	}
+	s.notifier(store.NouvelleNotif{Genre: store.NotifMessage, Titre: "Message du MJ — " + camp.Nom, Texte: in.Texte}, pour...)
+	s.store.NoterFiche("message aux joueurs", camp.ID, camp.Nom, in.Texte, auteurDe(r))
+	repondre(w, 200, map[string]any{"envoyes": len(pour), "noms": noms})
 }
